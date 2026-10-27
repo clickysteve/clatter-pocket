@@ -1,0 +1,36 @@
+# Comparison script: the same calls are made on CLATTER's WebAssembly engine
+# (compare_clatter.mjs) and on CLATTER Pocket's native engine (dump.c), and every voice's
+# output is compared block by block.
+#
+#   <block> param <PAR_*> <0-127>      set a sound parameter before rendering <block>
+#   <block> trig <trigger> <vel> <note>
+#   <block> lock <trigger> <vel> <note> <p1> <v1> <p2> <v2>
+#   end <blocks>                        total 64-sample blocks to render
+#
+# Parameter 127 (PAR_BANK_CHANGE) is not used: see engine/pocket_lxr.c dispatchParam.
+0 trig 0 127 60
+40 param 8 50
+40 param 50 70
+40 param 88 100
+41 trig 0 100 60
+120 trig 3 127 60
+160 trig 4 110 60
+200 trig 5 90 60
+220 trig 6 120 60
+260 trig 1 127 48
+260 trig 2 127 72
+300 param 74 127
+300 param 70 20
+301 trig 0 127 36
+340 lock 3 127 60 56 110 0 0
+400 trig 3 127 60
+440 param 109 30
+441 trig 1 127 60
+500 param 36 90
+500 param 37 40
+501 trig 0 127 60
+501 trig 4 127 60
+600 trig 0 64 60
+600 trig 3 64 60
+600 trig 5 64 60
+end 800

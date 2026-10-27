@@ -1,0 +1,3 @@
+[submodule "third_party/fm1_open"]
+	path = third_party/fm1_open
+	url = https://github.com/m-vave/fm1_open.git

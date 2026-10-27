@@ -1,0 +1,46 @@
+diff -ru a/app/board/audio.c b/app/board/audio.c
+--- a/app/board/audio.c
++++ b/app/board/audio.c
+@@ -3,6 +3,7 @@
+ #include "fm1_gpio.h"
+ #include "fm1_engine_control.h"
+ #include "audio_output.h"
++#include "clatter_pocket/clatter_pocket_fm1.h"
+ #include <string.h>
+ 
+ #define DMA_ALIGNED __attribute__((aligned(32)))
+@@ -44,6 +45,8 @@
+         ++statistics.overruns;
+         return;
+     }
++    /* CLATTER Pocket: the LXR voices join the instrument before master gain and USB/BT. */
++    clatter_pocket_fm1_render(rendered);
+     fm1_output_mix(rendered);
+     uint32_t flags = fm1_audio_irq_save();
+     if (fm1_audio_half_owned(half) &&
+diff -ru a/app/screen.c b/app/screen.c
+--- a/app/screen.c
++++ b/app/screen.c
+@@ -3,6 +3,7 @@
+ #include "fm_patch.h"
+ #include "version.h"
+ #include "fm1_engine_control.h"
++#include "clatter_pocket/clatter_pocket_fm1.h"
+ #include <string.h>
+ enum {
+     BACK = 0x0000,
+@@ -2577,6 +2578,14 @@
+         else memcpy(master_notice, "MASTER MUTED", sizeof "MASTER MUTED");
+         notice = master_notice;
+         notice_until = now + 1200U;
++    }
++    /* CLATTER Pocket (HOME+ARP) takes the panel over while it is shown; MASTER still works. */
++    int pocket = clatter_pocket_fm1_control(&controls, previous_buttons);
++    if (pocket) {
++        previous_buttons = controls.buttons;
++        previous_keys = controls.keys;
++        if (pocket == 2) saved_cache.shown_page = ~0U; /* repaint the stock page */
++        return;
+     }
+     if (now - health_at >= 500U) {
+         struct fm1_engine_stats health;
