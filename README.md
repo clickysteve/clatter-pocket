@@ -16,8 +16,8 @@ pocket synthesizer, through M-VAVE's open firmware SDK
 
 | | |
 |---|---|
-| LXR engine (all six voices, seven triggers, the firmware's parameter handler, modulation, locks) | runs natively; 65 host checks pass; matches CLATTER's engine to within 3 LSB |
-| FM-1 integration (audio hook, panel, timing display) | written, patch applies, type-checks against the SDK; **not compiled with the FM-1 toolchain yet** |
+| LXR engine (all six voices, seven triggers, the firmware's parameter handler, modulation, locks) | runs natively; 117 host checks pass; matches CLATTER's engine to within 3 LSB |
+| FM-1 integration (audio hook, panel, timing display) | compiles and links with the FM-1 toolchain and passes the SDK's firmware checks; **does not fit the FM-1's flash layout yet** (about 108 KB over, BUILDING.md) |
 | On the device | **nothing has run on hardware** |
 | Sequencer, generation, storage | not started (ROADMAP.md) |
 

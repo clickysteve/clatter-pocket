@@ -28,12 +28,12 @@ another synthesis engine to the FM-1 was found.
 | | | Source |
 |---|---|---|
 | MCU | **JieLi AC791N** ("WL82" family) | Verified: `app/board/fm1_input.h` ("AC791N SPI2 setup"), `fm1_audio.h` ("WL82 ALNK0"), library names in the linker script (`lib_wl82_rf_version`); SDK notices cite JieLi's AC79 SDK |
-| CPU core | PI32v2, `r3`, with an FPU (`-mfprev1`) | Verified (compiler flags). **Whether the FPU does double precision is unknown** |
+| CPU core | PI32v2, `r3`, with a **single-precision** FPU (`-mfprev1`): float add, multiply, divide; **no double precision, no square root, no fused multiply-add** | Verified 2026-10-29 with the SDK's toolchain: `double` arithmetic compiles to compiler-rt calls (`__muldf3`, ...), `sqrtf`/`fmaf` to library calls the SDK's libc does not provide |
 | Cores | Dual-core | Reported (secondary source, below); which core runs what in the FM-1 is **unknown** |
 | Clock | Up to 320 MHz | Reported, not verified; the firmware reads it at run time (`fm1_device_clock()`) |
 | Internal SRAM | RAM0 0x01C00000–0x01C7FE00 = **523 776 bytes** for the firmware, plus 28 KB of data cache usable as RAM (`cache_ram`, 7 ways × 4 KB) | Verified (`sdk/config/linker.ld.in`). A secondary source gives 578 KB in total |
 | External RAM | None used (`SDRAM_SIZE = 0`) | Verified |
-| Code Flash | Executed in place from 0x02000120; the firmware image must fit 1 MiB | Verified (linker script, `Package-Firmware`) |
+| Code Flash | Executed in place from 0x02000120. The 1 MiB update image (`0xff000` usable) holds the app image, at least 32 KB of VM and the fixed user area, which leaves **479 232 bytes for the app image**; stock fm1_open V14 uses 453 576 (25 656 bytes free) | Verified (`sdk/Package.cs`, first builds 2026-10-29) |
 | User Flash | 536 576 bytes (131 × 4 KB sectors), API `fm1_flash_*`; the stock instrument already stores projects, samples and voices there | Verified (`Build.ps1` variant, `fm1.h`) |
 | Runtime heap | Must stay ≥ 49 152 bytes; RTOS, Bluetooth and USB allocate from it | Verified (`Test-Firmware`) |
 
@@ -122,8 +122,8 @@ before any update: migration can erase it.
 ## Open questions (need the device or the vendor)
 
 1. Hardware revision(s) in the field and whether fm1_open supports all of them.
-2. Does the PI32v2 r3 FPU execute **double precision**? (The LXR's envelopes use double; see
-   ARCHITECTURE.md. A single-precision fallback exists and is measured.)
+2. ~~Does the FPU execute double precision?~~ **No** (answered with the toolchain,
+   2026-10-29; see Processor and memory). The FM-1 build uses `--single-precision`.
 3. Does `__attribute__((interrupt("")))` on PI32v2 save **FPU registers**? CLATTER Pocket
    runs float DSP in the audio interrupt and float code in the control task. (The SDK's own
    float kernels in the same interrupt suggest yes.)

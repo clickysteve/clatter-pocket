@@ -42,7 +42,7 @@ obj = $(patsubst %.c,$(BUILD)/obj/$(1)/%.o,$(2))
 FULL_OBJ := $(call obj,full,$(LXR_SRC) $(BRIDGE) $(ENGINE) engine/fx_on.c)
 NOFX_OBJ := $(call obj,nofx,$(LXR_NOFX) $(BRIDGE) $(ENGINE) engine/fx_off.c)
 
-TOOLS := $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_panel $(BUILD)/bench $(BUILD)/render $(BUILD)/dump
+TOOLS := $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_panel $(BUILD)/test_fm1_libm $(BUILD)/bench $(BUILD)/render $(BUILD)/dump
 
 .PHONY: all test bench render compare compare-sp firmware clean
 all: $(TOOLS) test
@@ -72,6 +72,9 @@ $(BUILD)/test_engine_nofx: host/tests/test_engine.c host/wav.h $(BUILD)/liblxr_n
 	$(CC) $(HOST_CFLAGS) -DPOCKET_NOFX $< $(BUILD)/liblxr_nofx.a -lm -o $@
 $(BUILD)/test_panel: host/tests/test_panel.c ui/pocket_panel.c ui/pocket_panel.h $(BUILD)/liblxr_nofx.a
 	$(CC) $(HOST_CFLAGS) $< ui/pocket_panel.c $(BUILD)/liblxr_nofx.a -lm -o $@
+# The FM-1 build's own sqrtf and fmaf (the PI32v2 FPU and the SDK's libc have neither).
+$(BUILD)/test_fm1_libm: host/tests/test_fm1_libm.c firmware/fm1/pocket_fm1_libm.c
+	$(CC) $(HOST_CFLAGS) -ffp-contract=off $< -lm -o $@
 $(BUILD)/bench: host/bench.c $(BUILD)/liblxr_nofx.a
 	$(CC) $(HOST_CFLAGS) $< $(BUILD)/liblxr_nofx.a -lm -o $@
 $(BUILD)/render: host/render.c host/wav.h $(BUILD)/liblxr_nofx.a
@@ -81,10 +84,11 @@ $(BUILD)/dump: host/compare/dump.c $(BUILD)/liblxr_full.a
 $(BUILD)/dump_sp: host/compare/dump.c $(BUILD)/liblxr_sp.a
 	$(CC) $(HOST_CFLAGS) $< $(BUILD)/liblxr_sp.a -lm -o $@
 
-test: $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_panel
+test: $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_panel $(BUILD)/test_fm1_libm
 	$(BUILD)/test_engine
 	$(BUILD)/test_engine_nofx
 	$(BUILD)/test_panel $(BUILD)/panel.ppm
+	$(BUILD)/test_fm1_libm
 
 bench: $(BUILD)/bench
 	$(BUILD)/bench

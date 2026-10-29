@@ -6,8 +6,12 @@
 #
 # 1. downloads JieLi's installer from the URL fm1_open's README gives, into
 #    ~/.cache/clatter-pocket/, and checks its SHA-256 (recorded below on 2026-10-27);
-# 2. runs the installer silently in its own Wine prefix (WINEPREFIX, default ~/.wine-jieli)
-#    into C:\JL - this executes JieLi's installer, review before running;
+# 2. runs the installer in its own Wine prefix (WINEPREFIX, default ~/.wine-jieli) into C:\JL
+#    - this executes JieLi's installer, review before running. The installer insists on
+#    JieLi's Code::Blocks integration, so the prefix first gets a placeholder Code::Blocks
+#    registry entry and an empty Code::Blocks configuration; its notices (in Chinese) are
+#    message boxes that the silent options do not suppress: click OK, then go through the
+#    wizard with the defaults;
 # 3. checks all toolchain files against third_party/fm1_open/sdk/manifest.json.
 # Then: export FM1_PI32_TOOLCHAIN=<printed path>. On Windows, install 2.5.3 normally and set
 # FM1_PI32_TOOLCHAIN=C:\JL\pi32 instead.
@@ -27,8 +31,16 @@ actual=$(shasum -a 256 "$exe" | cut -d' ' -f1)
 
 pi32="$WINEPREFIX/drive_c/JL/pi32"
 if [[ ! -f "$pi32/bin/clang.exe" ]]; then
-	echo "installing into $WINEPREFIX (C:\\JL)"
-	wine "$exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- '/DIR=C:\JL'
+	echo "installing into $WINEPREFIX (C:\\JL): click OK on the notices, keep the wizard's defaults"
+	wineboot -i >/dev/null 2>&1 || true
+	for key in 'HKCU\Software\CodeBlocks' 'HKLM\Software\CodeBlocks' 'HKLM\Software\Wow6432Node\CodeBlocks'; do
+		wine reg add "$key" /v Path /t REG_SZ /d 'C:\Program Files\CodeBlocks' /f >/dev/null
+	done
+	mkdir -p "$WINEPREFIX/drive_c/Program Files/CodeBlocks"
+	conf="$WINEPREFIX/drive_c/users/$USER/AppData/Roaming/CodeBlocks/default.conf"
+	mkdir -p "$(dirname "$conf")"
+	[[ -f "$conf" ]] || printf '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>\n<CodeBlocksConfig version="1">\n\t<app>\n\t</app>\n\t<compiler>\n\t\t<sets>\n\t\t</sets>\n\t</compiler>\n</CodeBlocksConfig>\n' >"$conf"
+	wine "$exe" /NORESTART /SP- '/DIR=C:\JL' || true
 fi
 python3 - "$repo/third_party/fm1_open/sdk/manifest.json" "$pi32" <<'EOF'
 import hashlib, json, pathlib, sys

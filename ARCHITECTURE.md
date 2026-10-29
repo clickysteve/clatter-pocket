@@ -92,19 +92,30 @@ There is no device measurement. What is known:
 
 - The same code runs all six voices, the FX bus, the sequencer and the UI of the LXR-02 on a
   216 MHz Cortex-M7 with a double-precision FPU.
-- The AC791N is reported at up to 320 MHz with an FPU; its pipeline, caches and double
-  precision support are unknown, and the stock instrument shares the same interrupt.
-- **Risk: double precision.** The firmware computes envelopes (`slopeEg2_calc`), amplitude
-  smoothing (`calcOnePole`) and some filter terms in `double` in per-sample paths. On a
-  single-precision FPU each is a software call. `tools/size-estimate.sh` lists them: seven
-  DSP files. Fallback: `engine/single_precision.h` (`--single-precision`) computes them in
-  float; with the SDK's `-cl-single-precision-constant` no DSP file calls a double helper any
-  more, and against CLATTER the output stays within -78 dBFS (COMPATIBILITY.md).
+- The AC791N is reported at up to 320 MHz; its pipeline and caches are unknown, and the
+  stock instrument shares the same interrupt.
+- **Double precision: none.** The PI32v2 FPU is single precision only (checked with the
+  SDK's toolchain). The firmware computes envelopes (`slopeEg2_calc`), amplitude smoothing
+  (`calcOnePole`) and some filter terms in `double` in per-sample paths; in the FM-1's
+  double build these call software routines (`__muldf3`, `__adddf3`, ...) from five DSP
+  files. The FM-1 configuration is therefore `--single-precision`
+  (`engine/single_precision.h`): no DSP file calls a double helper (checked on the linked
+  PI32v2 objects), and against CLATTER the output stays within -78 dBFS (COMPATIBILITY.md).
+- No square root or fused multiply-add either: `firmware/fm1/pocket_fm1_libm.c` supplies
+  `sqrtf` (correctly rounded, integer arithmetic, trigger-time only) and `fmaf` (CLATTER's
+  definition).
 - The FM-1 build measures itself: the audio hook times every block with the board's audio
   timer and the Pocket screen shows mean and peak share of the block period, DMA overruns
   (the SDK's counter), clipped samples and dropped events.
 
-### Memory (estimated)
+### Memory
+
+Measured with the SDK's toolchain (BUILDING.md, First build results): CLATTER Pocket adds
+about 133 KB to the app image (the update image has room for 25.6 KB more than stock: **the
+current blocker**) and, with `--placement sram`, 153 KB of RAM (runtime heap 96 KB, minimum
+48 KB); with `--placement tcm`, 65 KB of RAM (heap 183 KB).
+
+The earlier estimate, by section:
 
 `tools/size-estimate.sh` compiles the FM-1 configuration for a Cortex-M4F stand-in. Tables
 and state are exact; code size on PI32v2 will differ.

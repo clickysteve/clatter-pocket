@@ -29,18 +29,19 @@ On macOS the firmware's ELF section attributes are mapped to `annotate` (`Makefi
 
 ## FM-1 firmware build
 
-**Status: prepared, not run.** The toolchain install was not executed in the first session,
-so no PI32v2 object has been compiled, nothing has been linked and no firmware package
-exists. Everything up to the compiler is checked (`preflight.sh`).
+**Status (2026-10-29):** the toolchain is installed and verified; the unmodified fm1_open
+builds and packages; CLATTER Pocket compiles, links and passes all of the SDK's firmware
+checks, but **does not fit the FM-1's flash layout**, so no CLATTER Pocket package exists.
+See "First build results" below.
 
 ### Requirements
 
 - **JieLi Windows toolchain 2.5.3** (PI32v2 clang 4.0.1). The SDK checks 22 of its files by
   SHA-256 and refuses any other version.
 - **PowerShell 7** (`pwsh`). The SDK's build and packager are PowerShell/C#. macOS:
-  `brew install --cask powershell`.
-- On macOS/Linux, **Wine** to run the Windows toolchain (Wine 10 checked to be installed; the
-  toolchain has not yet been run under it).
+  `brew install --cask powershell`, or Microsoft's release tarball (7.6.9 osx-arm64, checked
+  against the release's `hashes.sha256`) unpacked anywhere; set `PWSH` to its `pwsh`.
+- On macOS/Linux, **Wine** to run the Windows toolchain (Wine 10.0 on macOS checked).
 - The fm1_open submodule at `4c7496d` (`git submodule update --init`).
 
 ### Toolchain
@@ -55,13 +56,25 @@ the URL fm1_open's README gives), checks its SHA-256 (`399bd518...c5a5e`, record
 every toolchain file against the SDK manifest. It then prints the `FM1_PI32_TOOLCHAIN` line to
 export. On Windows: install 2.5.3 from the same URL and set `FM1_PI32_TOOLCHAIN=C:\JL\pi32`.
 
+The installer is in Chinese and is written for JieLi's Code::Blocks integration: its setup
+script refuses to install unless Code::Blocks is in the registry and has been run once, and it
+shows message boxes that the silent-install options do not suppress. The setup script
+therefore adds a placeholder Code::Blocks registry entry and an empty Code::Blocks
+configuration **in the separate Wine prefix only**, and runs the installer's wizard: click OK
+on the notices and go through the wizard with the defaults (folder `C:\JL`). The compiler does
+not need Code::Blocks.
+
 ### Build
 
 ```bash
+firmware/fm1/build.sh --stock          # the unmodified fm1_open, same toolchain and steps
 firmware/fm1/build.sh --prepare-only   # build/fm1/tree: fm1_open + patch + CLATTER Pocket sources
 firmware/fm1/preflight.sh              # SDK manifest + stand-in compile of every touched file
-firmware/fm1/build.sh                  # the real build (toolchain, pwsh, Wine)
+firmware/fm1/build.sh --single-precision   # the real build (toolchain, pwsh, Wine)
 ```
+
+`--stock` is the known-good comparison: every CLATTER Pocket edit of the derived build
+script is off, the tree is unpatched, output in `build/fm1-stock/`.
 
 Options: `--placement sram` (default: all CLATTER Pocket code and tables in SRAM) or
 `--placement tcm` (only the LXR's own TCM-marked code and state in SRAM, the rest in Flash;
@@ -85,13 +98,33 @@ What `build.sh` does:
 `-FirmwareOnly` is the SDK's local-test mode; distributable packages (`-Package`) need a
 matching public source archive URL (GPL) and are not set up.
 
-### Expected first-build problems
+### First build results (2026-10-29, JieLi 2.5.3 under Wine 10.0, macOS arm64)
 
-These are untested, in rough order of likelihood: Wine path handling for the toolchain;
-the LXR objects exceeding SRAM in `sram` placement (link error or the 48 KB heap check: try
-`--placement tcm`); PI32v2 clang 4.0.1 rejecting something modern clang accepted;
-`EXCLUDE_FILE` support in `pi32v2-ld`; the size of soft-double code if the FPU is single
-precision (try `--single-precision`).
+| Build | App image | Runtime heap | SDK firmware checks | Package |
+|---|---|---|---|---|
+| `--stock` (fm1_open 4c7496d unmodified) | 453 576 | 247 340 | pass | **built** (`fm1_open-stock-4c7496d.fwsc`) |
+| CLATTER Pocket, double precision, `sram` | 588 712 | 94 252 | pass | **does not fit** |
+| CLATTER Pocket, `--single-precision`, `sram` | 586 920 | 95 948 | pass | **does not fit** |
+| CLATTER Pocket, `--single-precision`, `--placement tcm` | 586 888 | 182 572 | pass | **does not fit** |
+
+All CLATTER Pocket sources compile with PI32v2 clang 4.0.1; the link resolves; the audio
+path is in SRAM; RAM is not the problem (the heap minimum is 49 152). **Flash is**: the
+update image leaves 479 232 bytes for the app image (HARDWARE.md) and CLATTER Pocket adds
+about 133 KB to the stock 453 576, about 108 KB more than fits. Of the 133 KB, 102 KB are
+the LXR's constant tables (tri/saw/rect wavetables 3 × 22.5 KB, transient samples 26 KB,
+sine 8 KB). Options: ROADMAP.md, milestone B.
+
+Fixed on the way: the Windows clang under Wine does not open `-include` files by absolute
+Unix path (forced includes now go through the include path); the derived script passed the
+application's include paths ahead of the engine's, so the LXR saw the SDK's `<math.h>`
+instead of CLATTER's shim (now left out); the PI32v2 FPU has no square root and the SDK's
+libc no `sqrtf`/`fmaf` (`firmware/fm1/pocket_fm1_libm.c`, tested bit-exact by
+`host/tests/test_fm1_libm.c`).
+
+The double-precision build calls software double routines from the per-sample DSP
+(`1PoleLp.c`, `SlopeEg2.c`, `ResonantFilter.c`, `Snare.c`, `DrumVoice.c`); the
+single-precision build calls them only from CLATTER's libm, which is not per sample. The
+FM-1 configuration is therefore `--single-precision`.
 
 ## Flashing
 

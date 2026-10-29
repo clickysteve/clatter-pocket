@@ -10,10 +10,13 @@ checked as far as possible without the toolchain or device), **open**.
 - **done** hardware facts from the SDK sources: MCU, memory map, audio format and path,
   panel, MIDI, storage, update protocol; open questions listed
 - **done** flashing and recovery documented, including what is not recoverable
-- **prepared** toolchain: `tools/setup-toolchain.sh` (download verified; the installer run
-  was not executed in the first session), derived build script, tree preparation, preflight
-- **open** build the unmodified fm1_open with the toolchain (the known-good example), then the
-  CLATTER Pocket build; record firmware-report.json and the link map's SRAM use
+- **done** toolchain: JieLi 2.5.3 under Wine, all 22 pinned files verified
+  (`tools/setup-toolchain.sh`); PowerShell 7
+- **done** the unmodified fm1_open builds and packages with it (`build.sh --stock`, the
+  known-good example)
+- **done** CLATTER Pocket compiles, links and passes the SDK's firmware checks (SRAM, heap,
+  BLE, USB) in every configuration; footprints recorded (BUILDING.md)
+- **done** the FPU question: single precision only, no sqrt, no fma
 - **open** identify the owner's unit (revision, firmware identity), back up, confirm
   V15/Open restore works on it
 
@@ -28,9 +31,21 @@ checked as far as possible without the toolchain or device), **open**.
 - **done** host CPU, memory and soft-float assessment
 - **prepared** FM-1 integration: audio hook, control hook, Pocket panel (kick and the other
   six triggers: pitch, decay, level, keys and PLAY), on-device timing display
-- **open** first build, then on-device: audio heard, CPU per block, overruns, clipping,
-  stability over an hour, latency (USB recording of a key press vs the click)
-- **open** if needed: single precision, `tcm` placement, skipping silent voices
+- **blocked: flash budget.** CLATTER Pocket beside the stock instrument needs about 108 KB
+  more than the update image has room for (BUILDING.md, First build results). Ways out, none
+  taken yet:
+  1. pack the LXR's tables (second-order delta coding measures about 76 KB -> 11 KB for the
+     wavetables, 26 -> 13 KB for the transients) and unpack them into SRAM when Pocket mode
+     starts: about 77 KB, not enough on its own;
+  2. size-optimise the engine's non-audio code (`-Oz`): a few KB;
+  3. a smaller user area (the 536 576-byte projects/samples partition): changes the device
+     layout and where user data lives; only with the owner's decision and after confirming
+     how the stock firmware, loader and workbench treat it;
+  4. drop parts of the stock application from the image (CLATTER Pocket as the instrument
+     rather than beside it); the stock synthesis is a binary library linked whole.
+- **open** then on-device: audio heard, CPU per block, overruns, clipping, stability over an
+  hour, latency (USB recording of a key press vs the click)
+- **done** single precision is the FM-1 configuration (no soft double in the per-sample DSP)
 
 ## C - Basic drum machine
 

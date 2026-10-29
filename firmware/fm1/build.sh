@@ -2,6 +2,8 @@
 # CLATTER Pocket FM-1 firmware build (macOS, Linux; on Windows run it from Git Bash).
 #
 #   firmware/fm1/build.sh [--prepare-only] [--placement sram|tcm] [--single-precision]
+#   firmware/fm1/build.sh --stock     (the unmodified fm1_open, same toolchain and steps:
+#                                      the known-good comparison, in build/fm1-stock/)
 #
 # 1. prepares build/fm1/tree: the pinned fm1_open (third_party/fm1_open), with
 #    firmware/fm1/fm1_open.patch applied, the FM-1 adapter in app/clatter_pocket/ and
@@ -18,7 +20,7 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
-tree="$repo/build/fm1/tree"
+stock=0
 placement=sram
 single=()
 prepare_only=0
@@ -27,10 +29,15 @@ while [[ $# -gt 0 ]]; do
 	--prepare-only) prepare_only=1 ;;
 	--placement) placement=$2; shift ;;
 	--single-precision) single=(-SinglePrecision) ;;
+	--stock) stock=1 ;;
 	*) echo "unknown option $1" >&2; exit 2 ;;
 	esac
 	shift
 done
+
+out_dir="$repo/build/fm1"
+[[ $stock == 1 ]] && out_dir="$repo/build/fm1-stock"
+tree="$out_dir/tree"
 
 pinned=4c7496d
 fm1="$repo/third_party/fm1_open"
@@ -42,6 +49,9 @@ echo "== preparing $tree"
 rm -rf "$tree"
 mkdir -p "$tree"
 (cd "$fm1" && git archive --format=tar HEAD) | tar -x -C "$tree"
+if [[ $stock == 1 ]]; then
+	echo "   unmodified fm1_open $actual"
+else
 (cd "$tree" && patch -s -p1 < "$here/fm1_open.patch")
 cp -R "$here/app/clatter_pocket" "$tree/app/"
 
@@ -58,8 +68,9 @@ cp "$repo/lxr/bridge/lxr_params.c" "$repo/lxr/bridge/libm.c" "$pocket/lxr/bridge
 cp "$repo/engine/pocket_lxr.c" "$repo/engine/pocket_lxr.h" "$repo/engine/pocket_params.h" \
 	"$repo/engine/fx_off.c" "$repo/engine/single_precision.h" "$pocket/engine/"
 cp "$repo/ui/pocket_panel.c" "$repo/ui/pocket_panel.h" "$pocket/ui/"
-cp "$here/pocket_fm1_config.h" "$pocket/fm1/"
+cp "$here/pocket_fm1_config.h" "$here/pocket_fm1_libm.c" "$pocket/fm1/"
 echo "   $(find "$pocket" -name '*.c' | wc -l | tr -d ' ') CLATTER Pocket sources, fm1_open $actual + fm1_open.patch"
+fi
 [[ $prepare_only == 1 ]] && exit 0
 
 pwsh=${PWSH:-pwsh}
@@ -75,13 +86,19 @@ MINGW* | MSYS* | CYGWIN*) ;;
 	;;
 esac
 
-echo "== building (placement $placement${single:+, single precision})"
+if [[ $stock == 1 ]]; then
+	echo "== building unmodified fm1_open"
+	single=(-Stock)
+else
+	echo "== building (placement $placement${single:+, single precision})"
+fi
 "$pwsh" -NoProfile -File "$here/Build-ClatterPocket.ps1" -Root "$tree" -FirmwareOnly \
 	-Toolchain "$FM1_PI32_TOOLCHAIN" -Placement "$placement" "${wine[@]+"${wine[@]}"}" "${single[@]+"${single[@]}"}"
 
-out="$repo/build/fm1/clatter-pocket-fm1-UNVERIFIED.fwsc"
+out="$out_dir/clatter-pocket-fm1-UNVERIFIED.fwsc"
+[[ $stock == 1 ]] && out="$out_dir/fm1_open-stock-$actual.fwsc"
 cp "$tree/build/dx7/generated/FM1_OFFICIAL_OPEN.fwsc" "$out"
-cp "$tree/build/dx7/firmware-report.json" "$repo/build/fm1/"
+cp "$tree/build/dx7/firmware-report.json" "$out_dir/"
 echo "== $out"
-echo "   firmware checks: build/fm1/firmware-report.json, link map: build/fm1/tree/build/dx7/sdk.map"
+echo "   firmware checks: ${out_dir#$repo/}/firmware-report.json, link map: ${out_dir#$repo/}/tree/build/dx7/sdk.map"
 echo "   NOT FLASHED. NOT HARDWARE-VALIDATED. See HARDWARE.md before installing."
