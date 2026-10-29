@@ -36,7 +36,8 @@ static const uint8_t levelParam[POCKET_LXR_TRIGGERS] = {
 static const char* const controlNames[POCKET_CTLS] = { "PITCH", "DECAY", "LEVEL" };
 
 /* bands of the layout */
-enum { B_TITLE = 0, B_VOICE = 2, B_CTL0 = 4, B_HITS = 11, B_CPU = 12, B_ERRORS = 13, B_FOOTER = 14 };
+enum { B_TITLE = 0, B_STATE = 1, B_VOICE = 2, B_MIDI = 3, B_CTL0 = 4, B_LEVEL = 10, B_HITS = 11, B_CPU = 12,
+	B_ERRORS = 13, B_FOOTER = 14 };
 #define ALL_BANDS ((uint16_t)((1u << POCKET_BANDS) - 1))
 
 void pocket_panel_init(struct pocket_panel* panel)
@@ -46,6 +47,7 @@ void pocket_panel_init(struct pocket_panel* panel)
 	panel->previous_buttons = ~0u; /* buttons held on entry do not act */
 	panel->dirty = ALL_BANDS;
 	panel->hits = 0;
+	panel->footer = "KEYS/PLAY HIT  HOME+ARP EXIT";
 }
 
 int pocket_panel_param(const struct pocket_panel* panel, int c)
@@ -184,7 +186,38 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 			text(px, POCKET_SCREEN_W - 8 - 3 * ADVANCE, y, "LXR", PAPER);
 		}
 		else
-			text(px, 8, y, "KEYS/PLAY HIT  HOME+ARP EXIT", PAPER);
+			text(px, 8, y, panel->footer, PAPER);
+		return;
+	}
+	if (band == B_STATE && status)
+	{
+		static const char* const states[] = { "STARTING", "LXR ENGINE READY", "SAFE MODE - ENGINE OFF",
+			"ENGINE ERROR - TABLES" };
+		text(px, 8, y, states[status->state < 4 ? status->state : 3], INK);
+		return;
+	}
+	if (band == B_MIDI && status)
+	{
+		char n1[12], n2[12], n3[12], l1[24], line[48];
+		if (!status->midi_messages)
+			text(px, 8, y, "MIDI WAITING", INK);
+		else
+		{
+			concat(b, "MIDI ", number(n1, status->midi_messages, 0));
+			concat(l1, " HITS ", number(n2, status->midi_hits, 0));
+			concat(line, b, l1);
+			concat(b, line, " NOTE ");
+			text(px, 8, y, concat(line, b, number(n3, status->midi_last, 0)), INK);
+		}
+		return;
+	}
+	if (band == B_LEVEL && status)
+	{
+		const int x = text(px, 8, y, "LEVEL", INK) + ADVANCE;
+		const int w = POCKET_SCREEN_W - 8 - x;
+		fill(px, x, 3, w, POCKET_BAND_ROWS - 6, INK);
+		fill(px, x + 1, 4, w - 2, POCKET_BAND_ROWS - 8, PAPER);
+		fill(px, x + 2, 5, (w - 4) * (status->level > 100 ? 100 : status->level) / 100, POCKET_BAND_ROWS - 10, INK);
 		return;
 	}
 	if (band == B_VOICE)
@@ -217,6 +250,11 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 	if (band == B_HITS)
 	{
 		text(px, 8, y, concat(b, "HITS ", number(a, panel->hits, 0)), INK);
+		if (status && status->build[0])
+		{
+			const int x = text(px, POCKET_SCREEN_W - 8 - 14 * ADVANCE, y, "BUILD ", INK);
+			text(px, x, y, status->build, INK); /* uppercase hex: the font has no lower case */
+		}
 		return;
 	}
 	if (band == B_CPU && status)

@@ -86,7 +86,7 @@ cp -R "$repo/lxr/shim" "$pocket/lxr/"
 cp "$repo/lxr/bridge/lxr_params.c" "$repo/lxr/bridge/libm.c" "$pocket/lxr/bridge/"
 cp "$repo/engine/pocket_lxr.c" "$repo/engine/pocket_lxr.h" "$repo/engine/pocket_params.h" \
 	"$repo/engine/fx_off.c" "$repo/engine/single_precision.h" "$pocket/engine/"
-cp "$repo/ui/pocket_panel.c" "$repo/ui/pocket_panel.h" "$pocket/ui/"
+cp "$repo/ui/pocket_panel.c" "$repo/ui/pocket_panel.h" "$repo/ui/pocket_midi.c" "$repo/ui/pocket_midi.h" "$pocket/ui/"
 cp "$here/pocket_fm1_config.h" "$here/pocket_fm1_libm.c" "$pocket/fm1/"
 # init-only code and data: stays in Flash with every placement
 mkdir -p "$pocket/flash"

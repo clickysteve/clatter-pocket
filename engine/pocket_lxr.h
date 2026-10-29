@@ -70,8 +70,10 @@ struct pocket_lxr_stats {
 
 /* ---------------------------------------------------------------- lifetime (control) */
 /* Initialise the engine exactly as soundengine_init() does (without codec or sequencer),
- * reset the event ring and load the firmware's init kit. `seed` seeds the noise source. */
-void pocket_lxr_init(uint32_t seed);
+ * reset the event ring and load the firmware's init kit. `seed` seeds the noise source.
+ * Returns 0, or -1 if the packed tables (POCKET_PACKED_TABLES builds) failed to unpack: the
+ * engine must then not be rendered. */
+int pocket_lxr_init(uint32_t seed);
 
 /* ---------------------------------------------------------------- control context */
 /* Sound parameter `p` (a Parameters.h PAR_* number, 1..END_OF_SOUND_PARAMETERS-1) to `value`

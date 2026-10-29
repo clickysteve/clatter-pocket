@@ -85,10 +85,44 @@ int main(int argc, char** argv)
 	poll(&panel, 0, (1u << POCKET_BTN_HOME) | (1u << POCKET_BTN_ARP), 0, 0, 0, 0, &exited);
 	CHECK(exited, "HOME+ARP does not exit");
 
-	/* screenshot */
+	/* hardware-test diagnostics: every band in every state, at extreme values, stays inside
+	   its band buffer (guard words after it), and the state line differs per state */
+	{
+		static uint16_t guarded[POCKET_SCREEN_W * POCKET_BAND_ROWS + 64];
+		static uint16_t first[POCKET_SCREEN_W * POCKET_BAND_ROWS];
+		struct pocket_panel_status worst = { 65535, 65535, 0xffffffffu, 0xffffffffu, 0xffffffffu,
+			0, 255, 127, 0xffffffffu, 0xffffffffu, "FFFFFFFF" };
+		pocket_panel_init(&panel);
+		panel.hits = 0xffffffffu;
+		int intact = 1, distinct = 1;
+		for (unsigned st = 0; st < 6; st++)
+		{
+			worst.state = (uint8_t)st; /* 4 and 5 are out of range: shown as an error */
+			for (unsigned b = 0; b < POCKET_BANDS; b++)
+			{
+				for (int i = 0; i < 64; i++) guarded[POCKET_SCREEN_W * POCKET_BAND_ROWS + i] = 0x5a5a;
+				pocket_panel_draw_band(&panel, &worst, b, guarded);
+				for (int i = 0; i < 64; i++) intact &= guarded[POCKET_SCREEN_W * POCKET_BAND_ROWS + i] == 0x5a5a;
+				if (b == 1 && st == 0) memcpy(first, guarded, sizeof first);
+				if (b == 1 && st > 0 && st < 4) distinct &= memcmp(first, guarded, sizeof first) != 0;
+			}
+		}
+		CHECK(intact, "a diagnostic band wrote past its buffer");
+		CHECK(distinct, "the engine state line does not change with the state");
+		struct pocket_panel_status quiet = { 0 };
+		pocket_panel_draw_band(&panel, &quiet, 3, guarded);
+		memcpy(first, guarded, sizeof first);
+		quiet.midi_messages = 1;
+		pocket_panel_draw_band(&panel, &quiet, 3, guarded);
+		CHECK(memcmp(first, guarded, sizeof first) != 0, "MIDI activity does not change the MIDI line");
+		pocket_panel_draw_band(&panel, NULL, 1, guarded); /* no status: blank band, no crash */
+	}
+
+	/* screenshot: the replacement firmware's screen with the engine running */
 	pocket_panel_init(&panel);
 	panel.hits = 42;
-	struct pocket_panel_status status = { 183, 241, 0, 0, 0 };
+	panel.footer = "KEYS/PLAY HIT  ENC 7 VOICE";
+	struct pocket_panel_status status = { 183, 241, 0, 0, 0, POCKET_STATE_READY, 46, 38, 120, 57, "1FE05C9D" };
 	static uint16_t band[POCKET_SCREEN_W * POCKET_BAND_ROWS];
 	const char* path = argc > 1 ? argv[1] : "build/host/panel.ppm";
 	FILE* f = fopen(path, "wb");

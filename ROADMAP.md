@@ -33,9 +33,10 @@ checked as far as possible without the toolchain or device), **open**.
   six triggers: pitch, decay, level, keys and PLAY), on-device timing display
 - **done: flash budget.** CLATTER Pocket replaces the stock instrument application, the
   LXR tables are packed losslessly (102 KB -> 24 KB, unpacked into RAM at start-up), control
-  code is `-Oz`: a valid package with 59 KB to spare, all SDK checks passing, the user
-  partition untouched (FM1-REPLACEMENT.md). Beside the stock instrument it is still 27 KB
-  too large. The options that were considered:
+  code is `-Oz`: a valid package with 32,709 bytes to spare (the limit is 453,921, not the
+  479,232 first reported), all SDK checks passing, the stock flash layout, the user
+  partition untouched (FM1-REPLACEMENT.md). Beside the stock instrument it is still
+  53,671 bytes too large. The options that were considered:
   1. pack the LXR's tables (second-order delta coding measures about 76 KB -> 11 KB for the
      wavetables, 26 -> 13 KB for the transients) and unpack them into SRAM when Pocket mode
      starts: about 77 KB, not enough on its own;
@@ -45,6 +46,10 @@ checked as far as possible without the toolchain or device), **open**.
      how the stock firmware, loader and workbench treat it;
   4. drop parts of the stock application from the image (CLATTER Pocket as the instrument
      rather than beside it); the stock synthesis is a binary library linked whole.
+- **done** pre-flash audit (PRE-FLASH-AUDIT.md): `sqrtf` miscompilation, MIDI pitch, VM
+  layout, start-up order (engine after the updater, SAFE MODE), SRAM placement, clean
+  builds, installer page, start-up diagnostics, exhaustive MIDI tests; reproducible package
+- **next** the first hardware test (FIRST-HARDWARE-TEST.md), with the owner's approval
 - **open** a settings page for the linked Bluetooth/BLE API (role, scan, connect), and a
   way to tell the user that workbench backups need the stock firmware
 - **open** then on-device: audio heard, CPU per block, overruns, clipping, stability over an

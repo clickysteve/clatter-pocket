@@ -13,6 +13,16 @@
  * compiled. Byte-identical tables; see BUILDING.md. */
 #define POCKET_PACKED_TABLES 1
 
+/* CLATTER's shim defines sqrtf and sqrt as static inline wrappers of __builtin_sqrtf and
+ * __builtin_sqrt. The PI32v2 FPU has no square root, so the builtin becomes a call to the
+ * library function of the same name: inside the shim that is the wrapper itself, an
+ * infinite recursion that LLVM deletes as undefined behaviour (the pan gains came out as
+ * garbage; found by the pre-flash audit, PRE-FLASH-AUDIT.md). Renamed, the wrappers call
+ * the external sqrtf (pocket_fm1_libm.c, correctly rounded); a sqrt (double) call would
+ * fail to link instead of miscompiling. The firmware checks require sqrtf in SRAM. */
+#define sqrtf pocket_sqrtf
+#define sqrt pocket_sqrt
+
 /* Event ring ordering. The SDK's own audio code uses csync as its barrier. ASSUMPTION: the
  * control task and the audio interrupt run on the same core of the AC791N (see HARDWARE.md,
  * open questions); if they do not, this must become a real cross-core barrier. */

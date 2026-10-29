@@ -16,12 +16,22 @@
  */
 #include <stdint.h>
 
-float fmaf(float a, float b, float c)
+/* pocket_fm1_config.h renames the shim's sqrtf wrapper; this file defines the real one.
+   The names can be overridden (host/tests/test_fm1_libm.c compiles these beside the host's). */
+#undef sqrtf
+#ifndef POCKET_LIBM_SQRTF
+#define POCKET_LIBM_SQRTF sqrtf
+#endif
+#ifndef POCKET_LIBM_FMAF
+#define POCKET_LIBM_FMAF fmaf
+#endif
+
+float POCKET_LIBM_FMAF(float a, float b, float c)
 {
 	return (float)((double)a * (double)b + (double)c);
 }
 
-float sqrtf(float x)
+float POCKET_LIBM_SQRTF(float x)
 {
 	union { float f; uint32_t u; } v = { x };
 	uint32_t bits = v.u;

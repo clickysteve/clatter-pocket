@@ -2,37 +2,49 @@
 
 `firmware/fm1/build.sh --replace --single-precision` builds a firmware in which CLATTER
 Pocket **replaces fm1_open's stock instrument application** and keeps the SDK's
-infrastructure: RTOS, drivers, audio DMA, panel and LCD, USB (MIDI and audio), Bluetooth
-(MIDI and audio), the firmware update protocol, and the flash layout. It produces a valid
-package, `build/fm1-replace/clatter-pocket-fm1-replace-UNVERIFIED.fwsc`, which passes all
-of the SDK's firmware checks. The replacement-mode adjustments to those checks are listed
-below.
+infrastructure:
+- RTOS and drivers;
+- audio DMA, panel and LCD;
+- USB (MIDI and audio) and Bluetooth (MIDI and audio);
+- the firmware update protocol;
+- the flash layout, **exactly as stock fm1_open V14**.
 
-Package (fm1_open 4c7496d, JieLi 2.5.3, `--replace --single-precision`): 459,316 bytes,
-SHA-256 `3cd6a723796681beaee114116abd88fadedeabb1851c7f8a06ec970e04723b64`, ELF
-`1fe05c9dcee63ddd32e7abe2f2a069f0e25a3f3072c56813b11495f65f62c00a`. Reproducible: two clean
-rebuilds gave the same bytes.
+It produces a valid package, `build/fm1-replace/clatter-pocket-fm1-replace-UNVERIFIED.fwsc`,
+which passes all of the SDK's firmware checks; the replacement-mode adjustments are listed
+below. `python3 tools/make-installer-page.py` makes an installer page for it.
+
+| | |
+|---|---|
+| Package | `clatter-pocket-fm1-replace-UNVERIFIED.fwsc`, 492,084 bytes |
+| Package SHA-256 | `b8c13d2c4d3a40879164261e45cf9b30124b4837ccb0bf7b3c823ca0f30e7890` |
+| ELF SHA-256 | `2d3ce3a6b1e0765fe8c41f8ac7298fa9d1ebc86fd807dfe7a04dabcf248524f1` |
+| Built from | fm1_open 4c7496d, JieLi 2.5.3, `--replace --single-precision` |
+| Reproducible | two builds from an empty `build/` gave identical bytes |
 
 **Status, 2026-10-29: built and packaged; not flashed; not run on hardware.** Everything
-below comes from the link map, the SDK's firmware report and packager, and host tests. None
-of it comes from a device.
+below comes from the link map, the ELF, the SDK's firmware report and packager, and host
+tests. None of it comes from a device. PRE-FLASH-AUDIT.md has the full audit;
+FIRST-HARDWARE-TEST.md has the test procedure.
 
-## Why replacement
+## The flash budget
 
-CLATTER Pocket beside the stock instrument does not fit. The 1 MiB update image leaves
-479,232 bytes for the firmware image and stock fm1_open V14 uses 453,576 of them.
+`Package.Create` (fm1_open `sdk/Package.cs`) accepts an application image of at most:
 
-| Approach | App image | vs the 479,232 limit |
+0xff000 − 536,576 (user) − 4,096 (BTIF) − 32,768 (minimum VM) − 16,384 (boot area) − 288 − 383 − 64 = **453,921 bytes**
+
+The first report gave 479,232: that figure left out the boot area, BTIF and the directory.
+
+| Approach | App image | vs the 453,921 limit |
 |---|---|---|
-| Stock fm1_open V14 | 453,576 | 25,656 free |
-| Beside stock, tables as compiled | 586,920 | 107,688 over |
-| Beside stock, tables packed | 506,696 | 27,464 over |
-| **Replacing the stock application, tables packed, `-Oz` control code** | **419,964** | **59,268 free** |
+| Stock fm1_open V14 | 453,576 | 345 free |
+| Beside stock, tables as compiled | 586,920 | 132,999 over |
+| Beside stock, tables packed | 507,592 | 53,671 over |
+| **Replacing the stock application, tables packed, `-Oz` control code** | **421,212** | **32,709 free** |
 
 The SDK's binary library (`libfm1_engine.a`) is a single pre-linked object. `--gc-sections`
 removes what nothing references any more, but the library still references its own
-instrument internals, so about 40.6 KB of stock instrument code and data stay in the
-image, unused and unreachable from CLATTER Pocket:
+instrument internals, so about 40.6 KB of stock instrument code and data stay in the image,
+unused and unreachable from CLATTER Pocket:
 
 | Stock code still linked | Bytes |
 |---|---|
@@ -50,26 +62,44 @@ Removing it would require changing the binary SDK, which this project does not d
 
 | Flash bytes, from the link map | Stock | Replacement |
 |---|---|---|
-| SDK library (`libfm1_engine.a`) | 375,348 | 358,075 |
+| SDK library | 375,348 | 358,071 |
 | fm1_open application. Stock: all of `app/`. Replacement: what is kept, the board layer, `audio_output.c` and the build identity | 73,570 | 4,563 |
-| CLATTER Pocket application unit | | 1,011 |
-| CLATTER Pocket engine (LXR-02 DSP, parameter handler, engine host, panel, table unpacker) | | 27,824 |
+| CLATTER Pocket application unit | | 1,219 |
+| CLATTER Pocket engine (LXR-02 DSP, parameter handler, engine host, panel, MIDI, unpacker, `sqrtf`) | | 28,871 |
 | LXR tables, packed (from 102,238) | | 23,892 |
 | libc, compiler-rt | 4,538 | 4,452 |
-| Sum of input sections | 453,456 | 419,817 |
-| **App image** (the SDK's definition: `.text` + `.ram0_data` + `.cache_ram_data`) | **453,576** | **419,964** |
+| **App image** (`.text` + `.ram0_data` + `.cache_ram_data`) | **453,576** | **421,212** |
 
-The packager places the image, then the VM, BTIF and the user partition. The **user
-partition (507,904 to 1,044,480) and BTIF (503,808) are at the same addresses as in stock**.
-The VM (system configuration such as Bluetooth pairings, between the image and BTIF) is
-sized by the SDK's packager, as for any build. It grows from 32 KB to 64 KB into the space
-the smaller image leaves.
+## Flash layout: identical to stock
+
+`Package.Create` places the VM, the system settings store, directly after the image,
+rounded to 4 KiB. The VM holds Bluetooth paired devices
+(`get_remote_device_info_from_vm`) and syscfg items, and the SDK validates its area by ID
+(`vm_check_id`, `vm_area_check`, `vm_reset`, `_vm_area_erase`). Left alone, a smaller
+image would move the VM's start into flash the previous firmware used for code. So
+CLATTER Pocket builds pad the packaged application with 28,614 erased-flash bytes (`0xFF`,
+after the last section; never executed or copied), and the build fails unless the result
+is the stock layout. `tools/fwsc-layout.py` decodes the records of both packages:
+
+| Record | fm1_open V14 stock | CLATTER Pocket | M-VAVE V15 (SDK recovery image) |
+|---|---|---|---|
+| `flash.bin` written by an update | 0 to 471,040 | 0 to 471,040 | 0 to 602,112 |
+| VM | 471,040, 32,768 bytes | 471,040, 32,768 bytes | 602,112, 352,256 bytes |
+| BTIF | 503,808, 4,096 | 503,808, 4,096 | 954,368, 4,096 |
+| USER | 507,904, 536,576 | 507,904, 536,576 | (no user record) |
+| `key_mac` | 1,044,480, 4,096 | 1,044,480, 4,096 | 1,044,480, 4,096 |
+
+The boot area (0 to 0x4000: uboot, boot configuration), the update identity
+(`FM-1_8000014`) and the loader (`ota.bin`, the vendor loader `ef1f2db8…`) are
+byte-identical to the stock package. Only `app.bin` differs. Switching between M-VAVE
+V15 and fm1_open Open already moves VM and BTIF; switching between Open V14 and CLATTER
+Pocket does not.
 
 ## What was removed
 
 All of fm1_open's instrument application:
-- the UI: 240 × 240 pages for tracks, steps, tones, FM operators, LFOs, effects, mixer,
-  projects, presets, MIDI, Bluetooth and settings;
+- the UI: tracks, steps, tones, FM operators, LFOs, effects, mixer, projects, presets,
+  MIDI, Bluetooth and settings pages;
 - project, preset and sample storage;
 - the DX7 voice library and factory voices;
 - the workbench transfer protocol for projects, samples and voices;
@@ -80,9 +110,7 @@ All of fm1_open's instrument application:
 `docs/fm1-replace-removed.txt` lists every flash symbol of the stock image that is absent
 from the replacement, by input file, with sizes, 60,831 bytes in total. It is generated by
 `tools/flash-map.py --diff` from the two link maps. It includes:
-- 17,426 bytes of SDK library functions that only the stock application called. These are
-  the `groove_*` editing, sequence, timbre and tuning API and the instrument's storage
-  journal;
+- 17,426 bytes of SDK library functions that only the stock application called;
 - **`fm1_flash_read`, `fm1_flash_write`, `fm1_flash_erase`, `fm1_flash_map` and
   `fm1_flash_invalidate`**. The replacement contains no code that can read or write the
   user partition.
@@ -91,65 +119,70 @@ from the replacement, by input file, with sizes, 60,831 bytes in total. It is ge
 
 | Hardware or function | State |
 |---|---|
-| Audio output (DAC, I2S DMA, 44.1 kHz, 128-frame blocks) | kept (`app/board/audio.c`); CLATTER Pocket renders the instrument |
+| Audio output (I2S DMA, 44.1 kHz, 128-frame blocks, Q23 stereo) | kept (`app/board/audio.c`); CLATTER Pocket renders the instrument |
 | MASTER knob | output level 0 to 127 with the stock ramp (`audio_output.c`) |
-| USB audio in (mixed into the output) and out (recording) | kept (`audio_output.c`) |
-| Bluetooth audio in (mixed) | kept; enabled at start-up like stock (on, music and MIDI) |
-| MIDI in over USB, BLE and DIN/TRS | kept; General MIDI drum notes on any channel trigger the seven LXR voices |
-| MIDI out | linked (SDK), unused by CLATTER Pocket |
-| BLE MIDI roles, scan and connect | Peripheral at start-up like stock; the rest of the API is linked (the SDK check requires it) with no page yet |
-| 27 keys, 14 buttons, 7 encoders, LCD | kept (`app/board/panel.c`); the CLATTER Pocket panel |
-| Button and key LEDs | kept (switched off; unused) |
-| **Firmware update over USB-MIDI** (vendor protocol `00 59`: identity, capability, transfer) | kept: handled inside the SDK before application SysEx (`fm1_update_*` present; checked). Identity and family are fm1_open's, so the workbench can install stock Open or V15 again |
-| User partition (projects, samples, DX7 library) | **untouched**, and readable again after reinstalling stock |
-| Workbench project, sample and voice backup | **not available** while CLATTER Pocket is installed (`transfer.c` is removed): back up first |
+| USB audio in (mixed) and out (recording); Bluetooth audio in (mixed) | kept (`audio_output.c`); Bluetooth enabled at start-up like stock (on, music and MIDI, BLE Peripheral) |
+| MIDI in over USB, BLE and DIN/TRS | kept; General MIDI drum notes on any channel trigger the seven LXR voices at their programmed pitch |
+| MIDI out | linked (SDK), unused |
+| BLE roles, scan and connect | Peripheral at start-up; the rest of the API is linked (the SDK check requires it), with no page yet |
+| 27 keys, 14 buttons, 7 encoders, LCD | kept (`app/board/panel.c`): the CLATTER Pocket panel and start-up diagnostics |
+| LEDs | switched off |
+| **Firmware update over USB-MIDI** | kept, in the SDK, untouched: handled before application SysEx, in the higher-priority `update` task (PRE-FLASH-AUDIT.md) |
+| User partition | **untouched**; readable again after reinstalling stock |
+| Workbench project, sample and voice backup | **not available** while CLATTER Pocket is installed: back up first |
 | Stock instrument, sequencer, arpeggiator, effects | not available (code partly present, unreachable) |
+
+## Start-up, safe mode, diagnostics
+
+The SDK calls `groove_screen_init` before it starts the firmware updater, USB and audio
+(the order is read from the ELF in PRE-FLASH-AUDIT.md). So `groove_screen_init` only
+prepares the panel and draws the start screen, which is the same work as stock. The LXR
+engine starts in the control loop **1.5 s later**, after the updater, USB and audio are
+running.
+
+- **SAFE MODE:** if HOME is held at that moment, the engine never starts. The screen says
+  SAFE MODE, the output is silent, and the SDK, USB-MIDI updater and Bluetooth run
+  normally. This is a way to reach the updater if the engine misbehaves.
+- **ENGINE ERROR:** if the packed tables do not unpack, the engine is not started and the
+  output stays silent.
+
+The screen shows:
+- the engine state: STARTING, LXR ENGINE READY, SAFE MODE or ENGINE ERROR;
+- MIDI activity: WAITING, or messages, hits and the last note;
+- an output level meter;
+- the audio CPU share (mean and peak per block), DMA overruns, clipped samples and dropped
+  events;
+- the build identity: the first 8 hex digits of `fm1_build_id`.
+
+`-DPOCKET_DIAGNOSTICS=0` removes the per-block timing from the audio interrupt.
 
 ## SDK firmware checks in replacement mode
 
-`Build-ClatterPocket.ps1 -Replace` (generated, edit group 8 in `tools/derive-fm1-build.py`)
-keeps every platform check:
-- ELF entry and section rules;
-- registration tables;
-- RTOS ABI;
+Generated by edit groups 8 and 9 of `tools/derive-fm1-build.py`; PRE-FLASH-AUDIT.md lists
+the exact diff. Every platform check is kept:
+- ELF entry and section rules, registration tables, RTOS ABI;
 - the Bluetooth, BLE, USB MIDI, USB audio, update and flash-runtime symbols;
-- forbidden runtimes;
+- forbidden runtimes and inputs;
 - the heap minimum;
-- the platform audio path in SRAM (`fm1_audio_irq`, `fm1_output_mix`, `fm1_audio_copy`,
-  USB and Bluetooth audio, flash-safety helpers, the SDK's hash-named audio internals);
-- the panel scan code in SRAM.
+- the platform audio path and panel scan in SRAM.
 
-It requires CLATTER Pocket's audio path in SRAM:
-- `clatter_pocket_render` and `clatter_pocket_output_level`;
-- `pocket_lxr_render_q23`;
-- the LXR's per-sample code, voice state and tables.
-
-Stock-instrument symbols (the `synth.json` SRAM contract, the engine's render, level and
-sequencer entry points, the tuning and project hooks) may be absent. Any that are present
-are still checked for SRAM placement. The firmware report lists the absent ones
-(`stock_instrument_symbols_absent`). For this build they are `fm1_master_gain`,
-`groove_project_apply_edit` and `groove_tuning_apply`. Everything else of the stock contract
-is still linked and placed as the SDK requires.
-
-The SDK library calls these hooks; the replacement implements them as follows:
-
-| Hook | Replacement |
-|---|---|
-| `groove_screen_init`, `groove_screen_control` | the CLATTER Pocket panel |
-| `fm1_app_midi_received` | drum-note triggers |
-| `fm1_app_sysex` | empty: updates are handled by the SDK first |
-| project, sample, transfer and DX7-library hooks | inert, and never touch flash; `groove_project_scratch` returns a 4,064-byte RAM buffer |
-| `groove_midi_*` and `groove_fm_program` (the audio-context sequencer hooks) | inert, placed in SRAM |
-
-Bluetooth is configured at start-up the way the stock firmware does it.
+CLATTER Pocket's audio path, voice state, tables and `sqrtf` must be in SRAM. Stock
+instrument symbols (the `synth.json` contract, the engine's entry points, the tuning and
+project hooks) may be absent. Any that are present are still checked; the absent ones are
+reported: `fm1_master_gain`, `groove_project_apply_edit` and `groove_tuning_apply`. The
+package must keep the stock layout.
 
 ## RAM
 
 | | Stock | Replacement |
 |---|---|---|
-| `.ram0_data` (SRAM code and initialised data) | 80,968 | 128,860 |
-| `.ram0_bss` | 195,232 | 284,524 (of which 102,238 are the unpacked LXR tables) |
-| Runtime heap (minimum 49,152) | 247,340 | **110,156** |
+| `.ram0_data` (SRAM code and initialised data) | 80,968 | 104,924 |
+| `.ram0_bss` | 195,232 | 284,492 (of which 102,238 are the unpacked LXR tables) |
+| Runtime heap (SDK minimum 49,152) | 247,340 | **134,124** (84,972 above the minimum) |
+
+CLATTER Pocket allocates nothing at runtime: no allocator call in its code (checked in the
+ELF). The heap is left to the SDK's RTOS, Bluetooth and USB, which the 49,152-byte minimum
+is for.
 
 ## The LXR tables
 
@@ -162,31 +195,19 @@ They are stored losslessly packed, in 23,812 bytes:
 - a second-order predictor for the waveforms and a first-order one for the transients;
 - Rice coding in blocks of 64.
 
-`pocket_lxr_init` unpacks them into RAM, under their firmware names, before the engine
-starts (`engine/lxr_tables_unpack.c`, about 500 bytes of code). They are regenerated with
-`make packed-tables`. `make test` checks:
+The packed data and the unpacker stay in flash. `pocket_lxr_init` unpacks the tables into
+RAM, under their firmware names, once, on the control task, before rendering is enabled.
+Nothing unpacks in the audio interrupt. `make test` checks:
 - the unpacked tables are **byte-identical** to the compiled firmware tables;
 - all 48 engine checks pass on the packed engine;
-- the CLATTER comparison script renders **bit-identical** voices with packed and unpacked
-  tables.
+- the CLATTER comparison script renders **bit-identical** voices.
 
-The synthesis is the same LXR-02 code with the same data.
+## Compiler settings
 
-## Compiler size settings
-
-- Control-task-only code is compiled with `-Oz` and stays in Flash, even with
-  `--placement sram`. That covers the CLATTER Pocket application unit, `ui/pocket_panel.c`
-  and the table unpacker.
-- The LXR DSP keeps `-O2` and stays in SRAM (`--placement sram`). It runs in the audio
-  interrupt, its CPU cost on the device is not measured yet, and SRAM is the SDK's rule for
-  audio code during flash writes.
-
-## Before anyone installs it
-
-This build has never run. Before installing it, the owner should:
-1. back up projects, samples and the DX7 library with the workbench while stock Open is
-   installed;
-2. confirm that the workbench can reinstall stock Open and V15 on their unit (HARDWARE.md,
-   recovery);
-3. install only with explicit approval. A failure that stops the firmware from answering
-   over USB-MIDI needs the vendor's unpublished recovery tool.
+- **Control-task-only code** stays in flash and is compiled with `-Oz`: the CLATTER Pocket
+  application unit, the panel, MIDI parsing and the table unpacker.
+- **The LXR DSP** keeps `-O2` and stays in SRAM: it runs in the audio interrupt.
+- **Single precision** (`--single-precision`): no CLATTER Pocket function calls a software
+  double routine (checked in the ELF).
+- **`sqrtf`:** the shim's wrappers are renamed so `sqrtf` resolves to a real,
+  correctly rounded implementation (PRE-FLASH-AUDIT.md, finding 1).

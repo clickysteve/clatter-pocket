@@ -56,13 +56,14 @@ function Add-PocketSections([string]$text) {
         $t.Substring(0, $at) + $new + $t.Substring($at + $old.Length)
     }
     $code = "        *(.volatile_ram_code .volatile_ram_code.*)`n        *(.itcm_text .itcm_text.*)"
-    if ($Placement -eq 'sram') { $code += "`n        *lxr_*.obj(.text .text.* .rodata .rodata.*)" }
+    # Anchored to the object prefix: source names may contain 'lxr_' too (lxr_tables_*.c).
+    if ($Placement -eq 'sram') { $code += "`n        obj/lxr_*.obj(.text .text.* .rodata .rodata.*)" }
     $text = Edit-Once $text '        *(.volatile_ram_code .volatile_ram_code.*)' $code
     $text = Edit-Once $text '        *(.data .data.*)' "        *(.data .data.*)`n        *(.dtcm .dtcm.*)"
     $text = Edit-Once $text '        *(.bss .bss.*)' "        *(.dtcmz .dtcmz.*)`n        *(.bss .bss.*)"
     if ($Placement -eq 'sram') {
-        $text = Edit-Once $text '        *(.text*)' '        *(EXCLUDE_FILE(*lxr_*.obj) .text*)'
-        $text = Edit-Once $text '        *(.rodata*)' '        *(EXCLUDE_FILE(*lxr_*.obj) .rodata*)'
+        $text = Edit-Once $text '        *(.text*)' '        *(EXCLUDE_FILE(obj/lxr_*.obj) .text*)'
+        $text = Edit-Once $text '        *(.rodata*)' '        *(EXCLUDE_FILE(obj/lxr_*.obj) .rodata*)'
     }
     $text
 }
@@ -194,7 +195,7 @@ function Test-Firmware {
     # CLATTER Pocket: the audio hook, the engine host and the LXR's own TCM code and state.
     $pocketHooks = if ($Replace) { @('clatter_pocket_render','clatter_pocket_output_level') } else { @('clatter_pocket_fm1_render') }
     if (!$Stock) { $callbacks += @($pocketHooks) + @('pocket_lxr_render_q23','calcDrumVoiceSyncBlock','calcDrumVoiceAsync',
-        'mixer_decimateBlock','SVF_recalcFreq','slopeEg2_calc','calcNextOscSampleBlock','sine_table',
+        'mixer_decimateBlock','SVF_recalcFreq','slopeEg2_calc','calcNextOscSampleBlock','sine_table','sqrtf',
         'voiceArray','snareVoice','cymbalVoice','hatVoice')
     if ($Placement -eq 'sram') {
         $callbacks += @('midiParser_ccHandler','Drum_trigger','Snare_calcSyncBlock','Cymbal_calcSyncBlock',
@@ -306,8 +307,27 @@ function Package-Firmware {
                 $bytes = [IO.File]::ReadAllBytes((Join-Path $generated "$section.bin"))
                 $image.Write($bytes,0,$bytes.Length)
             }
+            # CLATTER Pocket: keep the stock fm1_open V14 flash layout. Package.cs places the VM
+            # (system settings) directly after the image, rounded to 4 KiB; pad the application with
+            # erased-flash bytes after its last section so the image ends where stock's does.
+            $stockImageEnd = 471040   # build.sh --stock: FLASH_BIN_SIZE of fm1_open 4c7496d
+            $layoutPadding = 0
+            if (!$Stock) {
+                $minimumApp = $stockImageEnd - 4096 - (0x4000 + 0x120 + 383 + 64) + 1
+                if ($image.Length -lt $minimumApp) {
+                    $layoutPadding = [int]($minimumApp - $image.Length)
+                    $fill = New-Object byte[] $layoutPadding
+                    for ($i = 0; $i -lt $layoutPadding; $i++) { $fill[$i] = 0xff }
+                    $image.Write($fill,0,$layoutPadding)
+                }
+            }
             Add-Type -Path (Join-Path $sdk 'Package.cs')
             $layout = [FM1.Package]::Create($image.ToArray(),(Join-Path $sdk 'tools/pack'),$output,$variant.user_bytes,$firmwareProduct)
+            if (!$Stock -and ($layout.VM_START_ADDR -ne $stockImageEnd -or $layout.VM_REAL_SIZE -ne 32768 -or
+                    $layout.BTIF_RESERVED_START -ne 503808 -or $layout.USER_RESERVED_START -ne 507904)) {
+                throw 'CLATTER Pocket package does not keep the stock fm1_open V14 flash layout.'
+            }
+            $layout['layout_padding_bytes'] = $layoutPadding
         } finally { $image.Dispose() }
         if (!(Test-Path -LiteralPath $output) -or (Hash $elf) -ne $before) {
             throw 'Firmware packaging did not produce a matching image.'

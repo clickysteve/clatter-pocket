@@ -11,11 +11,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#define sqrtf pocket_sqrtf
-#define fmaf pocket_fmaf
+#define POCKET_LIBM_SQRTF pocket_sqrtf
+#define POCKET_LIBM_FMAF pocket_fmaf
 #include "../../firmware/fm1/pocket_fm1_libm.c"
-#undef sqrtf
-#undef fmaf
 
 static uint32_t bitsOf(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
 static float floatOf(uint32_t u) { float f; memcpy(&f, &u, 4); return f; }

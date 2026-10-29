@@ -374,7 +374,7 @@ static void zeroEngineState(void)
  * generator, as CLATTER's clatter_init. The init kit is applied directly here (the audio
  * context is not running yet), every parameter through the firmware's handler.
  */
-void pocket_lxr_init(uint32_t seed)
+int pocket_lxr_init(uint32_t seed)
 {
 #ifdef POCKET_PACKED_TABLES
 	/* the firmware's constant tables, unpacked into RAM before anything reads them */
@@ -427,6 +427,11 @@ void pocket_lxr_init(uint32_t seed)
 	modNode_setDestination(&cymbalVoice.lfo.modTarget, 0);
 	modNode_setDestination(&hatVoice.lfo.modTarget, 0);
 	for (int v = 0; v < POCKET_LXR_VOICES; v++) modNode_setDestination(&velocityModulators[v], 0);
+#ifdef POCKET_PACKED_TABLES
+	return tablesBad ? -1 : 0;
+#else
+	return 0;
+#endif
 }
 
 /* ------------------------------------------------------------------ audio context */

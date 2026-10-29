@@ -80,6 +80,11 @@ transfer, MIDI router, DX7 library), keeps the board layer and output mix, adds
 (FM1-REPLACEMENT.md). Output: `build/fm1-replace/clatter-pocket-fm1-replace-UNVERIFIED.fwsc`.
 `python3 tools/flash-map.py <sdk.map>` and `--diff <stock.map> <other.map>` analyse the link.
 
+`python3 tools/make-installer-page.py` writes `build/fm1-replace/clatter-pocket-installer-UNVERIFIED.html`
+(M-VAVE's `WebUpdate.js` unchanged; FIRST-HARDWARE-TEST.md). `python3 tools/fwsc-layout.py
+PACKAGE.fwsc` prints a package's flash layout records. CLATTER Pocket packages keep the
+stock fm1_open V14 layout (VM at 471 040): the build pads the image and checks it.
+
 All FM-1 builds use the packed LXR tables (`engine/lxr_tables_packed.c`, regenerated with
 `make packed-tables`; unpacked into RAM at start-up).
 
@@ -116,13 +121,14 @@ matching public source archive URL (GPL) and are not set up.
 | CLATTER Pocket, double precision, `sram` | 588 712 | 94 252 | pass | **does not fit** |
 | CLATTER Pocket, `--single-precision`, `sram` | 586 920 | 95 948 | pass | **does not fit** |
 | CLATTER Pocket, `--single-precision`, `--placement tcm` | 586 888 | 182 572 | pass | **does not fit** |
-| after table packing: CLATTER Pocket beside stock, `--single-precision` | 506 696 | | pass | **does not fit** (27 464 over) |
-| **`--replace --single-precision`** (packed tables, `-Oz` control code) | **419 964** | **110 156** | **pass** (replacement mode) | **built**: 59 268 bytes under the limit |
+| after table packing: CLATTER Pocket beside stock, `--single-precision` | 507 592 | | pass | **does not fit** (53 671 over) |
+| **`--replace --single-precision`** (packed tables, `-Oz` control code; final, PRE-FLASH-AUDIT.md) | **421 212** | **134 124** | **pass** (replacement mode) | **built**: 32 709 bytes under the limit, stock layout |
 
 All CLATTER Pocket sources compile with PI32v2 clang 4.0.1; the link resolves; the audio
 path is in SRAM; RAM is not the problem (the heap minimum is 49 152). **Flash is**: the
-update image leaves 479 232 bytes for the app image (HARDWARE.md) and CLATTER Pocket adds
-about 133 KB to the stock 453 576, about 108 KB more than fits. Of the 133 KB, 102 KB are
+packager accepts an app image of at most 453 921 bytes (HARDWARE.md; first reported as
+479 232, which left out the boot area, BTIF and the directory) and CLATTER Pocket adds about
+133 KB to the stock 453 576. Of the 133 KB, 102 KB are
 the LXR's constant tables (tri/saw/rect wavetables 3 × 22.5 KB, transient samples 26 KB,
 sine 8 KB). Resolved by replacing the stock application and packing the tables:
 FM1-REPLACEMENT.md.

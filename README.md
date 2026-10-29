@@ -16,17 +16,18 @@ pocket synthesizer, through M-VAVE's open firmware SDK
 
 | | |
 |---|---|
-| LXR engine (all six voices, seven triggers, the firmware's parameter handler, modulation, locks) | runs natively; 165 host checks pass; matches CLATTER's engine to within 3 LSB; the FM-1's packed tables unpack byte-identical |
-| FM-1 firmware, CLATTER Pocket **replacing** the stock instrument application | **builds and packages** with the FM-1 toolchain: 419,964-byte image (59,268 bytes under the limit), all SDK firmware checks pass, user partition untouched ([FM1-REPLACEMENT.md](FM1-REPLACEMENT.md)) |
-| FM-1 firmware, CLATTER Pocket **beside** the stock instrument (HOME + ARP) | compiles, links, passes the checks, but is 27 KB too large for the flash layout |
+| LXR engine (all six voices, seven triggers, the firmware's parameter handler, modulation, locks) | runs natively; 177 host checks pass; matches CLATTER's engine to within 3 LSB; the FM-1's packed tables unpack byte-identical |
+| FM-1 firmware, CLATTER Pocket **replacing** the stock instrument application | **builds and packages** reproducibly with the FM-1 toolchain: 421,212-byte image (32,709 bytes under the 453,921 limit), stock flash layout, all SDK firmware checks pass, user partition untouched, installer page ([FM1-REPLACEMENT.md](FM1-REPLACEMENT.md)) |
+| Pre-flash audit | done ([PRE-FLASH-AUDIT.md](PRE-FLASH-AUDIT.md)); first-test procedure: [FIRST-HARDWARE-TEST.md](FIRST-HARDWARE-TEST.md) |
+| FM-1 firmware, CLATTER Pocket **beside** the stock instrument (HOME + ARP) | compiles, links, passes the checks, but is 53,671 bytes too large for the flash layout |
 | On the device | **nothing has run on hardware** |
 | Sequencer, generation, storage | not started (ROADMAP.md) |
 
 ## What it does on the FM-1 (once installed)
 
-In the replacement firmware CLATTER Pocket is the instrument: the panel below at power-on,
-MIDI drum notes (General MIDI numbers, any channel) trigger the voices, and USB/Bluetooth
-audio is mixed in as before. (The overlay build would open it with **HOME + ARP** beside
+In the replacement firmware CLATTER Pocket is the instrument: the panel below about 1.5 s
+after power-on (hold HOME then for SAFE MODE, engine off), MIDI drum notes (General MIDI
+numbers, any channel) trigger the voices, and USB/Bluetooth audio is mixed in as before. (The overlay build would open it with **HOME + ARP** beside
 the stock instrument; it does not fit the flash.)
 
 | Control | Action |
@@ -66,6 +67,8 @@ Firmware: BUILDING.md. **Read HARDWARE.md before flashing anything.**
 - [COMPATIBILITY.md](COMPATIBILITY.md) - numerical comparison with CLATTER, kits, formats
 - [FM1-REPLACEMENT.md](FM1-REPLACEMENT.md) - the replacement firmware: flash map, what was
   removed, what remains, sizes, RAM, checks
+- [PRE-FLASH-AUDIT.md](PRE-FLASH-AUDIT.md) - the pre-flash audit: findings, evidence, risks
+- [FIRST-HARDWARE-TEST.md](FIRST-HARDWARE-TEST.md) - first installation, test and recovery
 - [ROADMAP.md](ROADMAP.md) - milestones A-F
 
 ## Layout

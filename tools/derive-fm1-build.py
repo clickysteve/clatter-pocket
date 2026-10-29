@@ -20,6 +20,11 @@ The edits:
      and, with -Placement sram, all lxr_*.obj code and constants, in internal SRAM;
   6. Test-Firmware: the CLATTER Pocket audio path must be in internal SRAM too;
   7. build identity: covers pocket/ as well as app/;
+  9. flash layout: CLATTER Pocket builds pad the packaged application image with erased-flash
+     bytes (0xFF, after the last section; never executed or copied) so the package keeps the
+     stock fm1_open V14 layout exactly (image end and VM start 471,040, VM 32,768 bytes, BTIF
+     503,808, user partition 507,904), and check the result. Package.cs otherwise starts the
+     VM (system settings, Bluetooth pairings) wherever a smaller image ends;
   8. -Replace (CLATTER Pocket instead of the stock instrument, build.sh --replace): the
      firmware checks keep every platform requirement (startup, registration tables, RTOS
      ABI, Bluetooth, USB MIDI, update, heap, panel scan, the platform audio path and
@@ -140,18 +145,43 @@ edit("""function Test-Firmware {""", """function Add-PocketSections([string]$tex
         $t.Substring(0, $at) + $new + $t.Substring($at + $old.Length)
     }
     $code = "        *(.volatile_ram_code .volatile_ram_code.*)`n        *(.itcm_text .itcm_text.*)"
-    if ($Placement -eq 'sram') { $code += "`n        *lxr_*.obj(.text .text.* .rodata .rodata.*)" }
+    # Anchored to the object prefix: source names may contain 'lxr_' too (lxr_tables_*.c).
+    if ($Placement -eq 'sram') { $code += "`n        obj/lxr_*.obj(.text .text.* .rodata .rodata.*)" }
     $text = Edit-Once $text '        *(.volatile_ram_code .volatile_ram_code.*)' $code
     $text = Edit-Once $text '        *(.data .data.*)' "        *(.data .data.*)`n        *(.dtcm .dtcm.*)"
     $text = Edit-Once $text '        *(.bss .bss.*)' "        *(.dtcmz .dtcmz.*)`n        *(.bss .bss.*)"
     if ($Placement -eq 'sram') {
-        $text = Edit-Once $text '        *(.text*)' '        *(EXCLUDE_FILE(*lxr_*.obj) .text*)'
-        $text = Edit-Once $text '        *(.rodata*)' '        *(EXCLUDE_FILE(*lxr_*.obj) .rodata*)'
+        $text = Edit-Once $text '        *(.text*)' '        *(EXCLUDE_FILE(obj/lxr_*.obj) .text*)'
+        $text = Edit-Once $text '        *(.rodata*)' '        *(EXCLUDE_FILE(obj/lxr_*.obj) .rodata*)'
     }
     $text
 }
 function Test-Firmware {""")
 
+# 9. flash layout
+edit("""            Add-Type -Path (Join-Path $sdk 'Package.cs')
+            $layout = [FM1.Package]::Create($image.ToArray(),(Join-Path $sdk 'tools/pack'),$output,$variant.user_bytes,$firmwareProduct)""",
+     """            # CLATTER Pocket: keep the stock fm1_open V14 flash layout. Package.cs places the VM
+            # (system settings) directly after the image, rounded to 4 KiB; pad the application with
+            # erased-flash bytes after its last section so the image ends where stock's does.
+            $stockImageEnd = 471040   # build.sh --stock: FLASH_BIN_SIZE of fm1_open 4c7496d
+            $layoutPadding = 0
+            if (!$Stock) {
+                $minimumApp = $stockImageEnd - 4096 - (0x4000 + 0x120 + 383 + 64) + 1
+                if ($image.Length -lt $minimumApp) {
+                    $layoutPadding = [int]($minimumApp - $image.Length)
+                    $fill = New-Object byte[] $layoutPadding
+                    for ($i = 0; $i -lt $layoutPadding; $i++) { $fill[$i] = 0xff }
+                    $image.Write($fill,0,$layoutPadding)
+                }
+            }
+            Add-Type -Path (Join-Path $sdk 'Package.cs')
+            $layout = [FM1.Package]::Create($image.ToArray(),(Join-Path $sdk 'tools/pack'),$output,$variant.user_bytes,$firmwareProduct)
+            if (!$Stock -and ($layout.VM_START_ADDR -ne $stockImageEnd -or $layout.VM_REAL_SIZE -ne 32768 -or
+                    $layout.BTIF_RESERVED_START -ne 503808 -or $layout.USER_RESERVED_START -ne 507904)) {
+                throw 'CLATTER Pocket package does not keep the stock fm1_open V14 flash layout.'
+            }
+            $layout['layout_padding_bytes'] = $layoutPadding""")
 # 8. replacement mode (before 6: edit 6 extends the same block)
 edit("""        if ($source -in @('app/screen.c','app/transfer.c','app/midi_router.c')) {""",
      """        # CLATTER Pocket -Replace: its application unit holds the SDK entry points (MIDI,
@@ -200,7 +230,7 @@ edit("""    foreach ($name in @($synth.sram_optional) + @($synth.native_sram_opt
      """    # CLATTER Pocket: the audio hook, the engine host and the LXR's own TCM code and state.
     $pocketHooks = if ($Replace) { @('clatter_pocket_render','clatter_pocket_output_level') } else { @('clatter_pocket_fm1_render') }
     if (!$Stock) { $callbacks += @($pocketHooks) + @('pocket_lxr_render_q23','calcDrumVoiceSyncBlock','calcDrumVoiceAsync',
-        'mixer_decimateBlock','SVF_recalcFreq','slopeEg2_calc','calcNextOscSampleBlock','sine_table',
+        'mixer_decimateBlock','SVF_recalcFreq','slopeEg2_calc','calcNextOscSampleBlock','sine_table','sqrtf',
         'voiceArray','snareVoice','cymbalVoice','hatVoice')
     if ($Placement -eq 'sram') {
         $callbacks += @('midiParser_ccHandler','Drum_trigger','Snare_calcSyncBlock','Cymbal_calcSyncBlock',
@@ -221,4 +251,4 @@ header = f"""# GENERATED by tools/derive-fm1-build.py from third_party/fm1_open/
 """
 dest = root / 'firmware/fm1/Build-ClatterPocket.ps1'
 dest.write_text(header + out, encoding='utf-8')
-print(f'{dest.relative_to(root)}: derived from Build.ps1 {digest[:12]}, 8 edit groups applied')
+print(f'{dest.relative_to(root)}: derived from Build.ps1 {digest[:12]}, 9 edit groups applied')

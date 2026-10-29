@@ -112,8 +112,8 @@ There is no device measurement. What is known:
 
 Measured with the SDK's toolchain. Beside the stock instrument CLATTER Pocket does not fit
 the update image (BUILDING.md, First build results). The FM-1 firmware therefore
-**replaces the stock instrument application** (FM1-REPLACEMENT.md: 419,964-byte image,
-59 KB under the limit, runtime heap 110 KB) and stores the LXR's 102 KB of tables packed
+**replaces the stock instrument application** (FM1-REPLACEMENT.md: 421,212-byte image,
+32,709 bytes under the 453,921 limit, runtime heap 134 KB) and stores the LXR's 102 KB of tables packed
 (24 KB; `engine/lxr_tables_unpack.c` restores them byte-identically in RAM before the
 engine starts). CLATTER Pocket's engine is 28 KB of code; its RAM is the unpacked tables
 (102 KB), the LXR's voice state and SRAM code, the event ring and the panel band buffer.

@@ -33,7 +33,7 @@ another synthesis engine to the FM-1 was found.
 | Clock | Up to 320 MHz | Reported, not verified; the firmware reads it at run time (`fm1_device_clock()`) |
 | Internal SRAM | RAM0 0x01C00000–0x01C7FE00 = **523 776 bytes** for the firmware, plus 28 KB of data cache usable as RAM (`cache_ram`, 7 ways × 4 KB) | Verified (`sdk/config/linker.ld.in`). A secondary source gives 578 KB in total |
 | External RAM | None used (`SDRAM_SIZE = 0`) | Verified |
-| Code Flash | Executed in place from 0x02000120. The 1 MiB update image (`0xff000` usable) holds the app image, at least 32 KB of VM and the fixed user area, which leaves **479 232 bytes for the app image**; stock fm1_open V14 uses 453 576 (25 656 bytes free); CLATTER Pocket replacing the stock application uses 419 964 (FM1-REPLACEMENT.md). The packager keeps the user partition (507 904-1 044 480) and BTIF (503 808) fixed and sizes the VM between image and BTIF | Verified (`sdk/Package.cs`, package reports 2026-10-29) |
+| Code Flash | Executed in place from 0x02000120. The 1 MiB update image (`0xff000` usable) holds the app image, at least 32 KB of VM and the fixed user area, which accepts an app image of at most **453 921 bytes** (`Package.Create`); stock fm1_open V14 uses 453 576 (345 bytes free); CLATTER Pocket replacing the stock application uses 421 212, padded in the package to the stock layout (FM1-REPLACEMENT.md). The packager keeps the user partition (507 904-1 044 480) and BTIF (503 808) fixed and sizes the VM between image and BTIF | Verified (`sdk/Package.cs`, package reports 2026-10-29) |
 | User Flash | 536 576 bytes (131 × 4 KB sectors), API `fm1_flash_*`; the stock instrument already stores projects, samples and voices there | Verified (`Build.ps1` variant, `fm1.h`) |
 | Runtime heap | Must stay ≥ 49 152 bytes; RTOS, Bluetooth and USB allocate from it | Verified (`Test-Firmware`) |
 
@@ -134,7 +134,11 @@ before any update: migration can erase it.
 7. Physical labels of encoders 0-6.
 8. Whether every Flash write (including the Bluetooth stack's) suspends audio
    (`fm1_audio_suspend` is referenced by the SDK's Flash code; not proven for all paths).
-9. A ROM-level recovery procedure.
+9. A ROM-level recovery procedure. The SDK contains a mask-ROM USB update entry
+   (`platform_enter_mask_usb_update`, reached by SysEx `F0 22 24 35 7D F7` from running
+   firmware), but M-VAVE documents no tool or procedure for it (PRE-FLASH-AUDIT.md).
+   Firmware updates run in the SDK's own `update` task (priority 21, above the application's
+   15), and CLATTER Pocket starts its engine only after the updater (SAFE MODE: hold HOME).
 
 ## Sources
 
