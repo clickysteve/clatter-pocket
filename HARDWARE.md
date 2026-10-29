@@ -33,7 +33,7 @@ another synthesis engine to the FM-1 was found.
 | Clock | Up to 320 MHz | Reported, not verified; the firmware reads it at run time (`fm1_device_clock()`) |
 | Internal SRAM | RAM0 0x01C00000–0x01C7FE00 = **523 776 bytes** for the firmware, plus 28 KB of data cache usable as RAM (`cache_ram`, 7 ways × 4 KB) | Verified (`sdk/config/linker.ld.in`). A secondary source gives 578 KB in total |
 | External RAM | None used (`SDRAM_SIZE = 0`) | Verified |
-| Code Flash | Executed in place from 0x02000120. The 1 MiB update image (`0xff000` usable) holds the app image, at least 32 KB of VM and the fixed user area, which leaves **479 232 bytes for the app image**; stock fm1_open V14 uses 453 576 (25 656 bytes free) | Verified (`sdk/Package.cs`, first builds 2026-10-29) |
+| Code Flash | Executed in place from 0x02000120. The 1 MiB update image (`0xff000` usable) holds the app image, at least 32 KB of VM and the fixed user area, which leaves **479 232 bytes for the app image**; stock fm1_open V14 uses 453 576 (25 656 bytes free); CLATTER Pocket replacing the stock application uses 419 964 (FM1-REPLACEMENT.md). The packager keeps the user partition (507 904-1 044 480) and BTIF (503 808) fixed and sizes the VM between image and BTIF | Verified (`sdk/Package.cs`, package reports 2026-10-29) |
 | User Flash | 536 576 bytes (131 × 4 KB sectors), API `fm1_flash_*`; the stock instrument already stores projects, samples and voices there | Verified (`Build.ps1` variant, `fm1.h`) |
 | Runtime heap | Must stay ≥ 49 152 bytes; RTOS, Bluetooth and USB allocate from it | Verified (`Test-Firmware`) |
 

@@ -19,7 +19,15 @@ The edits:
   5. linker script: the LXR's tightly coupled memory sections (.itcm_text, .dtcm, .dtcmz)
      and, with -Placement sram, all lxr_*.obj code and constants, in internal SRAM;
   6. Test-Firmware: the CLATTER Pocket audio path must be in internal SRAM too;
-  7. build identity: covers pocket/ as well as app/.
+  7. build identity: covers pocket/ as well as app/;
+  8. -Replace (CLATTER Pocket instead of the stock instrument, build.sh --replace): the
+     firmware checks keep every platform requirement (startup, registration tables, RTOS
+     ABI, Bluetooth, USB MIDI, update, heap, panel scan, the platform audio path and
+     CLATTER Pocket's audio path in SRAM); stock-instrument symbols (the synth.json SRAM
+     contract, the engine's render/level/sequencer entry points, its hash-named internals
+     and the tuning/project hooks) may be absent because the application no longer links
+     them, are still checked for SRAM placement when present, and are listed in the
+     firmware report.
 
     python3 tools/derive-fm1-build.py      (from the repository root)
 
@@ -59,7 +67,9 @@ edit("""    [string]$Toolchain = $env:FM1_PI32_TOOLCHAIN,
     # Compute the LXR's double-precision arithmetic in single precision.
     [switch]$SinglePrecision,
     # Build the unmodified fm1_open tree (no pocket/): the known-good comparison.
-    [switch]$Stock
+    [switch]$Stock,
+    # CLATTER Pocket as the instrument: the stock instrument application is not in the tree.
+    [switch]$Replace
 )""")
 
 # 2. paths
@@ -98,7 +108,12 @@ edit("""    # The device reports this source/SDK build identity after a browser 
     foreach ($source in $pocketSources) {
         $options = @($pocketFlags)
         if ($SinglePrecision -and $source -notmatch '/libm\\.c$') { $options += @('-include','single_precision.h') }
-        $output = 'obj/lxr_' + ($objectIndex++) + '_' + ($source -replace '[^a-zA-Z0-9._-]', '_') + '.obj'
+        # pocket/flash/ (init-only: the packed tables) and pocket/ui/ (the panel, control task
+        # only) are never placed in SRAM, and are optimised for size
+        $controlOnly = $source -like 'pocket/flash/*' -or $source -like 'pocket/ui/*'
+        if ($controlOnly) { $options = @($options | Where-Object { $_ -cne '-O2' }) + @('-Oz') }
+        $prefix = if ($controlOnly) { 'obj/pocketflash_' } else { 'obj/lxr_' }
+        $output = $prefix + ($objectIndex++) + '_' + ($source -replace '[^a-zA-Z0-9._-]', '_') + '.obj'
         $arguments = @($options) + @('-MMD','-MF',($output + '.d'),'-c',(Join-Path $root $source),'-o',$output)
         Write-Host "Compile $source"
         Run (Join-Path $bin 'clang.exe') $arguments
@@ -110,6 +125,10 @@ edit("""    # The device reports this source/SDK build identity after a browser 
 # 5. linker script
 edit("""    Write-Text (Join-Path $build 'generated/linker') $linker""",
      """    if (!$Stock) { $linker = Add-PocketSections $linker }
+    # CLATTER Pocket -Replace: keep the SDK's Bluetooth/BLE control API linked although no
+    # CLATTER Pocket page calls all of it yet (the stock UI did; the firmware checks require it).
+    $keepPlatform = if ($Replace) { @('fm1_ble_scan','fm1_ble_connect','fm1_ble_disconnect','fm1_ble_get_status',
+        'fm1_ble_get_device','fm1_ble_forget_bonds','fm1_bluetooth_get_status','fm1_ble_set_role','fm1_bluetooth_configure') } else { @() }
     Write-Text (Join-Path $build 'generated/linker') $linker""")
 edit("""function Test-Firmware {""", """function Add-PocketSections([string]$text) {
     # The LXR firmware keeps its per-sample code and voice state in the STM32's tightly coupled
@@ -133,10 +152,54 @@ edit("""function Test-Firmware {""", """function Add-PocketSections([string]$tex
 }
 function Test-Firmware {""")
 
+# 8. replacement mode (before 6: edit 6 extends the same block)
+edit("""        if ($source -in @('app/screen.c','app/transfer.c','app/midi_router.c')) {""",
+     """        # CLATTER Pocket -Replace: its application unit holds the SDK entry points (MIDI,
+        # SysEx) that the replaced units held; same treatment, and -Oz as app/screen.c.
+        if ($source -in @('app/screen.c','app/transfer.c','app/midi_router.c','app/clatter_pocket/clatter_pocket_app.c')) {""")
+edit("""        if ($source -eq 'app/screen.c') { $options += '-fno-inline-functions' }""",
+     """        if ($source -eq 'app/screen.c') { $options += '-fno-inline-functions' }
+        if ($source -eq 'app/clatter_pocket/clatter_pocket_app.c') { $options += '-Oz' }""")
+edit("""    $link += @('--undefined=audio_app_bluetooth_open','--undefined=bt_get_local_name','--undefined=bt_get_mac_addr')""",
+     """    $link += @('--undefined=audio_app_bluetooth_open','--undefined=bt_get_local_name','--undefined=bt_get_mac_addr')
+    foreach ($name in $keepPlatform) { $link += '--undefined=' + $name }""")
+edit("""    foreach ($name in $required) { if (!$info.ContainsKey($name)) { throw "Required runtime symbol absent: $name" } }""",
+     """    # CLATTER Pocket -Replace: the stock instrument's hooks may be gone with the instrument.
+    $stockInstrument = @('groove_tuning_capture','groove_tuning_apply','groove_project_apply_edit',
+        'fm1_engine_render','fm1_engine_output_level','groove_sequence_render','groove_sequence_clock',
+        'groove_sequence_position','groove_sequence_transport','fm1_sea_decode_groups','fm1_codec_sea_mono_s16_run',
+        'fm1_r_0aa010fe1de1','fm1_r_33d5e5b63b6b') + @($extra) + @($synth.sram_required) + @($synth.sram_optional) + @($synth.native_sram_optional)
+    $removedStock = New-Object 'Collections.Generic.List[string]'
+    foreach ($name in $required) {
+        if (!$info.ContainsKey($name)) {
+            if ($Replace -and $stockInstrument -ccontains $name) { $removedStock.Add($name); continue }
+            throw "Required runtime symbol absent: $name"
+        }
+    }""")
+edit("""        if (!$info.ContainsKey($name) -or $info[$name].kind -cnotin @('T','N','t','n') -or !$info[$name].size) {
+            throw "Application callback was lost or replaced by a weak default: $name"
+        }""",
+     """        if ($Replace -and !$info.ContainsKey($name) -and $stockInstrument -ccontains $name) { $removedStock.Add($name); continue }
+        if (!$info.ContainsKey($name) -or $info[$name].kind -cnotin @('T','N','t','n') -or !$info[$name].size) {
+            throw "Application callback was lost or replaced by a weak default: $name"
+        }""")
+edit("""    foreach ($name in $callbacks) {
+        if (!$info.ContainsKey($name)) { throw "Audio callback absent: $name" }""",
+     """    foreach ($name in $callbacks) {
+        if ($Replace -and !$info.ContainsKey($name) -and $stockInstrument -ccontains $name) { $removedStock.Add($name); continue }
+        if (!$info.ContainsKey($name)) { throw "Audio callback absent: $name" }""")
+edit("""        application_callbacks_verified=$true; board_validation='not performed'}""",
+     """        application_callbacks_verified=$true; board_validation='not performed'}
+    if ($Replace) {
+        $result['instrument'] = 'CLATTER Pocket (stock instrument application replaced)'
+        $result['stock_instrument_symbols_absent'] = @($removedStock | Sort-Object -Unique)
+    }""")
+
 # 6. Test-Firmware: the CLATTER Pocket audio path in internal SRAM
 edit("""    foreach ($name in @($synth.sram_optional) + @($synth.native_sram_optional)) {""",
      """    # CLATTER Pocket: the audio hook, the engine host and the LXR's own TCM code and state.
-    if (!$Stock) { $callbacks += @('clatter_pocket_fm1_render','pocket_lxr_render_q23','calcDrumVoiceSyncBlock','calcDrumVoiceAsync',
+    $pocketHooks = if ($Replace) { @('clatter_pocket_render','clatter_pocket_output_level') } else { @('clatter_pocket_fm1_render') }
+    if (!$Stock) { $callbacks += @($pocketHooks) + @('pocket_lxr_render_q23','calcDrumVoiceSyncBlock','calcDrumVoiceAsync',
         'mixer_decimateBlock','SVF_recalcFreq','slopeEg2_calc','calcNextOscSampleBlock','sine_table',
         'voiceArray','snareVoice','cymbalVoice','hatVoice')
     if ($Placement -eq 'sram') {
@@ -158,4 +221,4 @@ header = f"""# GENERATED by tools/derive-fm1-build.py from third_party/fm1_open/
 """
 dest = root / 'firmware/fm1/Build-ClatterPocket.ps1'
 dest.write_text(header + out, encoding='utf-8')
-print(f'{dest.relative_to(root)}: derived from Build.ps1 {digest[:12]}, 7 edit groups applied')
+print(f'{dest.relative_to(root)}: derived from Build.ps1 {digest[:12]}, 8 edit groups applied')

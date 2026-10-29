@@ -31,9 +31,11 @@ checked as far as possible without the toolchain or device), **open**.
 - **done** host CPU, memory and soft-float assessment
 - **prepared** FM-1 integration: audio hook, control hook, Pocket panel (kick and the other
   six triggers: pitch, decay, level, keys and PLAY), on-device timing display
-- **blocked: flash budget.** CLATTER Pocket beside the stock instrument needs about 108 KB
-  more than the update image has room for (BUILDING.md, First build results). Ways out, none
-  taken yet:
+- **done: flash budget.** CLATTER Pocket replaces the stock instrument application, the
+  LXR tables are packed losslessly (102 KB -> 24 KB, unpacked into RAM at start-up), control
+  code is `-Oz`: a valid package with 59 KB to spare, all SDK checks passing, the user
+  partition untouched (FM1-REPLACEMENT.md). Beside the stock instrument it is still 27 KB
+  too large. The options that were considered:
   1. pack the LXR's tables (second-order delta coding measures about 76 KB -> 11 KB for the
      wavetables, 26 -> 13 KB for the transients) and unpack them into SRAM when Pocket mode
      starts: about 77 KB, not enough on its own;
@@ -43,6 +45,8 @@ checked as far as possible without the toolchain or device), **open**.
      how the stock firmware, loader and workbench treat it;
   4. drop parts of the stock application from the image (CLATTER Pocket as the instrument
      rather than beside it); the stock synthesis is a binary library linked whole.
+- **open** a settings page for the linked Bluetooth/BLE API (role, scan, connect), and a
+  way to tell the user that workbench backups need the stock firmware
 - **open** then on-device: audio heard, CPU per block, overruns, clipping, stability over an
   hour, latency (USB recording of a key press vs the click)
 - **done** single precision is the FM-1 configuration (no soft double in the per-sample DSP)

@@ -30,9 +30,9 @@ On macOS the firmware's ELF section attributes are mapped to `annotate` (`Makefi
 ## FM-1 firmware build
 
 **Status (2026-10-29):** the toolchain is installed and verified; the unmodified fm1_open
-builds and packages; CLATTER Pocket compiles, links and passes all of the SDK's firmware
-checks, but **does not fit the FM-1's flash layout**, so no CLATTER Pocket package exists.
-See "First build results" below.
+builds and packages; **CLATTER Pocket replacing the stock instrument application builds and
+packages** (`--replace`, FM1-REPLACEMENT.md); CLATTER Pocket beside the stock instrument
+does not fit the flash layout. Nothing has been flashed.
 
 ### Requirements
 
@@ -70,8 +70,18 @@ not need Code::Blocks.
 firmware/fm1/build.sh --stock          # the unmodified fm1_open, same toolchain and steps
 firmware/fm1/build.sh --prepare-only   # build/fm1/tree: fm1_open + patch + CLATTER Pocket sources
 firmware/fm1/preflight.sh              # SDK manifest + stand-in compile of every touched file
-firmware/fm1/build.sh --single-precision   # the real build (toolchain, pwsh, Wine)
+firmware/fm1/build.sh --replace --single-precision   # CLATTER Pocket as the instrument: packages
+firmware/fm1/build.sh --single-precision   # CLATTER Pocket beside the stock instrument (does not fit)
 ```
+
+`--replace` removes fm1_open's instrument application (screen, projects, presets, samples,
+transfer, MIDI router, DX7 library), keeps the board layer and output mix, adds
+`firmware/fm1/replace/` and runs the firmware checks in replacement mode
+(FM1-REPLACEMENT.md). Output: `build/fm1-replace/clatter-pocket-fm1-replace-UNVERIFIED.fwsc`.
+`python3 tools/flash-map.py <sdk.map>` and `--diff <stock.map> <other.map>` analyse the link.
+
+All FM-1 builds use the packed LXR tables (`engine/lxr_tables_packed.c`, regenerated with
+`make packed-tables`; unpacked into RAM at start-up).
 
 `--stock` is the known-good comparison: every CLATTER Pocket edit of the derived build
 script is off, the tree is unpatched, output in `build/fm1-stock/`.
@@ -106,13 +116,16 @@ matching public source archive URL (GPL) and are not set up.
 | CLATTER Pocket, double precision, `sram` | 588 712 | 94 252 | pass | **does not fit** |
 | CLATTER Pocket, `--single-precision`, `sram` | 586 920 | 95 948 | pass | **does not fit** |
 | CLATTER Pocket, `--single-precision`, `--placement tcm` | 586 888 | 182 572 | pass | **does not fit** |
+| after table packing: CLATTER Pocket beside stock, `--single-precision` | 506 696 | | pass | **does not fit** (27 464 over) |
+| **`--replace --single-precision`** (packed tables, `-Oz` control code) | **419 964** | **110 156** | **pass** (replacement mode) | **built**: 59 268 bytes under the limit |
 
 All CLATTER Pocket sources compile with PI32v2 clang 4.0.1; the link resolves; the audio
 path is in SRAM; RAM is not the problem (the heap minimum is 49 152). **Flash is**: the
 update image leaves 479 232 bytes for the app image (HARDWARE.md) and CLATTER Pocket adds
 about 133 KB to the stock 453 576, about 108 KB more than fits. Of the 133 KB, 102 KB are
 the LXR's constant tables (tri/saw/rect wavetables 3 × 22.5 KB, transient samples 26 KB,
-sine 8 KB). Options: ROADMAP.md, milestone B.
+sine 8 KB). Resolved by replacing the stock application and packing the tables:
+FM1-REPLACEMENT.md.
 
 Fixed on the way: the Windows clang under Wine does not open `-include` files by absolute
 Unix path (forced includes now go through the include path); the derived script passed the

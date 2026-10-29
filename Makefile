@@ -6,6 +6,7 @@
 #   make render     render demo WAVs into build/host/
 #   make compare    compare with CLATTER's WebAssembly engine (needs node and CLATTER_DIR)
 #   make firmware   FM-1 firmware (see BUILDING.md; needs the JieLi toolchain)
+#   make packed-tables  regenerate engine/lxr_tables_packed.c from the firmware's tables
 #
 # The LXR sources are compiled as CLATTER compiles them for WebAssembly (scripts/build-lxr.mjs
 # in CLATTER): CLATTER's freestanding shim and libm, -O3 -ffast-math -freciprocal-math, so the
@@ -41,10 +42,15 @@ obj = $(patsubst %.c,$(BUILD)/obj/$(1)/%.o,$(2))
 
 FULL_OBJ := $(call obj,full,$(LXR_SRC) $(BRIDGE) $(ENGINE) engine/fx_on.c)
 NOFX_OBJ := $(call obj,nofx,$(LXR_NOFX) $(BRIDGE) $(ENGINE) engine/fx_off.c)
+# The FM-1 configuration's tables: packed in Flash, unpacked into RAM at start-up.
+LXR_TABLES := lxr/upstream/Core/Src/Soundengine/DSPAudio/wavetable.c lxr/upstream/Core/Src/Soundengine/DSPAudio/transientTables.c
+PACKED_SRC := $(filter-out $(LXR_TABLES),$(LXR_NOFX)) $(BRIDGE) $(ENGINE) engine/fx_off.c engine/lxr_tables_packed.c engine/lxr_tables_unpack.c
+PACKED_OBJ := $(call obj,packed,$(PACKED_SRC))
+$(PACKED_OBJ): DSP_CFLAGS += -DPOCKET_PACKED_TABLES
 
-TOOLS := $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_panel $(BUILD)/test_fm1_libm $(BUILD)/bench $(BUILD)/render $(BUILD)/dump
+TOOLS := $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_fm1_libm $(BUILD)/bench $(BUILD)/render $(BUILD)/dump
 
-.PHONY: all test bench render compare compare-sp firmware clean
+.PHONY: all test bench render compare compare-sp firmware packed-tables clean
 all: $(TOOLS) test
 
 # Single-precision variant (make compare-sp): the DSP's double-precision envelope and
@@ -53,9 +59,9 @@ all: $(TOOLS) test
 SP_OBJ := $(call obj,sp,$(LXR_SRC) $(BRIDGE) $(ENGINE) engine/fx_on.c)
 $(filter-out %/libm.o,$(SP_OBJ)): DSP_CFLAGS += -include engine/single_precision.h -cl-single-precision-constant
 
-$(BUILD)/obj/full/lxr/bridge/libm.o $(BUILD)/obj/nofx/lxr/bridge/libm.o $(BUILD)/obj/sp/lxr/bridge/libm.o: DSP_CFLAGS += $(LIBM_RENAMES)
+$(BUILD)/obj/full/lxr/bridge/libm.o $(BUILD)/obj/nofx/lxr/bridge/libm.o $(BUILD)/obj/sp/lxr/bridge/libm.o $(BUILD)/obj/packed/lxr/bridge/libm.o: DSP_CFLAGS += $(LIBM_RENAMES)
 
-$(BUILD)/obj/full/%.o $(BUILD)/obj/nofx/%.o $(BUILD)/obj/sp/%.o: %.c
+$(BUILD)/obj/full/%.o $(BUILD)/obj/nofx/%.o $(BUILD)/obj/sp/%.o $(BUILD)/obj/packed/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(DSP_CFLAGS) -c $< -o $@
 
@@ -65,11 +71,24 @@ $(BUILD)/liblxr_nofx.a: $(NOFX_OBJ)
 	@rm -f $@; ar rcs $@ $^
 $(BUILD)/liblxr_sp.a: $(SP_OBJ)
 	@rm -f $@; ar rcs $@ $^
+$(BUILD)/liblxr_packed.a: $(PACKED_OBJ)
+	@rm -f $@; ar rcs $@ $^
 
 $(BUILD)/test_engine: host/tests/test_engine.c host/wav.h $(BUILD)/liblxr_full.a
 	$(CC) $(HOST_CFLAGS) $< $(BUILD)/liblxr_full.a -lm -o $@
 $(BUILD)/test_engine_nofx: host/tests/test_engine.c host/wav.h $(BUILD)/liblxr_nofx.a
 	$(CC) $(HOST_CFLAGS) -DPOCKET_NOFX $< $(BUILD)/liblxr_nofx.a -lm -o $@
+$(BUILD)/test_engine_packed: host/tests/test_engine.c host/wav.h $(BUILD)/liblxr_packed.a
+	$(CC) $(HOST_CFLAGS) -DPOCKET_NOFX $< $(BUILD)/liblxr_packed.a -lm -o $@
+# The firmware's tables as compiled, and the same tables after packing and unpacking.
+$(BUILD)/dump_tables: host/dump_tables.c $(call obj,nofx,$(LXR_TABLES))
+	$(CC) $(HOST_CFLAGS) $^ -o $@
+$(BUILD)/dump_tables_packed: host/dump_tables.c $(BUILD)/liblxr_packed.a
+	$(CC) $(HOST_CFLAGS) -DPOCKET_PACKED_TABLES $< $(BUILD)/liblxr_packed.a -lm -o $@
+$(BUILD)/lxr_tables.bin: $(BUILD)/dump_tables
+	$(BUILD)/dump_tables $@
+packed-tables: $(BUILD)/lxr_tables.bin
+	python3 tools/pack-lxr-tables.py $< engine/lxr_tables_packed.c
 $(BUILD)/test_panel: host/tests/test_panel.c ui/pocket_panel.c ui/pocket_panel.h $(BUILD)/liblxr_nofx.a
 	$(CC) $(HOST_CFLAGS) $< ui/pocket_panel.c $(BUILD)/liblxr_nofx.a -lm -o $@
 # The FM-1 build's own sqrtf and fmaf (the PI32v2 FPU and the SDK's libc have neither).
@@ -81,12 +100,22 @@ $(BUILD)/render: host/render.c host/wav.h $(BUILD)/liblxr_nofx.a
 	$(CC) $(HOST_CFLAGS) $< $(BUILD)/liblxr_nofx.a -lm -o $@
 $(BUILD)/dump: host/compare/dump.c $(BUILD)/liblxr_full.a
 	$(CC) $(HOST_CFLAGS) $< $(BUILD)/liblxr_full.a -lm -o $@
+$(BUILD)/dump_nofx: host/compare/dump.c $(BUILD)/liblxr_nofx.a
+	$(CC) $(HOST_CFLAGS) $< $(BUILD)/liblxr_nofx.a -lm -o $@
+$(BUILD)/dump_packed: host/compare/dump.c $(BUILD)/liblxr_packed.a
+	$(CC) $(HOST_CFLAGS) $< $(BUILD)/liblxr_packed.a -lm -o $@
 $(BUILD)/dump_sp: host/compare/dump.c $(BUILD)/liblxr_sp.a
 	$(CC) $(HOST_CFLAGS) $< $(BUILD)/liblxr_sp.a -lm -o $@
 
-test: $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_panel $(BUILD)/test_fm1_libm
+test: $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_fm1_libm $(BUILD)/lxr_tables.bin $(BUILD)/dump_tables_packed $(BUILD)/dump_nofx $(BUILD)/dump_packed
 	$(BUILD)/test_engine
 	$(BUILD)/test_engine_nofx
+	$(BUILD)/test_engine_packed
+	$(BUILD)/dump_tables_packed $(BUILD)/lxr_tables_unpacked.bin
+	cmp $(BUILD)/lxr_tables.bin $(BUILD)/lxr_tables_unpacked.bin && echo "packed tables: unpack byte-identical to the firmware's tables"
+	$(BUILD)/dump_nofx > $(BUILD)/voices_nofx.f32
+	$(BUILD)/dump_packed > $(BUILD)/voices_packed.f32
+	cmp $(BUILD)/voices_nofx.f32 $(BUILD)/voices_packed.f32 && echo "packed tables: comparison script renders bit-identical voices"
 	$(BUILD)/test_panel $(BUILD)/panel.ppm
 	$(BUILD)/test_fm1_libm
 

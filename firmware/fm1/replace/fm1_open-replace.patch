@@ -1,0 +1,42 @@
+diff -ru a/app/audio_output.c b/app/audio_output.c
+--- a/app/audio_output.c	2026-10-29 13:06:05
++++ b/app/audio_output.c	2026-10-29 13:06:05
+@@ -2,6 +2,7 @@
+ #include "audio_output.h"
+ #include "fm1_engine_control.h"
+ #include "fm1_audio_io.h"
++#include "clatter_pocket/clatter_pocket_app.h"
+ 
+ static unsigned output_gain;
+ static int32_t usb_pcm[FM1_BLOCK_WORDS] __attribute__((aligned(32)));
+@@ -19,7 +20,7 @@
+ FM1_AUDIO_CODE void fm1_output_mix(int32_t *output)
+ {
+     if (!output) return;
+-    unsigned target = fm1_engine_output_level();
++    unsigned target = clatter_pocket_output_level();
+     if (target > 127U) target = 127U;
+     int delta = (int)target - (int)output_gain;
+     output_gain = (unsigned)((int)output_gain + (delta > 8 ? 8 : delta < -8 ? -8 : delta));
+diff -ru a/app/board/audio.c b/app/board/audio.c
+--- a/app/board/audio.c	2026-10-29 13:06:05
++++ b/app/board/audio.c	2026-10-29 13:06:05
+@@ -3,6 +3,7 @@
+ #include "fm1_gpio.h"
+ #include "fm1_engine_control.h"
+ #include "audio_output.h"
++#include "clatter_pocket/clatter_pocket_app.h"
+ #include <string.h>
+ 
+ #define DMA_ALIGNED __attribute__((aligned(32)))
+@@ -39,8 +40,8 @@
+     if (interval < block_ticks - (block_ticks >> 3)) { ++statistics.short_intervals; return; }
+     if (interval > block_ticks + (block_ticks >> 3)) { ++statistics.overruns; return; }
+     half = fm1_audio_free_half();
+-    /* The library renders the instrument; APP mixes external audio. */
+-    if (fm1_engine_render(rendered, FM1_BLOCK_FRAMES) != 0) {
++    /* CLATTER Pocket renders the instrument; APP mixes external audio. */
++    if (clatter_pocket_render(rendered) != 0) {
+         ++statistics.overruns;
+         return;
+     }

@@ -110,10 +110,13 @@ There is no device measurement. What is known:
 
 ### Memory
 
-Measured with the SDK's toolchain (BUILDING.md, First build results): CLATTER Pocket adds
-about 133 KB to the app image (the update image has room for 25.6 KB more than stock: **the
-current blocker**) and, with `--placement sram`, 153 KB of RAM (runtime heap 96 KB, minimum
-48 KB); with `--placement tcm`, 65 KB of RAM (heap 183 KB).
+Measured with the SDK's toolchain. Beside the stock instrument CLATTER Pocket does not fit
+the update image (BUILDING.md, First build results). The FM-1 firmware therefore
+**replaces the stock instrument application** (FM1-REPLACEMENT.md: 419,964-byte image,
+59 KB under the limit, runtime heap 110 KB) and stores the LXR's 102 KB of tables packed
+(24 KB; `engine/lxr_tables_unpack.c` restores them byte-identically in RAM before the
+engine starts). CLATTER Pocket's engine is 28 KB of code; its RAM is the unpacked tables
+(102 KB), the LXR's voice state and SRAM code, the event ring and the panel band buffer.
 
 The earlier estimate, by section:
 

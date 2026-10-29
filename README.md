@@ -16,14 +16,18 @@ pocket synthesizer, through M-VAVE's open firmware SDK
 
 | | |
 |---|---|
-| LXR engine (all six voices, seven triggers, the firmware's parameter handler, modulation, locks) | runs natively; 117 host checks pass; matches CLATTER's engine to within 3 LSB |
-| FM-1 integration (audio hook, panel, timing display) | compiles and links with the FM-1 toolchain and passes the SDK's firmware checks; **does not fit the FM-1's flash layout yet** (about 108 KB over, BUILDING.md) |
+| LXR engine (all six voices, seven triggers, the firmware's parameter handler, modulation, locks) | runs natively; 165 host checks pass; matches CLATTER's engine to within 3 LSB; the FM-1's packed tables unpack byte-identical |
+| FM-1 firmware, CLATTER Pocket **replacing** the stock instrument application | **builds and packages** with the FM-1 toolchain: 419,964-byte image (59,268 bytes under the limit), all SDK firmware checks pass, user partition untouched ([FM1-REPLACEMENT.md](FM1-REPLACEMENT.md)) |
+| FM-1 firmware, CLATTER Pocket **beside** the stock instrument (HOME + ARP) | compiles, links, passes the checks, but is 27 KB too large for the flash layout |
 | On the device | **nothing has run on hardware** |
 | Sequencer, generation, storage | not started (ROADMAP.md) |
 
-## What it does on the FM-1 (once built)
+## What it does on the FM-1 (once installed)
 
-The stock instrument keeps working. **HOME + ARP** opens CLATTER Pocket:
+In the replacement firmware CLATTER Pocket is the instrument: the panel below at power-on,
+MIDI drum notes (General MIDI numbers, any channel) trigger the voices, and USB/Bluetooth
+audio is mixed in as before. (The overlay build would open it with **HOME + ARP** beside
+the stock instrument; it does not fit the flash.)
 
 | Control | Action |
 |---|---|
@@ -32,7 +36,7 @@ The stock instrument keeps working. **HOME + ARP** opens CLATTER Pocket:
 | encoder 1 / 2 / 3 | pitch / decay / level of the selected voice |
 | encoder 7 | select DRUM 1-3, SNARE, CYMBAL, CL HAT, OP HAT |
 | MASTER | master volume (stock) |
-| HOME + ARP | back to the stock instrument (voices ring out) |
+| HOME + ARP | (overlay build only) back to the stock instrument |
 
 The screen shows the engine's CPU share per audio block (mean and peak), DMA overruns,
 clipped samples and dropped events. Encoder numbering is the SDK's; the physical knobs are
@@ -60,6 +64,8 @@ Firmware: BUILDING.md. **Read HARDWARE.md before flashing anything.**
 - [BUILDING.md](BUILDING.md) - host and firmware builds, toolchain
 - [ARCHITECTURE.md](ARCHITECTURE.md) - layers, real-time design, porting decisions, CPU and memory
 - [COMPATIBILITY.md](COMPATIBILITY.md) - numerical comparison with CLATTER, kits, formats
+- [FM1-REPLACEMENT.md](FM1-REPLACEMENT.md) - the replacement firmware: flash map, what was
+  removed, what remains, sizes, RAM, checks
 - [ROADMAP.md](ROADMAP.md) - milestones A-F
 
 ## Layout
@@ -69,7 +75,7 @@ lxr/              LXR-02 firmware DSP (unchanged) + CLATTER's shim and bridge
 engine/           real-time engine host (event ring, mixing, Q23 output)
 ui/               the Pocket panel (platform-independent)
 host/             tests, benchmark, WAV renderer, CLATTER comparison
-firmware/fm1/     FM-1 adapter, fm1_open patch, build scripts
+firmware/fm1/     FM-1 adapters (replace/: the replacement app), fm1_open patches, build scripts
 third_party/      fm1_open (submodule, pinned)
 tools/            generators, toolchain setup, size estimate
 ```

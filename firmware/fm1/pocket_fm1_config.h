@@ -8,6 +8,11 @@
 #ifndef POCKET_FM1_CONFIG_H
 #define POCKET_FM1_CONFIG_H
 
+/* The LXR's constant tables (102 KB) are stored packed and unpacked into RAM at start-up
+ * (engine/lxr_tables_unpack.c): the firmware's wavetable.c and transientTables.c are not
+ * compiled. Byte-identical tables; see BUILDING.md. */
+#define POCKET_PACKED_TABLES 1
+
 /* Event ring ordering. The SDK's own audio code uses csync as its barrier. ASSUMPTION: the
  * control task and the audio interrupt run on the same core of the AC791N (see HARDWARE.md,
  * open questions); if they do not, this must become a real cross-core barrier. */

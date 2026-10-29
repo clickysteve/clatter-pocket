@@ -46,6 +46,9 @@
 void mixer_decimateBlock(const uint8_t voiceNr, int16_t* buffer);
 
 #include "pocket_params.h"
+#ifdef POCKET_PACKED_TABLES
+#include "lxr_tables_packed.h"
+#endif
 
 _Static_assert(POCKET_LXR_BLOCK == OUTPUT_DMA_SIZE, "engine block must match the firmware");
 _Static_assert(POCKET_SOUND_PARAMS == END_OF_SOUND_PARAMETERS, "regenerate engine/pocket_params.h");
@@ -373,6 +376,15 @@ static void zeroEngineState(void)
  */
 void pocket_lxr_init(uint32_t seed)
 {
+#ifdef POCKET_PACKED_TABLES
+	/* the firmware's constant tables, unpacked into RAM before anything reads them */
+	static uint8_t tablesReady, tablesBad;
+	if (!tablesReady)
+	{
+		tablesBad = pocket_lxr_tables_unpack() != 0;
+		tablesReady = 1;
+	}
+#endif
 	zeroEngineState();
 	hrng.state = seed ? seed : 0x9e3779b9u;
 	engineBpm = 120;
@@ -381,6 +393,9 @@ void pocket_lxr_init(uint32_t seed)
 	dcBlock = 0;
 	dcX1[0] = dcX1[1] = dcY1[0] = dcY1[1] = 0;
 	for (unsigned i = 0; i < sizeof stats; i++) ((uint8_t*)&stats)[i] = 0;
+#ifdef POCKET_PACKED_TABLES
+	if (tablesBad) stats.events_dropped = ~0u; /* corrupt tables: shown as DROP on the panel */
+#endif
 	for (int i = 0; i < NUM_PARAMS; i++) activeParameters[i] = 0;
 	for (int i = 0; i < END_OF_SOUND_PARAMETERS; i++) paramShadow[i] = 0;
 

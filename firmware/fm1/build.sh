@@ -4,6 +4,9 @@
 #   firmware/fm1/build.sh [--prepare-only] [--placement sram|tcm] [--single-precision]
 #   firmware/fm1/build.sh --stock     (the unmodified fm1_open, same toolchain and steps:
 #                                      the known-good comparison, in build/fm1-stock/)
+#   firmware/fm1/build.sh --replace [--placement ...] [--single-precision]
+#                                     (CLATTER Pocket instead of the stock instrument
+#                                      application, in build/fm1-replace/; BUILDING.md)
 #
 # 1. prepares build/fm1/tree: the pinned fm1_open (third_party/fm1_open), with
 #    firmware/fm1/fm1_open.patch applied, the FM-1 adapter in app/clatter_pocket/ and
@@ -21,6 +24,7 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
 stock=0
+replace=0
 placement=sram
 single=()
 prepare_only=0
@@ -30,6 +34,7 @@ while [[ $# -gt 0 ]]; do
 	--placement) placement=$2; shift ;;
 	--single-precision) single=(-SinglePrecision) ;;
 	--stock) stock=1 ;;
+	--replace) replace=1 ;;
 	*) echo "unknown option $1" >&2; exit 2 ;;
 	esac
 	shift
@@ -37,6 +42,7 @@ done
 
 out_dir="$repo/build/fm1"
 [[ $stock == 1 ]] && out_dir="$repo/build/fm1-stock"
+[[ $replace == 1 ]] && out_dir="$repo/build/fm1-replace"
 tree="$out_dir/tree"
 
 pinned=4c7496d
@@ -51,9 +57,20 @@ mkdir -p "$tree"
 (cd "$fm1" && git archive --format=tar HEAD) | tar -x -C "$tree"
 if [[ $stock == 1 ]]; then
 	echo "   unmodified fm1_open $actual"
+elif [[ $replace == 1 ]]; then
+	# The stock instrument application goes; the board layer (app/board/), the output mix
+	# (app/audio_output.c) and the headers stay. firmware/fm1/replace/ has the replacement.
+	(cd "$tree" && patch -s -p1 < "$here/replace/fm1_open-replace.patch")
+	for f in screen.c project.c presets.c samples.c transfer.c midi_router.c fm_library.c fm_factory.c; do
+		rm "$tree/app/$f"
+	done
+	mkdir -p "$tree/app/clatter_pocket"
+	cp "$here/replace/clatter_pocket_app.c" "$here/replace/clatter_pocket_app.h" "$tree/app/clatter_pocket/"
 else
-(cd "$tree" && patch -s -p1 < "$here/fm1_open.patch")
-cp -R "$here/app/clatter_pocket" "$tree/app/"
+	(cd "$tree" && patch -s -p1 < "$here/fm1_open.patch")
+	cp -R "$here/app/clatter_pocket" "$tree/app/"
+fi
+if [[ $stock == 0 ]]; then
 
 pocket="$tree/pocket"
 mkdir -p "$pocket/lxr/upstream/Core" "$pocket/lxr/bridge" "$pocket/engine" "$pocket/ui" "$pocket/fm1"
@@ -62,14 +79,20 @@ cp "$repo/lxr/upstream/LICENSE" "$repo/lxr/upstream/NOTICE.md" "$repo/lxr/upstre
 cp -R "$repo/lxr/shim" "$pocket/lxr/"
 # the firmware sources the FM-1 build links: everything CLATTER compiles except the FX bus
 # (engine/fx_off.c stands in) and MidiParser.c (its handler is lxr/bridge/lxr_params.c)
-(cd "$repo" && find lxr/upstream/Core/Src -name '*.c' ! -name MidiParser.c ! -name FxBus.c ! -path '*/FX/*') |
+# and the constant tables (wavetable.c, transientTables.c: packed, pocket/flash/)
+(cd "$repo" && find lxr/upstream/Core/Src -name '*.c' ! -name MidiParser.c ! -name FxBus.c ! -path '*/FX/*' \
+	! -name wavetable.c ! -name transientTables.c) |
 	while read -r f; do mkdir -p "$tree/pocket/$(dirname "$f")"; cp "$repo/$f" "$tree/pocket/$f"; done
 cp "$repo/lxr/bridge/lxr_params.c" "$repo/lxr/bridge/libm.c" "$pocket/lxr/bridge/"
 cp "$repo/engine/pocket_lxr.c" "$repo/engine/pocket_lxr.h" "$repo/engine/pocket_params.h" \
 	"$repo/engine/fx_off.c" "$repo/engine/single_precision.h" "$pocket/engine/"
 cp "$repo/ui/pocket_panel.c" "$repo/ui/pocket_panel.h" "$pocket/ui/"
 cp "$here/pocket_fm1_config.h" "$here/pocket_fm1_libm.c" "$pocket/fm1/"
-echo "   $(find "$pocket" -name '*.c' | wc -l | tr -d ' ') CLATTER Pocket sources, fm1_open $actual + fm1_open.patch"
+# init-only code and data: stays in Flash with every placement
+mkdir -p "$pocket/flash"
+cp "$repo/engine/lxr_tables_packed.c" "$repo/engine/lxr_tables_unpack.c" "$pocket/flash/"
+cp "$repo/engine/lxr_tables_packed.h" "$pocket/engine/"
+echo "   $(find "$pocket" -name '*.c' | wc -l | tr -d ' ') CLATTER Pocket sources, fm1_open $actual + $([[ $replace == 1 ]] && echo "replace/fm1_open-replace.patch, stock instrument application removed" || echo fm1_open.patch)"
 fi
 [[ $prepare_only == 1 ]] && exit 0
 
@@ -90,13 +113,15 @@ if [[ $stock == 1 ]]; then
 	echo "== building unmodified fm1_open"
 	single=(-Stock)
 else
-	echo "== building (placement $placement${single:+, single precision})"
+	echo "== building (placement $placement${single:+, single precision}$([[ $replace == 1 ]] && echo ", replacing the stock instrument"))"
+	[[ $replace == 1 ]] && single+=(-Replace)
 fi
 "$pwsh" -NoProfile -File "$here/Build-ClatterPocket.ps1" -Root "$tree" -FirmwareOnly \
 	-Toolchain "$FM1_PI32_TOOLCHAIN" -Placement "$placement" "${wine[@]+"${wine[@]}"}" "${single[@]+"${single[@]}"}"
 
 out="$out_dir/clatter-pocket-fm1-UNVERIFIED.fwsc"
 [[ $stock == 1 ]] && out="$out_dir/fm1_open-stock-$actual.fwsc"
+[[ $replace == 1 ]] && out="$out_dir/clatter-pocket-fm1-replace-UNVERIFIED.fwsc"
 cp "$tree/build/dx7/generated/FM1_OFFICIAL_OPEN.fwsc" "$out"
 cp "$tree/build/dx7/firmware-report.json" "$out_dir/"
 echo "== $out"

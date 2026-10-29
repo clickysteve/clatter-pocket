@@ -20,7 +20,9 @@ param(
     # Compute the LXR's double-precision arithmetic in single precision.
     [switch]$SinglePrecision,
     # Build the unmodified fm1_open tree (no pocket/): the known-good comparison.
-    [switch]$Stock
+    [switch]$Stock,
+    # CLATTER Pocket as the instrument: the stock instrument application is not in the tree.
+    [switch]$Replace
 )
 $ErrorActionPreference = 'Stop'
 if ($FirmwareOnly -and $Package) { throw 'Choose -FirmwareOnly for local hardware tests or -Package for distribution, not both.' }
@@ -119,7 +121,18 @@ function Test-Firmware {
     $required += @('audio_app_bluetooth_open','sbc_decoder','sbc_hwaccel','avdtp_packet_handler','bt_get_local_name','bt_get_mac_addr',
         'fm1_bluetooth_configure','fm1_bluetooth_get_status',
         'groove_tuning_capture','groove_tuning_apply','groove_project_apply_edit')
-    foreach ($name in $required) { if (!$info.ContainsKey($name)) { throw "Required runtime symbol absent: $name" } }
+    # CLATTER Pocket -Replace: the stock instrument's hooks may be gone with the instrument.
+    $stockInstrument = @('groove_tuning_capture','groove_tuning_apply','groove_project_apply_edit',
+        'fm1_engine_render','fm1_engine_output_level','groove_sequence_render','groove_sequence_clock',
+        'groove_sequence_position','groove_sequence_transport','fm1_sea_decode_groups','fm1_codec_sea_mono_s16_run',
+        'fm1_r_0aa010fe1de1','fm1_r_33d5e5b63b6b') + @($extra) + @($synth.sram_required) + @($synth.sram_optional) + @($synth.native_sram_optional)
+    $removedStock = New-Object 'Collections.Generic.List[string]'
+    foreach ($name in $required) {
+        if (!$info.ContainsKey($name)) {
+            if ($Replace -and $stockInstrument -ccontains $name) { $removedStock.Add($name); continue }
+            throw "Required runtime symbol absent: $name"
+        }
+    }
     # Incoming connections also work with inert client stubs. Require the
     # fixed SDK's real discovery paths for A2DP reconnect and BLE HOST.
     foreach ($name in @('sdp_send_cmd_iotl','sdp_master_packet_handler','gatt_client_discover_primary_services_by_uuid128')) {
@@ -131,6 +144,7 @@ function Test-Firmware {
     foreach ($name in @('fm1_r_dee1ea411566','fm1_r_d16405f329ed','fm1_r_f03cc16d330d','fm1_r_1993f9b103e3',
             'fm1_io_trs_midi_enabled','fm1_r_05431712fb7b','fm1_r_0aa010fe1de1','fm1_r_33d5e5b63b6b','fm1_app_sysex')) {
         # This vendor nm prints SRAM-section functions as N, Flash text as T.
+        if ($Replace -and !$info.ContainsKey($name) -and $stockInstrument -ccontains $name) { $removedStock.Add($name); continue }
         if (!$info.ContainsKey($name) -or $info[$name].kind -cnotin @('T','N','t','n') -or !$info[$name].size) {
             throw "Application callback was lost or replaced by a weak default: $name"
         }
@@ -178,7 +192,8 @@ function Test-Firmware {
         'fm1_usb_audio_read','fm1_bluetooth_audio_read','fm1_usb_audio_write','connectivity_audio_get_speaker_volume','connectivity_audio_get_mic_volume') + @($extra)
 
     # CLATTER Pocket: the audio hook, the engine host and the LXR's own TCM code and state.
-    if (!$Stock) { $callbacks += @('clatter_pocket_fm1_render','pocket_lxr_render_q23','calcDrumVoiceSyncBlock','calcDrumVoiceAsync',
+    $pocketHooks = if ($Replace) { @('clatter_pocket_render','clatter_pocket_output_level') } else { @('clatter_pocket_fm1_render') }
+    if (!$Stock) { $callbacks += @($pocketHooks) + @('pocket_lxr_render_q23','calcDrumVoiceSyncBlock','calcDrumVoiceAsync',
         'mixer_decimateBlock','SVF_recalcFreq','slopeEg2_calc','calcNextOscSampleBlock','sine_table',
         'voiceArray','snareVoice','cymbalVoice','hatVoice')
     if ($Placement -eq 'sram') {
@@ -203,6 +218,7 @@ function Test-Firmware {
         if ($info.ContainsKey('fm1_r_33d5e5b63b6b') -and $info['fm1_r_33d5e5b63b6b'].address -gt 0) { $callbacks += 'fm1_r_33d5e5b63b6b' }
     }
     foreach ($name in $callbacks) {
+        if ($Replace -and !$info.ContainsKey($name) -and $stockInstrument -ccontains $name) { $removedStock.Add($name); continue }
         if (!$info.ContainsKey($name)) { throw "Audio callback absent: $name" }
         if ($info[$name].address -lt 0x01c00000 -or $info[$name].address -ge 0x01c80000) { throw "Audio callback is outside internal SRAM: $name" }
     }
@@ -264,6 +280,10 @@ function Test-Firmware {
         usb_audio_playback_and_capture_linked=$true; bluetooth_audio_absent=$false; ble_roles='peripheral/central'; lvgl_absent=$true;
         active_bluetooth_discovery_linked=$true;
         application_callbacks_verified=$true; board_validation='not performed'}
+    if ($Replace) {
+        $result['instrument'] = 'CLATTER Pocket (stock instrument application replaced)'
+        $result['stock_instrument_symbols_absent'] = @($removedStock | Sort-Object -Unique)
+    }
     Write-Text $report ($result | ConvertTo-Json -Depth 6)
     Write-Host "FM1: $appImage bytes app image; SRAM/BLE/USB checks passed"
 }
@@ -418,7 +438,9 @@ try {
         $options = @($flags)
         # This PI32 LTO plugin can discard application definitions when a
         # native SDK object has weak defaults. Keep user entry units native.
-        if ($source -in @('app/screen.c','app/transfer.c','app/midi_router.c')) {
+        # CLATTER Pocket -Replace: its application unit holds the SDK entry points (MIDI,
+        # SysEx) that the replaced units held; same treatment, and -Oz as app/screen.c.
+        if ($source -in @('app/screen.c','app/transfer.c','app/midi_router.c','app/clatter_pocket/clatter_pocket_app.c')) {
             $options += '-fno-lto'
         }
         if ($source -eq 'app/board/panel.c') { $options += @('-fno-lto','-fno-pic') }
@@ -426,6 +448,7 @@ try {
         # Storage and screen run only from control; keep audio DSP on O2.
         if ($source -in @('app/project.c','app/transfer.c','app/samples.c','app/screen.c','app/presets.c','app/midi_router.c','app/fm_factory.c','app/fm_library.c')) { $options += '-Oz' }
         if ($source -eq 'app/screen.c') { $options += '-fno-inline-functions' }
+        if ($source -eq 'app/clatter_pocket/clatter_pocket_app.c') { $options += '-Oz' }
         $arguments = @($options) + @('-MMD','-MF',($output + '.d'),'-c',$inputFile,'-o',$output)
         Write-Host "Compile $source"
         Run (Join-Path $bin 'clang.exe') $arguments
@@ -448,7 +471,12 @@ try {
     foreach ($source in $pocketSources) {
         $options = @($pocketFlags)
         if ($SinglePrecision -and $source -notmatch '/libm\.c$') { $options += @('-include','single_precision.h') }
-        $output = 'obj/lxr_' + ($objectIndex++) + '_' + ($source -replace '[^a-zA-Z0-9._-]', '_') + '.obj'
+        # pocket/flash/ (init-only: the packed tables) and pocket/ui/ (the panel, control task
+        # only) are never placed in SRAM, and are optimised for size
+        $controlOnly = $source -like 'pocket/flash/*' -or $source -like 'pocket/ui/*'
+        if ($controlOnly) { $options = @($options | Where-Object { $_ -cne '-O2' }) + @('-Oz') }
+        $prefix = if ($controlOnly) { 'obj/pocketflash_' } else { 'obj/lxr_' }
+        $output = $prefix + ($objectIndex++) + '_' + ($source -replace '[^a-zA-Z0-9._-]', '_') + '.obj'
         $arguments = @($options) + @('-MMD','-MF',($output + '.d'),'-c',(Join-Path $root $source),'-o',$output)
         Write-Host "Compile $source"
         Run (Join-Path $bin 'clang.exe') $arguments
@@ -479,6 +507,10 @@ try {
     $aclRx = ' + 4096'
     $linker = [IO.File]::ReadAllText((Join-Path $sdk 'config/linker.ld.in')).Replace('@SBC_DECODER@',$sbcRoot).Replace('@ACL_TX_EXTRA@',$aclTx).Replace('@ACL_RX_EXTRA@',$aclRx)
     if (!$Stock) { $linker = Add-PocketSections $linker }
+    # CLATTER Pocket -Replace: keep the SDK's Bluetooth/BLE control API linked although no
+    # CLATTER Pocket page calls all of it yet (the stock UI did; the firmware checks require it).
+    $keepPlatform = if ($Replace) { @('fm1_ble_scan','fm1_ble_connect','fm1_ble_disconnect','fm1_ble_get_status',
+        'fm1_ble_get_device','fm1_ble_forget_bonds','fm1_bluetooth_get_status','fm1_ble_set_role','fm1_bluetooth_configure') } else { @() }
     Write-Text (Join-Path $build 'generated/linker') $linker
     $link = @('--plugin',(Join-Path $bin 'LLVMgold.dll'),'-o','sdk.elf') + $objects + @(
         '-flto','--plugin-opt=-pi32v2-always-use-itblock=false','--plugin-opt=-enable-ipra=true',
@@ -491,6 +523,7 @@ try {
     $link += @('../../sdk/lib/libc.a','../../sdk/lib/libcompiler_rt.a')
     $link += @('--end-group','--gc-sections','-Tgenerated/linker','-M=sdk.map','--undefined=connectivity_wl82_bluetooth_start')
     $link += @('--undefined=audio_app_bluetooth_open','--undefined=bt_get_local_name','--undefined=bt_get_mac_addr')
+    foreach ($name in $keepPlatform) { $link += '--undefined=' + $name }
     Write-Text (Join-Path $build 'compile_commands.json') (ConvertTo-Json -InputObject @($commands) -Depth 6)
     Write-Text (Join-Path $build 'link-arguments.json') ($link | ConvertTo-Json)
     Write-Host "Link $Profile using prebuilt FM1 SDK"
