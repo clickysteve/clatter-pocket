@@ -35,7 +35,7 @@ enum {
 	POCKET_ENC_SELECT, POCKET_ENC_ALGORITHM, POCKET_ENC_KNOB1, POCKET_ENC_KNOB2, POCKET_ENC_KNOB3,
 	POCKET_ENC_KNOB4, POCKET_ENC_PRESETS
 };
-#define POCKET_FW_VERSION "0.4.0 UNVERIFIED"
+#define POCKET_FW_VERSION "0.5.0 UNVERIFIED"
 
 struct pocket_panel_input {
 	uint32_t keys;                      /* held note keys */
@@ -61,7 +61,7 @@ struct pocket_panel_status {
 };
 enum { POCKET_STATE_STARTING, POCKET_STATE_READY, POCKET_STATE_SAFE, POCKET_STATE_ERROR };
 
-enum { POCKET_PAGE_MAIN, POCKET_PAGE_PATTERN, POCKET_PAGE_SOUND, POCKET_PAGE_MIXER, POCKET_PAGE_GLOBAL, POCKET_PAGE_SYSTEM, POCKET_PAGES };
+enum { POCKET_PAGE_MAIN, POCKET_PAGE_PATTERN, POCKET_PAGE_SOUND, POCKET_PAGE_MIXER, POCKET_PAGE_GLOBAL, POCKET_PAGE_SYSTEM, POCKET_PAGE_STORE, POCKET_PAGES };
 
 /* The keyboard: every key its own instrument, or all of them the selected one, chromatically. */
 enum { POCKET_KEYS_DRUM, POCKET_KEYS_PITCH };
@@ -123,6 +123,11 @@ struct pocket_panel {
 	uint16_t kit_takes;                 /* one-voice sounds drawn since ENV */
 	uint16_t notice_ms;
 	char notice[28];
+	/* The STORE page: the saved kits or patterns (pocket_store.h) */
+	uint8_t store_kind;                 /* POCKET_STORE_* */
+	uint8_t store_slot;                 /* selected slot */
+	uint8_t store_armed;                /* selected slot + 1 while a second SAVE overwrites it */
+	int8_t store_state;                 /* what opening it said */
 	/* The pattern, tempo, swing and transport are the sequencer's (pocket_seq.h). */
 	uint8_t step;                       /* selected step */
 	int8_t density, complexity;         /* 0-100 */

@@ -2,7 +2,8 @@
 
 Audit of the replacement firmware (FM1-REPLACEMENT.md) before its first installation,
 2026-10-29. Baseline: commit `abbe966`. Nothing was flashed and no device was connected or
-touched.
+touched. **It audited a firmware with no user-Flash code.** Saving was added later, with its own audit:
+docs/POCKET-STORAGE.md.
 
 Evidence labels:
 - **SOURCE**: verified by reading source (fm1_open, the SDK headers and scripts, CLATTER

@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: GPL-3.0-only
  *
  * Only what the firmware can do is on screen: every knob moves an engine parameter that the
- * host tests hear change, or the sequencer. Nothing here touches Flash; a pattern and a kit can be
- * replaced, and SAVE+OCT- and SAVE+OCT+ bring them back.
+ * host tests hear change, or the sequencer. The STORE page is the one way to Flash
+ * (pocket_store.h); a pattern and a kit can be replaced, and SAVE+OCT- and SAVE+OCT+ bring them back.
  *
  * Drawing: the Slop Factory 1-bit look (black on white, inverted title and footer), a 3x5
  * pixel font at twice its size, a band at a time so a page costs one 240x16 buffer.
@@ -18,19 +18,21 @@
 #include "pocket_gen.h"
 #include "pocket_kit.h"
 #include "pocket_midi.h"
+#include "pocket_store.h"
 
 static const char* const triggerNames[POCKET_LXR_TRIGGERS] = {
 	"DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "CL HAT", "OP HAT"
 };
 static const char* const cellNames[POCKET_LXR_TRIGGERS] = { "D1", "D2", "D3", "SN", "CY", "CH", "OH" };
-static const char* const pageNames[POCKET_PAGES] = { "MAIN", "PATTERN", "SOUND", "MIXER", "GLOBAL", "SYSTEM" };
+static const char* const pageNames[POCKET_PAGES] = { "MAIN", "PATTERN", "SOUND", "MIXER", "GLOBAL", "SYSTEM", "SAVED" };
 static const char* const pageFooters[POCKET_PAGES] = {
 	"ENV KIT ARP GEN LFO MUTATE",
 	"K1 VEL K2 BPM K3 SWG K4 STEP",
 	"SEL VOICE  KNOBS EDIT",
 	"SEL VOICE  KNOBS EDIT",
 	"K1 ROW K2 VALUE GLO SYSTEM",
-	"GLO BACK  BOOT+HOME SAFE"
+	"GLO BACK  BOOT+HOME SAFE",
+	"SAVE STORE OCT- LOAD K1 SLOT"
 };
 static const char* const mutateNames[POCKET_MUTATE_STRENGTHS] = { "LOW", "MED", "BIG" };
 static const uint8_t controlParams[POCKET_CTLS][POCKET_LXR_TRIGGERS] = {
@@ -168,6 +170,8 @@ int pocket_panel_param(const struct pocket_panel* panel, int c)
 {
 	return controlParams[c][panel->trigger];
 }
+
+static void go(struct pocket_panel* panel, unsigned page);
 
 /* ------------------------------------------------------------------ playing and recording */
 /* While playing a hit overdubs: it is never a reason to take a note away. A hit that lands ahead
@@ -344,6 +348,145 @@ static void kit_pump(struct pocket_panel* panel)
 	if (!panel->kit_cursor) panel->dirty |= BODY_BANDS; /* SOUND and MIXER show the new values */
 }
 
+/* ------------------------------------------------------------------ saved kits and patterns */
+/* A slot is what the kit or pattern was, on the record's own terms: POCKET_STORE_SLOT_BYTES each. */
+struct saved_kit {
+	uint8_t used, kit, generated, edited;
+	uint16_t seed;
+	uint8_t wild, reserved;
+	uint8_t params[POCKET_SOUND_PARAMS];
+};
+struct saved_pattern {
+	uint8_t used, swing, density, complexity, style, mutate, locks, reserved;
+	uint16_t seed, tempo;
+	uint16_t cells[POCKET_SEQ_TRACKS][POCKET_SEQ_STEPS];
+};
+_Static_assert(sizeof(struct saved_kit) <= POCKET_STORE_SLOT_BYTES && sizeof(struct saved_pattern) <= POCKET_STORE_SLOT_BYTES, "a slot");
+
+static void store_open(struct pocket_panel* panel, unsigned kind)
+{
+	panel->store_kind = (uint8_t)kind;
+	panel->store_slot = 0;
+	panel->store_armed = 0;
+	panel->store_state = (int8_t)pocket_store_open(kind);
+	go(panel, POCKET_PAGE_STORE);
+	panel->dirty |= BODY_BANDS;
+	if (panel->store_state == POCKET_STORE_DAMAGED) say(panel, "SAVED DATA DAMAGED", "");
+}
+
+static void slot_say(struct pocket_panel* panel, const char* action)
+{
+	char b[8];
+	number(b, panel->store_slot + 1u, 0);
+	say(panel, action, b);
+	panel->dirty |= BODY_BANDS;
+}
+
+static void save_kit(const struct pocket_panel* panel, struct saved_kit* k)
+{
+	k->used = 1;
+	k->kit = panel->kit;
+	k->generated = panel->kit_generated;
+	k->edited = panel->kit_edited;
+	k->seed = panel->kit_seed;
+	k->wild = (uint8_t)panel->kit_wild;
+	for (int p = 1; p < POCKET_SOUND_PARAMS; p++) k->params[p] = (uint8_t)pocket_lxr_get_param(p);
+}
+
+static void save_pattern(const struct pocket_panel* panel, struct saved_pattern* s)
+{
+	const struct pocket_pattern* pattern = pocket_seq_pattern();
+	s->used = 1;
+	s->swing = (uint8_t)pocket_seq_swing();
+	s->density = (uint8_t)panel->density;
+	s->complexity = (uint8_t)panel->complexity;
+	s->style = (uint8_t)panel->style;
+	s->mutate = (uint8_t)panel->mutate_strength;
+	s->locks = panel->locks;
+	s->seed = panel->seed;
+	s->tempo = (uint16_t)pocket_seq_tempo();
+	for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
+		for (int i = 0; i < POCKET_SEQ_STEPS; i++) s->cells[t][i] = pattern->cell[t][i];
+}
+
+/* SAVE, on this page. Erasing silences audio, so not while a pattern plays, and a slot that holds
+ * something needs a second press while the question is still on the screen. */
+static void store_save(struct pocket_panel* panel)
+{
+	uint8_t* slot = pocket_store_slot(panel->store_slot);
+	if (panel->store_state < 0) return;
+	if (pocket_seq_playing())
+	{
+		say(panel, "STOP TO SAVE", "");
+		return;
+	}
+	if (panel->kit_cursor) return; /* half way between two kits: a moment later */
+	if (slot[0] && (panel->store_armed != panel->store_slot + 1u || !panel->notice_ms))
+	{
+		panel->store_armed = panel->store_slot + 1u;
+		say(panel, "OVERWRITE: SAVE AGAIN", "");
+		return;
+	}
+	panel->store_armed = 0;
+	if (panel->store_kind == POCKET_STORE_KITS) save_kit(panel, (struct saved_kit*)slot);
+	else save_pattern(panel, (struct saved_pattern*)slot);
+	if (pocket_store_commit() == POCKET_STORE_OK) slot_say(panel, "SAVED ");
+	else
+	{
+		panel->store_state = (int8_t)pocket_store_open(panel->store_kind);
+		say(panel, "SAVE FAILED", "");
+		panel->dirty |= BODY_BANDS;
+	}
+}
+
+/* OCT-, on this page. What it replaces can be had back: it is the undo of each, as ENV and ARP. */
+static void store_load(struct pocket_panel* panel)
+{
+	const uint8_t* slot = pocket_store_slot(panel->store_slot);
+	if (panel->store_state < 0 || !slot[0]) return;
+	if (panel->store_kind == POCKET_STORE_KITS)
+	{
+		const struct saved_kit* k = (const struct saved_kit*)slot;
+		kit_keep(panel);
+		for (int p = 1; p < POCKET_SOUND_PARAMS; p++) kitTarget[p] = k->params[p];
+		for (int v = 0; v < POCKET_LXR_VOICES; v++) kitTarget[POCKET_PAR_VOLUME_MOD_ON_OFF1 + v] = 1;
+		panel->kit = k->kit < POCKET_KITS ? k->kit : 0;
+		panel->kit_generated = k->generated != 0;
+		panel->kit_edited = k->edited != 0;
+		panel->kit_seed = k->seed;
+		panel->kit_wild = (int8_t)limited(k->wild, 0, 100);
+		panel->kit_settings_changed = 0;
+		panel->kit_takes = 0;
+		panel->kit_cursor = 1;
+		panel->dirty |= 1u << (B_BODY + L_MAIN_KIT);
+	}
+	else
+	{
+		const struct saved_pattern* s = (const struct saved_pattern*)slot;
+		struct pocket_pattern* next = pocket_seq_edit_begin();
+		for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
+			for (int i = 0; i < POCKET_SEQ_STEPS; i++)
+			{
+				const unsigned c = s->cells[t][i] & 0x7f7fu;
+				next->cell[t][i] = POCKET_CELL_VELOCITY(c) ? (uint16_t)c : 0;
+			}
+		pocket_seq_edit_commit();
+		pocket_seq_set_tempo(s->tempo);
+		pocket_lxr_set_bpm(pocket_seq_tempo());
+		pocket_seq_set_swing(s->swing);
+		panel->density = (int8_t)limited(s->density, 0, 100);
+		panel->complexity = (int8_t)limited(s->complexity, 0, 100);
+		panel->style = (int8_t)(s->style < POCKET_GEN_STYLES ? s->style : 0);
+		panel->mutate_strength = (int8_t)(s->mutate < POCKET_MUTATE_STRENGTHS ? s->mutate : POCKET_MUTATE_MEDIUM);
+		panel->locks = (uint8_t)(s->locks & POCKET_GEN_ALL_TRACKS);
+		panel->seed = (uint16_t)(s->seed < 10000u ? s->seed : 1u);
+		panel->settings_changed = 0;
+		panel->mutations = 0;
+		panel->dirty |= PATTERN_CHANGED;
+	}
+	slot_say(panel, "LOADED ");
+}
+
 /* ------------------------------------------------------------------ time */
 static uint16_t less(uint16_t left, uint32_t elapsed)
 {
@@ -430,11 +573,19 @@ static void go(struct pocket_panel* panel, unsigned page)
 	panel->dirty = ALL_BANDS;
 }
 
-static void navigate(struct pocket_panel* panel, uint32_t pressed)
+static void navigate(struct pocket_panel* panel, uint32_t pressed, int save)
 {
 	if (pressed & BTN(HOME)) go(panel, POCKET_PAGE_MAIN);
-	if (pressed & BTN(SEQ)) go(panel, POCKET_PAGE_PATTERN);
-	if (pressed & BTN(EDIT)) go(panel, POCKET_PAGE_SOUND);
+	if (pressed & BTN(SEQ))
+	{
+		if (save) store_open(panel, POCKET_STORE_PATTERNS);
+		else go(panel, POCKET_PAGE_PATTERN);
+	}
+	if (pressed & BTN(EDIT))
+	{
+		if (save) store_open(panel, POCKET_STORE_KITS);
+		else go(panel, POCKET_PAGE_SOUND);
+	}
 	if (pressed & BTN(FX)) go(panel, POCKET_PAGE_MIXER);
 	if (pressed & BTN(GLO)) go(panel, panel->page == POCKET_PAGE_GLOBAL ? POCKET_PAGE_SYSTEM : POCKET_PAGE_GLOBAL);
 }
@@ -550,6 +701,14 @@ static void page_knobs(struct pocket_panel* panel, const int16_t* knob)
 			if (knob[c]) edit(panel, POCKET_CTL_LEVEL + c, B_BODY + 2 * c, knob[c]);
 		if (knob[0]) panel->dirty |= BODY_BANDS; /* the channel bars */
 		break;
+	case POCKET_PAGE_STORE:
+		if (knob[0])
+		{
+			panel->store_slot = (uint8_t)limited(panel->store_slot + knob[0], 0, POCKET_STORE_SLOTS - 1);
+			panel->store_armed = 0;
+			panel->dirty |= BODY_BANDS;
+		}
+		break;
 	case POCKET_PAGE_GLOBAL:
 		if (knob[0])
 		{
@@ -627,7 +786,7 @@ static void octave_button(struct pocket_panel* panel, int by, int held)
 }
 
 /* Every chord with SAVE is a one-track or an undo, and its release then locks nothing. */
-#define SAVE_CHORDS (BTN(ENV) | BTN(ARP) | BTN(LFO) | BTN(OCT_DOWN) | BTN(OCT_UP))
+#define SAVE_CHORDS (BTN(ENV) | BTN(ARP) | BTN(LFO) | BTN(OCT_DOWN) | BTN(OCT_UP) | BTN(SEQ) | BTN(EDIT))
 
 static void buttons(struct pocket_panel* panel, uint32_t pressed, uint32_t released, uint32_t held)
 {
@@ -643,7 +802,8 @@ static void buttons(struct pocket_panel* panel, uint32_t pressed, uint32_t relea
 	{
 		panel->save_down = 0;
 		panel->dirty |= 1u << B_FOOTER;
-		if (!panel->save_chorded)
+		if (!panel->save_chorded && panel->page == POCKET_PAGE_STORE) store_save(panel);
+		else if (!panel->save_chorded)
 		{
 			panel->locks ^= (uint8_t)(1u << panel->trigger);
 			panel->dirty |= (1u << B_VOICE) | GRID_BANDS;
@@ -665,7 +825,8 @@ static void buttons(struct pocket_panel* panel, uint32_t pressed, uint32_t relea
 		panel->recording = !panel->recording;
 		say(panel, "REC ", offOn[panel->recording]);
 	}
-	if (pressed & BTN(OCT_DOWN)) octave_button(panel, -1, save);
+	if ((pressed & BTN(OCT_DOWN)) && !save && panel->page == POCKET_PAGE_STORE) store_load(panel);
+	else if (pressed & BTN(OCT_DOWN)) octave_button(panel, -1, save);
 	if (pressed & BTN(OCT_UP)) octave_button(panel, 1, save);
 	if (pressed & BTN(ENV))
 	{
@@ -686,7 +847,7 @@ int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_inp
 	panel->previous_keys = in->keys;
 	if (exit) return 1;
 
-	navigate(panel, pressedButtons);
+	navigate(panel, pressedButtons, (in->buttons & BTN(SAVE)) != 0);
 	buttons(panel, pressedButtons, releasedButtons, in->buttons);
 	if (in->encoders[POCKET_ENC_SELECT])
 		select_voice(panel, wrapped(panel->trigger + in->encoders[POCKET_ENC_SELECT], POCKET_LXR_TRIGGERS));
@@ -979,6 +1140,39 @@ static void draw_mixer(const struct pocket_panel* panel, const struct pocket_pan
 		draw_channels(panel, line - 5, px);
 }
 
+/* Eight rows of the saved kits or patterns, scrolled to keep the selected one, inverted. */
+static void draw_store(const struct pocket_panel* panel, unsigned line, uint16_t* px)
+{
+	const int top = panel->store_slot < 8 ? 0 : panel->store_slot - 7, slot = top + (int)line, y = (POCKET_BAND_ROWS - 10) / 2;
+	const uint16_t ink = slot == panel->store_slot ? PAPER : INK;
+	char b[30], *d = b;
+	if (panel->store_state < 0)
+	{
+		if (line) return;
+		text(px, MARGIN, y, panel->store_state == POCKET_STORE_UNAVAILABLE ? "NO USER FLASH" : panel->store_state == POCKET_STORE_OCCUPIED ? "FLASH IN USE: SAVING OFF" : "FLASH ERROR", INK);
+		return;
+	}
+	if (ink == PAPER) fill(px, 0, 0, POCKET_SCREEN_W, POCKET_BAND_ROWS, INK);
+	const uint8_t* record = pocket_store_slot((unsigned)slot);
+	d = number(d, (uint32_t)slot + 1u, 2) + 2;
+	d = append(d, " ");
+	if (!record[0]) append(d, "--");
+	else if (panel->store_kind == POCKET_STORE_KITS)
+	{
+		const struct saved_kit* k = (const struct saved_kit*)record;
+		d = append(d, k->kit && k->kit < POCKET_KITS ? pocket_kit_name(k->kit - 1u) : "INIT");
+		if (k->generated) d = append_number(append(d, " "), k->seed);
+		if (k->edited) append(d, "+");
+	}
+	else
+	{
+		const struct saved_pattern* s = (const struct saved_pattern*)record;
+		d = append(d, pocket_gen_style_name(s->style));
+		append_number(append(d, " "), s->tempo);
+	}
+	text(px, MARGIN, y, b, ink);
+}
+
 /* Eight rows of GLOBAL, scrolled to keep the selected one, which is inverted. */
 static void draw_global(const struct pocket_panel* panel, unsigned line, uint16_t* px)
 {
@@ -1047,14 +1241,14 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 		fill(px, 0, 0, POCKET_SCREEN_W, POCKET_BAND_ROWS, INK);
 		if (band == B_TITLE)
 		{
-			const char* name = pageNames[panel->page];
+			const char* name = panel->page == POCKET_PAGE_STORE && panel->store_kind == POCKET_STORE_KITS ? "SAVED KITS" : panel->page == POCKET_PAGE_STORE ? "SAVED PATS" : pageNames[panel->page];
 			int n = 0;
 			while (name[n]) n++;
 			text(px, MARGIN, y, "CLATTER POCKET", PAPER);
 			text(px, POCKET_SCREEN_W - MARGIN - n * ADVANCE, y, name, PAPER);
 		}
 		else
-			text(px, MARGIN, y, panel->save_down ? "SAVE+ ENV ARP LFO: ONE VOICE" : pageFooters[panel->page], PAPER);
+			text(px, MARGIN, y, panel->save_down && panel->page != POCKET_PAGE_STORE ? "SAVE+ ENV ARP LFO: ONE VOICE" : pageFooters[panel->page], PAPER);
 		return;
 	}
 	if (band == B_STATE)
@@ -1145,6 +1339,7 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 		case POCKET_PAGE_SOUND: draw_sound(panel, line, px); break;
 		case POCKET_PAGE_MIXER: draw_mixer(panel, status, line, px); break;
 		case POCKET_PAGE_GLOBAL: draw_global(panel, line, px); break;
+		case POCKET_PAGE_STORE: draw_store(panel, line, px); break;
 		default: draw_system(status, line, px); break;
 		}
 	}

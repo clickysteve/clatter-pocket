@@ -345,6 +345,18 @@ POCKET_CONTROL_CODE int pocket_lxr_load_init_kit(void)
 	return 0;
 }
 
+POCKET_CONTROL_CODE uint32_t pocket_crc32(uint32_t crc, const void* data, unsigned bytes)
+{
+	const uint8_t* p = data;
+	crc = ~crc;
+	while (bytes--)
+	{
+		crc ^= *p++;
+		for (unsigned i = 0; i < 8; i++) crc = crc >> 1 ^ (0xedb88320u & -(crc & 1u));
+	}
+	return ~crc;
+}
+
 POCKET_CONTROL_CODE int pocket_lxr_init_kit_value(int p)
 {
 	return p >= 0 && p + 8 < INIT_KIT_SIZE ? initKit[p + 8] : 0;

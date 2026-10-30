@@ -7,9 +7,9 @@ whether to start, and every step can be the point to stop.
 
 Candidate:
 - `clatter-pocket-fm1-replace-UNVERIFIED.fwsc`, SHA-256
-  `51afea18e752b71161e0e743358868481791c76912bf892a338019947a902b4b`;
+  `bcfef5946b9c45b9c6402c7c7d177df8b43d8ce1f8686d7a31fbc3029d3550e8`;
 - installer `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-  `1c89c70b0bf8fd5051491ca8427ddb4a5facb27d0e323dff5a5d2be8c34ddf03`.
+  `20b22912dc9a12c63aecaf7e0ef0926f1ecd6c8c7fb297741ae9fa9d43086865`.
 
 Both are produced by:
 
@@ -162,13 +162,28 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
   silent and the keys do nothing. Then connect the **official** workbench and confirm it
   sees the device (connect only; do not install unless restoring).
 
+## Saving test
+
+**The first write this firmware makes to the device's Flash. Do it last, and only after the backups
+in "Before installation".** docs/POCKET-STORAGE.md says what is and is not known.
+
+1. Stopped, hold **SAVE** and press **EDIT**. The page shows 12 empty slots, or **FLASH IN USE: SAVING
+   OFF** or **NO USER FLASH**. Either of those two is a safe result and the end of this test: nothing has
+   been written. Record it, and which firmware the unit came from.
+2. Press **SAVE** on slot 1. Record what is heard and how long the screen takes to show SAVED 1.
+3. Press ENV for another kit, then SAVE+EDIT and **OCT−**: the first kit is back.
+4. Power off, power on, SAVE+EDIT: slot 1 is listed, and loads.
+5. Install the same package again and check again: this is what shows whether an update leaves the
+   sectors alone. Record the result either way.
+
 ## Recovery
 
 1. **Normal restore.** Connect the **official M-VAVE workbench** and install official Open
    (or V15). The FM-1 under CLATTER Pocket reports the fm1_open identity and family, so the
    workbench treats it as Open. Restore projects, samples and the DX7 library from the
-   backups if needed. The user partition is not written by CLATTER Pocket, so the data
-   should still be there after restoring Open. **UNVERIFIED.**
+   backups if needed. CLATTER Pocket writes the user partition only when a kit or pattern is
+   saved, and only in four sectors it has found blank or its own (docs/POCKET-STORAGE.md), so the
+   stock data should still be there after restoring Open. **UNVERIFIED.**
 2. **If the workbench cannot connect** while CLATTER Pocket runs normally: power off, power
    on holding HOME until SAFE MODE, then try the workbench again. **UNVERIFIED.**
 3. **If the install was interrupted:** the FM-1 should come back as its update loader

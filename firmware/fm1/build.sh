@@ -86,7 +86,8 @@ cp -R "$repo/lxr/shim" "$pocket/lxr/"
 cp "$repo/lxr/bridge/lxr_params.c" "$repo/lxr/bridge/libm.c" "$pocket/lxr/bridge/"
 cp "$repo/engine/pocket_lxr.c" "$repo/engine/pocket_lxr.h" "$repo/engine/pocket_params.h" \
 	"$repo/engine/fx_off.c" "$repo/engine/single_precision.h" "$pocket/engine/"
-cp "$repo/ui/pocket_panel.c" "$repo/ui/pocket_panel.h" "$repo/ui/pocket_midi.c" "$repo/ui/pocket_midi.h" "$pocket/ui/"
+cp "$repo/ui/pocket_panel.c" "$repo/ui/pocket_panel.h" "$repo/ui/pocket_midi.c" "$repo/ui/pocket_midi.h" \
+	"$repo/ui/pocket_store.c" "$repo/ui/pocket_store.h" "$pocket/ui/"
 # the sequencer's clock runs in the audio interrupt: with the engine, in SRAM. The generators
 # run only on a button press: with the panel, in Flash, -Oz.
 cp "$repo/seq/pocket_seq.c" "$repo/seq/pocket_seq.h" "$pocket/engine/"

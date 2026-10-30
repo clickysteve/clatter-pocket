@@ -7,8 +7,9 @@
  *
  * The binary SDK's control loop calls the application through the groove_* hooks below.
  * CLATTER Pocket implements the panel, audio and MIDI hooks; the project, sample, transfer
- * and DX7-library hooks are inert. Nothing here reads or writes the user Flash partition:
- * the stock instrument's projects, samples and voices stay where they are, untouched, for
+ * and DX7-library hooks are inert. The only code that reaches the user Flash partition is
+ * ui/pocket_store.c, on a save page, in four sectors it has checked are blank or its own: the
+ * stock instrument's projects, samples and voices stay where they are, untouched, for
  * a later return to the stock firmware. Firmware updates are handled by the SDK before
  * fm1_app_sysex is called and are unaffected.
  *
@@ -316,7 +317,7 @@ void groove_midi_poll(void) {}
 void groove_midi_panic(void) {}
 void groove_midi_clock_reset(void) {}
 
-/* ---- stock instrument storage: inert, user Flash untouched ---- */
+/* ---- stock instrument storage: inert ---- */
 
 static struct groove_project scratch;
 struct groove_project* groove_project_scratch(void) { return &scratch; }

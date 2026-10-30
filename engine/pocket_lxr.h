@@ -106,6 +106,8 @@ int pocket_lxr_set_bpm(int bpm);
 /* Reload the firmware's init kit. Queued as individual parameter events, so it is spread
  * over several blocks rather than stalling one. Returns -1 if the ring lacks room. */
 int pocket_lxr_load_init_kit(void);
+/* CRC-32 (the zlib one), continuing from `crc`, 0 to start. No table: for start-up and saving. */
+uint32_t pocket_crc32(uint32_t crc, const void* data, unsigned bytes);
 /* Parameter p of the firmware's init kit. */
 int pocket_lxr_init_kit_value(int p);
 /* Copy and reset the statistics (peak and backlog reset; counters keep counting). */

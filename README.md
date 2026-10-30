@@ -17,13 +17,13 @@ pocket synthesizer, through M-VAVE's open firmware SDK
 | | |
 |---|---|
 | LXR engine (all six voices, seven triggers, the firmware's parameter handler, modulation, locks) | runs natively; 177 host checks pass; matches CLATTER's engine to within 3 LSB; the FM-1's packed tables unpack byte-identical |
-| FM-1 firmware, CLATTER Pocket **replacing** the stock instrument application | **builds and packages** reproducibly with the FM-1 toolchain: 436,860-byte image (17,061 bytes under the 453,921 limit), stock flash layout, all SDK firmware checks pass, user partition untouched, installer page ([FM1-REPLACEMENT.md](FM1-REPLACEMENT.md)) |
+| FM-1 firmware, CLATTER Pocket **replacing** the stock instrument application | **builds and packages** reproducibly with the FM-1 toolchain: 433,628-byte image (20,293 bytes under the 453,921 limit), stock flash layout, all SDK firmware checks pass, user partition untouched, installer page ([FM1-REPLACEMENT.md](FM1-REPLACEMENT.md)) |
 | Pre-flash audit | done ([PRE-FLASH-AUDIT.md](PRE-FLASH-AUDIT.md)); first-test procedure: [FIRST-HARDWARE-TEST.md](FIRST-HARDWARE-TEST.md) |
 | FM-1 firmware, CLATTER Pocket **beside** the stock instrument (HOME + ARP) | compiles, links, passes the checks, but is 53,671 bytes too large for the flash layout |
 | On the device | **nothing has run on hardware** |
 | Sequencer and generator | 16 steps, seven tracks with notes, CLATTER's styles, whole-pattern and one-track generation, mutation; **tested in the FM-1 emulator** ([docs/POCKET-SEQUENCER.md](docs/POCKET-SEQUENCER.md)) |
 | Playing it | DRUM and PITCH keyboards, live and step recording, 16 kits and on-device kit generation from LXR parameters, GLOBAL settings; **tested in the FM-1 emulator** ([docs/POCKET-CONTROLS.md](docs/POCKET-CONTROLS.md)) |
-| Storage | not started: patterns and sounds are lost at restart (ROADMAP.md) |
+| Saving | 12 kits and 12 patterns in user Flash, written only to sectors checked blank or its own; **tested in the FM-1 emulator, not on a device** ([docs/POCKET-STORAGE.md](docs/POCKET-STORAGE.md)) |
 
 ## What it does on the FM-1 (once installed)
 
@@ -38,6 +38,7 @@ the stock instrument; it does not fit the flash.)
 | PLAY, REC | start or stop; recording on or off |
 | ENV, ARP, LFO | a new kit, a new pattern, mutate. Held SAVE: the selected voice only |
 | PRESETS, ALGORITHM | the kit, the pattern style |
+| SAVE+EDIT, SAVE+SEQ | saved kits, saved patterns |
 | SELECT | select DRUM 1-3, SNARE, CYMBAL, CL HAT, OP HAT |
 | HOME, SEQ, EDIT, FX, GLO | pages: MAIN, PATTERN, SOUND, MIXER, GLOBAL then SYSTEM |
 | KNOB 1-4 | PATTERN: velocity, tempo, swing, step. SOUND: pitch, decay, filter, drive. MIXER: level, pan. GLOBAL: row, value |

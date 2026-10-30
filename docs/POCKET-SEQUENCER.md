@@ -164,8 +164,7 @@ In [POCKET-CONTROLS.md](POCKET-CONTROLS.md), for the firmware as it now stands.
 
 ## Known limitations
 
-- **Nothing is saved.** A restart gives seed 1's pattern at 120 BPM. Storing patterns needs user
-  Flash code, which this firmware deliberately has none of (ROADMAP C).
+- A restart gives seed 1's pattern at 120 BPM until a saved one is loaded ([POCKET-STORAGE.md](POCKET-STORAGE.md)).
 - One pattern, 16 steps, 16th notes. No chaining, no track lengths.
 - Steps have velocity and a note: no probability or parameter locks, though the engine has locks
   (`pocket_lxr_trigger_locked`).

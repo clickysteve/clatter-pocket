@@ -35,7 +35,7 @@ checked as far as possible without the toolchain or device), **open**.
 - **prepared** FM-1 integration: audio hook, control hook, Pocket panel (kick and the other
   six triggers: pitch, decay, level, keys and PLAY), on-device timing display
 - **done: flash budget.** CLATTER Pocket replaces the stock instrument application, the
-  LXR tables are packed losslessly (102 KB -> 24 KB, unpacked into RAM at start-up), control
+  LXR tables are packed losslessly (102 KB -> 18 KB, unpacked into RAM at start-up), control
   code is `-Oz`: a valid package with 32,709 bytes to spare (the limit is 453,921, not the
   479,232 first reported), all SDK checks passing, the stock flash layout, the user
   partition untouched (FM1-REPLACEMENT.md). Beside the stock instrument it is still
@@ -66,11 +66,11 @@ checked as far as possible without the toolchain or device), **open**.
   editing, undo; the PATTERN page. Timing tested to the sample on the host and by measuring the
   emulated audio (docs/POCKET-SEQUENCER.md)
 - **done** tracks: one per LXR trigger, CLATTER's ten roles folded as its default project routes them
-- **open** save/load in the user Flash partition with CRC'd, versioned, two-sector records (the
-  first code here to touch user Flash, so it needs its own audit)
+- **done (emulator; not on hardware)** save/load in the user Flash partition with CRC'd, versioned,
+  two-sector banks, after its own audit (docs/POCKET-STORAGE.md)
 - **done (emulator; not on hardware)** DRUM and PITCH keyboards, step and live recording with a note
   per step, GLOBAL settings (docs/POCKET-CONTROLS.md)
-- **open** more than one pattern, chaining, track lengths (deferred: 677 bytes over the margin)
+- **open** more than one pattern playing in turn, chaining, track lengths
 - **open** MIDI clock in and out, and note output
 
 ## D - Generative CLATTER
@@ -80,8 +80,7 @@ checked as far as possible without the toolchain or device), **open**.
   MUTATE at three strengths
 - **done (emulator; not on hardware)** 16 kits and kit generation from LXR parameters: archetypes,
   characters, families, WILD; one-voice sounds, one-track patterns, pitch in mutation
-- **open** A/B/C/D variations (deferred for flash) and multi-bar phrases; per-step probability
-  (deferred for flash), conditional trigs, every-N
+- **open** multi-bar phrases; per-step probability, conditional trigs, every-N
 - **open** parameter locks per step (the engine has them)
 - **open** kit generation and mutation within instrument-aware ranges, wildness/character
 - **open** human-readable seeds (CLATTER's documented hash) and seed compatibility with CLATTER:

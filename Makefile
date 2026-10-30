@@ -31,7 +31,7 @@ DSP_CFLAGS := -O3 -ffast-math -freciprocal-math -ffp-contract=off -ffreestanding
 # WebAssembly build. Natively the platform provides those; rename CLATTER's out of the way.
 LIBM_RENAMES := -Dmemset=lxr_unused_memset -Dmemcpy=lxr_unused_memcpy -Dmemmove=lxr_unused_memmove \
 	-D__extendhfsf2=lxr_unused_extendhfsf2 -D__truncsfhf2=lxr_unused_truncsfhf2
-HOST_CFLAGS := -O2 -Wall -Wextra -Wno-unused-function -std=c11 -Iengine -Iui -Iseq -Ihost
+HOST_CFLAGS := -O2 -Wall -Wextra -Wno-unused-function -std=c11 -Iengine -Iui -Iseq -Ihost -Ihost/tests
 # The firmware places its hot code and state in the STM32's tightly coupled memories with
 # section attributes (config.h: IN_ITCM_RAM, INDTCM, INDTCMZ). Mach-O rejects ELF section
 # names; on macOS turn them into inert annotations. (The FM-1 linker script maps the sections
@@ -50,7 +50,7 @@ PACKED_SRC := $(filter-out $(LXR_TABLES),$(LXR_NOFX)) $(BRIDGE) $(ENGINE) engine
 PACKED_OBJ := $(call obj,packed,$(PACKED_SRC))
 $(PACKED_OBJ): DSP_CFLAGS += -DPOCKET_PACKED_TABLES
 
-TOOLS := $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_seq $(BUILD)/test_kit $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/bench $(BUILD)/render $(BUILD)/dump
+TOOLS := $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_seq $(BUILD)/test_kit $(BUILD)/test_store $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/bench $(BUILD)/render $(BUILD)/dump
 
 .PHONY: all test bench render compare compare-sp emu-test firmware packed-tables clean
 all: $(TOOLS) test
@@ -98,9 +98,12 @@ packed-tables: $(BUILD)/lxr_tables.bin
 	python3 tools/pack-lxr-tables.py $< engine/lxr_tables_packed.c
 SEQ := seq/pocket_seq.c seq/pocket_gen.c
 SEQ_DEPS := $(SEQ) seq/pocket_seq.h seq/pocket_gen.h seq/pocket_styles.h
-PANEL := ui/pocket_panel.c ui/pocket_midi.c seq/pocket_kit.c
-$(BUILD)/test_panel: host/tests/test_panel.c $(PANEL) ui/pocket_panel.h seq/pocket_kit.h $(SEQ_DEPS) $(BUILD)/liblxr_nofx.a
+PANEL := ui/pocket_panel.c ui/pocket_midi.c ui/pocket_store.c seq/pocket_kit.c host/tests/fake_flash.c
+$(BUILD)/test_panel: host/tests/test_panel.c $(PANEL) ui/pocket_panel.h ui/pocket_store.h host/tests/fake_flash.h seq/pocket_kit.h $(SEQ_DEPS) $(BUILD)/liblxr_nofx.a
 	$(CC) $(HOST_CFLAGS) $< $(PANEL) $(SEQ) $(BUILD)/liblxr_nofx.a -lm -o $@
+# Saving, on a model of the Flash chip: a power cut at every operation, with AddressSanitizer.
+$(BUILD)/test_store: host/tests/test_store.c host/tests/fake_flash.c host/tests/fake_flash.h ui/pocket_store.c ui/pocket_store.h $(BUILD)/liblxr_nofx.a
+	$(CC) $(HOST_CFLAGS) -Ihost/tests -fsanitize=address,undefined -fno-omit-frame-pointer $< host/tests/fake_flash.c ui/pocket_store.c $(BUILD)/liblxr_nofx.a -lm -o $@
 # Every kit rendered through the real engine.
 $(BUILD)/test_kit: host/tests/test_kit.c seq/pocket_kit.c seq/pocket_kit.h seq/pocket_gen.c $(BUILD)/liblxr_nofx.a
 	$(CC) $(HOST_CFLAGS) $< seq/pocket_kit.c seq/pocket_gen.c $(BUILD)/liblxr_nofx.a -lm -o $@
@@ -126,7 +129,7 @@ $(BUILD)/dump_packed: host/compare/dump.c $(BUILD)/liblxr_packed.a
 $(BUILD)/dump_sp: host/compare/dump.c $(BUILD)/liblxr_sp.a
 	$(CC) $(HOST_CFLAGS) $< $(BUILD)/liblxr_sp.a -lm -o $@
 
-test: $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_seq $(BUILD)/test_kit $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/lxr_tables.bin $(BUILD)/dump_tables_packed $(BUILD)/dump_nofx $(BUILD)/dump_packed
+test: $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_seq $(BUILD)/test_kit $(BUILD)/test_store $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/lxr_tables.bin $(BUILD)/dump_tables_packed $(BUILD)/dump_nofx $(BUILD)/dump_packed
 	$(BUILD)/test_engine
 	$(BUILD)/test_engine_nofx
 	$(BUILD)/test_engine_packed
@@ -138,6 +141,7 @@ test: $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed
 	$(BUILD)/test_panel $(BUILD)/panel.ppm
 	$(BUILD)/test_seq
 	$(BUILD)/test_kit
+	$(BUILD)/test_store
 	$(BUILD)/test_midi
 	$(BUILD)/test_fm1_libm
 

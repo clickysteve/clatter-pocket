@@ -88,7 +88,8 @@ of them. They are not checked on a device.
 
 The whole control map is in [POCKET-CONTROLS.md](POCKET-CONTROLS.md). The earlier "ENC 1/2/3" and
 "ENC 7" labels were matrix indices: they were physically SELECT, ALGORITHM, KNOB 1 and PRESETS. **No
-control writes Flash or updates anything.** A control can replace a pattern or a kit, and
+control updates anything, and only SAVE on a save page writes Flash**
+([POCKET-STORAGE.md](POCKET-STORAGE.md)). Otherwise: A control can replace a pattern or a kit, and
 SAVE+OCT− and SAVE+OCT+ bring them back.
 
 SAFE MODE is unchanged: HOME is read once, at the 1.5 s point, and a button held then does not
@@ -109,6 +110,7 @@ act afterwards. So HOME's page function cannot reach SAFE MODE, or the reverse.
 - **MIXER**: LEVEL and PAN of the selected voice, MASTER (shown; set by the pot), a level bar
   per voice. The LXR's pan is taken at each trigger, so a move is heard on the next hit.
 - **GLOBAL**: the settings, 17 rows of which 8 show (POCKET-CONTROLS.md). GLO opens it.
+- **SAVED KITS**, **SAVED PATS**: SAVE+EDIT, SAVE+SEQ, 12 slots each ([POCKET-STORAGE.md](POCKET-STORAGE.md)).
 - **SYSTEM**: GLO from GLOBAL. Version, build, CPU mean and peak, overruns, clipped samples, dropped events,
   heap, and how to reach SAFE MODE.
 
@@ -134,11 +136,11 @@ So there is no per-voice level measurement: the cells show triggers, the meter t
 |---|---|
 | `make test` | `test_seq`, `test_kit` and `test_panel`, on the real engine: the sequencer (POCKET-SEQUENCER.md), navigation, wrapping, unassigned buttons, knob scope, selection, clamping, **every control of every voice changes the rendered audio**, pan direction, MIDI and audio activity, the overrun warning, redraw masks, every band of every page in every state stays in its buffer |
 | `make emu-test EMU_WASM=…` | `tools/emu-test.mjs`: the package in the emulator (below) |
-| `python3 tools/check-firmware.py` | size and headroom, heap, stock layout, SRAM and Flash placement, no user-flash code, from the ELF |
+| `python3 tools/check-firmware.py` | size and headroom, heap, stock layout, SRAM and Flash placement, from the ELF |
 
 ### Emulator results
 
-175 checks pass, on the package in FM1-REPLACEMENT.md, in the emulator's WebAssembly core at 240 MHz.
+221 checks pass, on the package in FM1-REPLACEMENT.md, in the emulator's WebAssembly core at 240 MHz.
 [POCKET-CONTROLS.md](POCKET-CONTROLS.md) has what they cover.
 
 Limits of what this shows:
@@ -154,7 +156,7 @@ Limits of what this shows:
   for this interface; the safety properties are rechecked by `tools/check-firmware.py` and the
   emulator run, and the bootloader, update identity, flash layout, engine and audio path are
   unchanged.
-- Parameters, kits and patterns are not saved; a restart returns to the init kit and seed 1.
+- A restart returns to the init kit and seed 1 until something saved is loaded.
 - One parameter set per page: the other LXR parameters are reachable only from CLATTER's
   engine API.
 - The keys have one velocity, which you set (the scanner reports on and off). Steps and MIDI have

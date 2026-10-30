@@ -116,9 +116,7 @@ edit("""    # The device reports this source/SDK build identity after a browser 
         # pocket/flash/ (init-only: the packed tables) and pocket/ui/ (the panel, control task
         # only) are never placed in SRAM, and are optimised for size
         $controlOnly = $source -like 'pocket/flash/*' -or $source -like 'pocket/ui/*'
-        # The parameter table is built once, at start-up: in SRAM with the engine, but for size.
-        $sizeOnly = $controlOnly -or $source -match '/ParameterArray\.c$'
-        if ($sizeOnly) { $options = @($options | Where-Object { $_ -cne '-O2' }) + @('-Oz') }
+        if ($controlOnly) { $options = @($options | Where-Object { $_ -cne '-O2' }) + @('-Oz') }
         $prefix = if ($controlOnly) { 'obj/pocketflash_' } else { 'obj/lxr_' }
         $output = $prefix + ($objectIndex++) + '_' + ($source -replace '[^a-zA-Z0-9._-]', '_') + '.obj'
         $arguments = @($options) + @('-MMD','-MF',($output + '.d'),'-c',(Join-Path $root $source),'-o',$output)
@@ -148,12 +146,14 @@ edit("""function Test-Firmware {""", """function Add-PocketSections([string]$tex
     }
     $code = "        *(.volatile_ram_code .volatile_ram_code.*)`n        *(.itcm_text .itcm_text.*)"
     # Anchored to the object prefix: source names may contain 'lxr_' too (lxr_tables_*.c).
-    if ($Placement -eq 'sram') { $code += "`n        obj/lxr_*.obj(.text .text.* .rodata .rodata.*)" }
+    # memset too: the compiler makes clearing loops on the audio path into calls to it, and Flash
+    # cannot be fetched from while it is being written (tools/check-audio-path.py).
+    if ($Placement -eq 'sram') { $code += "`n        obj/lxr_*.obj(.text .text.* .rodata .rodata.*)`n        *lib_a-memset.o(.text .text.*)" }
     $text = Edit-Once $text '        *(.volatile_ram_code .volatile_ram_code.*)' $code
     $text = Edit-Once $text '        *(.data .data.*)' "        *(.data .data.*)`n        *(.dtcm .dtcm.*)"
     $text = Edit-Once $text '        *(.bss .bss.*)' "        *(.dtcmz .dtcmz.*)`n        *(.bss .bss.*)"
     if ($Placement -eq 'sram') {
-        $text = Edit-Once $text '        *(.text*)' '        *(EXCLUDE_FILE(obj/lxr_*.obj) .text*)'
+        $text = Edit-Once $text '        *(.text*)' '        *(EXCLUDE_FILE(obj/lxr_*.obj *lib_a-memset.o) .text*)'
         $text = Edit-Once $text '        *(.rodata*)' '        *(EXCLUDE_FILE(obj/lxr_*.obj) .rodata*)'
     }
     $text

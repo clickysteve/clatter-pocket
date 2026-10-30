@@ -29,6 +29,9 @@ none, so use the mouse.
 
 SAVE+OCT− `8`+`Z` undoes the last change to the pattern, and SAVE+OCT+ `8`+`X` the last change of kit.
 
+To keep them: SAVE+EDIT `8`+`5` for the saved kits, SAVE+SEQ `8`+`0` for the saved patterns
+([POCKET-STORAGE.md](POCKET-STORAGE.md)).
+
 ## Control map
 
 Every control below works on every page, unless it says otherwise.
@@ -43,11 +46,11 @@ Every control below works on every page, unless it says otherwise.
 | **ENV** | a new kit, in the character PRESETS chose | a new sound for the selected voice |
 | **ARP** | a new pattern, in the style ALGORITHM chose | a new pattern for the selected track |
 | **LFO** | mutate the pattern, at GLOBAL's MUTATE strength | mutate the selected track |
-| **SAVE** | a tap locks or unlocks the selected track: ARP and LFO leave it alone | |
+| **SAVE** | a tap locks or unlocks the selected track: ARP and LFO leave it alone. On a save page, a tap stores | |
 | **SELECT** | the selected voice | |
 | **PRESETS** | the kit: INIT, then 16 characters | |
 | **ALGORITHM** | the pattern style, of 11 | |
-| **HOME SEQ EDIT FX** | MAIN, PATTERN, SOUND, MIXER | |
+| **HOME SEQ EDIT FX** | MAIN, PATTERN, SOUND, MIXER | SEQ: saved patterns. EDIT: saved kits |
 | **GLO** | GLOBAL; again, SYSTEM | |
 | **MASTER** | output level | |
 | HOME held at 1.5 s after power-on | SAFE MODE, unchanged | |
@@ -208,7 +211,7 @@ one voice, so on either, both change.
 
 **Applying a kit.** The generator runs on the control task, into a buffer, and at most 12 changed
 parameters per control poll go to the engine through its event ring, so the audio interrupt does at
-most the bounded work it always did. With a pattern playing, emulated CPU peaks at 29.7 % while a kit
+most the bounded work it always did. With a pattern playing, emulated CPU peaks at 29.5 % while a kit
 loads (28.6 % playing), with no overruns or dropped events.
 
 **Protecting unsaved sounds.** A + after the name means hand edits. The kit before the last
@@ -245,14 +248,14 @@ an octave either way.
 **SAVE+LFO** does one track, which matches what SAVE means with ENV and ARP. Locked tracks stay out
 of ARP and LFO, and all of this is deterministic: the same seed gives the same result.
 
-**Not implemented.** A/B/C/D variations, step probability and per-track lengths were secondary and
-are **deferred**: 677 bytes remain over the hardware-fix margin, each needs storage, audio-path code and
-controls, and an unreliable version would be worse than none.
+**Not implemented.** Step probability and per-track lengths were secondary and are deferred. A/B/C/D
+variations were dropped.
 
 ## GLOBAL
 
 GLO opens it; GLO again opens SYSTEM, the diagnostics, which are as they were. KNOB 1 picks a row,
-KNOB 2 changes it. Every row works, and is tested at both of its ends. Nothing is saved at power-off.
+KNOB 2 changes it. Every row works, and is tested at both of its ends. These settings last until
+power-off.
 
 | Row | Values | |
 |---|---|---|
@@ -274,7 +277,7 @@ KNOB 2 changes it. Every row works, and is tested at both of its ends. Nothing i
 | MIDI MAP | GM, KEYS | DRUM's note map |
 
 **Left out, because they would not work:** MIDI output and thru, external clock (the firmware sends
-nothing and the clock is the audio's), a velocity curve, and a default tempo (nothing is saved).
+nothing and the clock is the audio's), a velocity curve, and a default tempo (these settings are not stored).
 
 ## The screen
 
@@ -289,25 +292,33 @@ nothing and the clock is the audio's), a velocity curve, and a default tempo (no
 
 ## Size
 
-Measured from the link map and the SDK's report, against the sequencer build, both
-`--replace --single-precision`:
+`tools/flash-map.py` breaks it down; the figures below are for this firmware, 0.5.0, and
+[POCKET-STORAGE.md](POCKET-STORAGE.md) has what storage cost. Both builds `--replace --single-precision`:
 
-| | Sequencer | This firmware | Change |
+| | Controls (9b1e916) | This firmware | Change |
 |---|---|---|---|
-| App image | 430,908 | **436,860** | +5,952 |
-| Headroom under 453,921 | 23,013 | **17,061** | |
-| Over the 16,384 hardware-fix margin | 6,629 | **677** | |
-| `.ram0_data` (SRAM code and data) | 105,756 | 105,820 | +64 |
-| `.ram0_bss` | 284,876 | 285,676 | +800 |
-| Runtime heap (SDK minimum 49,152) | 132,908 | **132,044** | −864 |
+| App image | 436,860 | **433,628** | −3,232 |
+| Headroom under 453,921 | 17,061 | **20,293** | +3,232 |
+| Over the 16,384 hardware-fix margin | 677 | **3,909** | |
+| `.ram0_data` (SRAM code and data) | 105,820 | 105,564 | −256 |
+| `.ram0_bss` | 285,676 | 289,292 | +3,616 |
+| Runtime heap (SDK minimum 49,152) | 132,044 | **128,684** | −3,360 |
 
-Of the 5,952: kits 2,392, the panel about 3,100, the generator about 350, the sequencer and engine
-about 70. Fixed-size data only: nothing allocates. The flash layout, bootloader, updater, Bluetooth and
-packed tables are unchanged, and `tools/check-firmware.py` passes, including the margin.
+| Where it went | Bytes |
+|---|---|
+| LXR tables: range coded, the sawtooth stored by its symmetry, from 23,892 to 17,650 | −6,242 |
+| CRC of the tables, checked at every start | +160 |
+| control-only engine code for size, packed style tables, compact MIDI map | −350 about |
+| **Recovered** | **−6,400** |
+| saving: the store 778, the panel about 1,500, the SDK's Flash driver 878 | +3,168 |
+| **Net** | **−3,232** |
 
-**The margin is what limits this firmware from here.** 677 bytes is not room for another feature.
-There are savings to be had: control-only engine functions such as `pocket_lxr_init` are compiled for
-speed in SRAM, and the tables of styles have padding.
+The target of 8 to 12 KB was not reached: 6.4 KB was what could be recovered safely. Of the image,
+359 KB is the binary SDK. It still links about 40 KB of unreachable stock engines, but the build's
+sealed SDK contract requires those symbols, so they stay. Compiling the LXR's parameter handler for
+size saved 160 bytes in code the audio interrupt runs, and was left out as not worth it.
+
+Stack and CPU below are from this firmware.
 
 **Stack**, from the frames in the linked ELF:
 
@@ -318,13 +329,15 @@ speed in SRAM, and the tables of styles have padding.
 | `pocket_kit_voice`, the same | about 440 |
 | `pocket_panel_draw_band` | about 440 |
 | audio interrupt: `pocket_seq_block` 4, `fire` 44, trigger 28 | about 472 at most |
+| a save: `pocket_store_commit` to `fm1_flash_write`, before the SDK's own callees | 604 |
 
-The control path stays under the 720 bytes the audit found, of an `app_core` stack of 2,048 units.
+The control path stays under the 720 bytes the audit found, of an `app_core` stack of 2,048 units, except
+possibly a save, whose depth inside the SDK's driver is not known: it is the driver stock uses from this task.
 The audio figure is the audit's 400 plus those frames, 32 more than the sequencer's, because `fire`
 is no longer inlined. There is no division on the audio path.
 
-**CPU**, in the emulator at 240 MHz: 28.1 % stopped, 28.6 % mean and 29.4 % peak playing, 29.7 % peak
-while a kit loads. **Not a device measurement**: the emulator counts about one instruction per cycle
+**CPU**, in the emulator at 240 MHz: 28.1 % stopped, 28.6 % mean and 29.4 % peak playing, 29.5 % peak
+while a kit loads. Start-up takes 38 ms longer, for the tables. **Not a device measurement**: the emulator counts about one instruction per cycle
 and models no cache or Flash wait states.
 
 ## Tests
@@ -332,16 +345,19 @@ and models no cache or Flash wait states.
 | Command | Covers |
 |---|---|
 | `make test` | `test_kit`, 23 checks: ranges, determinism, seeds, families, one voice changing only itself, and **1,344 voices rendered through the real engine** (each character and trigger at WILD 0, 50, 100): none silent, none clipping alone, kicks low, hats above them |
-| | `test_panel`, 350 checks on the real engine: DRUM keys not transposing, by bit-identical audio; PITCH by measured frequency, returning exactly; modes changing nothing else; octave and velocity; stopped and live recording; quantising; double triggers; kits, undo, one voice and one track; MIDI; every GLOBAL row at both ends |
+| | `test_panel`, 387 checks on the real engine: DRUM keys not transposing, by bit-identical audio; PITCH by measured frequency, returning exactly; modes changing nothing else; octave and velocity; stopped and live recording; quantising; double triggers; kits, undo, one voice and one track; MIDI; every GLOBAL row at both ends |
 | | `test_seq`, 13,334 checks with AddressSanitizer and UBSan, including notes through mutation, quantising every position with swing, skips, 15,400 one-track generations. The golden pattern hash is **unchanged** from the previous firmware |
 | | `test_midi`, every 3-byte message. Engine, libm and table checks unchanged |
+| | `test_store`, 1,379 checks: [POCKET-STORAGE.md](POCKET-STORAGE.md) |
 | `make compare CLATTER_DIR=…` | the engine against CLATTER's WebAssembly: **−80.8 dBFS** max error, pass |
 | `make emu-test EMU_WASM=…` | `tools/emu-test.mjs`, below |
-| `python3 tools/check-firmware.py` | size, margin, layout, placement, and now that the build is `--single-precision` |
+| `python3 tools/check-firmware.py` | size, margin, layout, placement, and that the build is `--single-precision` |
+| `node tools/emu-golden.mjs` | the firmware's own audio, each voice hashed: unchanged across these builds, bit for bit, once aligned for the later audio start with `--lead` |
+| `python3 tools/check-audio-path.py` | nothing the audio interrupt reaches is in Flash |
 
 ### Emulator results
 
-The package below, the emulator's WebAssembly core (the deployed `fm1_web.wasm`), 240 MHz, **175 of 175
+The package below, the emulator's WebAssembly core (the deployed `fm1_web.wasm`), 240 MHz, **221 of 221
 checks**. All input is through the emulated panel; text and grids come from the LCD's pixels, pitch and
 timing from the emulated audio. Kits are compared with the host's for the same seed, patterns bit for bit.
 
@@ -372,8 +388,8 @@ is unchanged. The emulator's core was scripted; the browser page itself was not 
 
 ## Known limitations
 
-- **Nothing is saved.** A restart returns the init kit, seed 1 and the defaults. Storing needs user-Flash
-  code, which this firmware deliberately has none of (ROADMAP C).
+- GLOBAL's settings are not saved, and a restart returns the init kit and seed 1 until something is
+  loaded. Kits and patterns can be: [POCKET-STORAGE.md](POCKET-STORAGE.md).
 - The keys have no velocity, and SELECT cannot be held: above.
 - Seven tracks: clap, percussion and FX share sounds with snare, high tom and cymbal. CH and OH are one
   voice with a shared sound.

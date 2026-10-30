@@ -69,11 +69,11 @@ for symbol in ("groove_screen_init", "groove_screen_control", "pocket_panel_draw
     check(within(symbol, FLASH), f"{symbol} linked, in Flash")
 check(all(within(f"pocket_{s}", FLASH) for s in ("gen_generate", "gen_track", "gen_mutate", "kit_voice")), "the generators in Flash: only a button runs them")
 for symbol in ("clatter_pocket_render", "clatter_pocket_output_level", "pocket_lxr_render_q23", "sqrtf",
-               "pocket_seq_block", "pocket_lxr_trigger_now"):
+               "pocket_seq_block", "pocket_lxr_trigger_now", "memset"):
     check(within(symbol, SRAM), f"{symbol} in SRAM")
 check(within("lxr_packed_sine_table", FLASH), "packed tables in Flash, not SRAM")
-for symbol in ("fm1_flash_read", "fm1_flash_write", "fm1_flash_erase", "fm1_flash_map"):
-    check(symbol not in symbols, f"not linked: {symbol}")
+check("fm1_flash_map" not in symbols, "not linked: fm1_flash_map")
+check(within("pocket_store_commit", FLASH), "the store in Flash: only a button runs it")
 for symbol in ("fm1_master_gain", "groove_project_apply_edit", "groove_tuning_apply"):
     check(symbol not in symbols, f"stock application absent: {symbol}")
 print("result:", "FAILED" if failed else "passed")

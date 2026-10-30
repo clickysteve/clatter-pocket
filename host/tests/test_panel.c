@@ -13,6 +13,8 @@
 #include "pocket_seq.h"
 #include "pocket_gen.h"
 #include "pocket_kit.h"
+#include "pocket_store.h"
+#include "fake_flash.h"
 
 static int failures, checks;
 #define CHECK(cond, ...) do { checks++; if (!(cond)) { failures++; printf("FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while (0)
@@ -847,6 +849,183 @@ static void test_global(void)
 	render_seconds(44100);
 }
 
+/* Save, change, load, restart: by the panel's own controls, on a model of the Flash chip. */
+static void test_saving(void)
+{
+	struct pocket_panel panel;
+	static uint8_t a[POCKET_SOUND_PARAMS], b[POCKET_SOUND_PARAMS];
+	fake_flash_reset();
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press(&panel, BUTTON(ARP));
+	press(&panel, BUTTON(ENV));
+	settle(&panel);
+	CHECK(!fake_flash_ops && !fake_flash_reads, "using the instrument touches no Flash: %ld %ld", fake_flash_ops, fake_flash_reads);
+
+	/* SAVE+EDIT: the kits. It is a chord: nothing locks, and it is not the SOUND page */
+	press2(&panel, BUTTON(SAVE), BUTTON(EDIT));
+	CHECK(panel.page == POCKET_PAGE_STORE && panel.store_kind == POCKET_STORE_KITS, "SAVE+EDIT opens the saved kits");
+	CHECK(!panel.locks, "and locks nothing");
+	CHECK(!fake_flash_ops && fake_flash_reads, "opening it reads and does not write");
+
+	/* a kit: all of it */
+	kit_now(a);
+	const uint16_t seed = panel.kit_seed;
+	const uint8_t kit = panel.kit;
+	turn(&panel, POCKET_ENC_KNOB1, 2);
+	press(&panel, BUTTON(SAVE));
+	CHECK(fake_flash_ops > 0, "SAVE stores it on an empty slot");
+	CHECK(!strncmp(panel.notice, "SAVED", 5), "and says so: %s", panel.notice);
+	CHECK(!panel.locks, "and is no lock here");
+
+	/* change the sound, by a generator and by hand, then load */
+	press(&panel, BUTTON(ENV));
+	settle(&panel);
+	press(&panel, BUTTON(EDIT));
+	turn(&panel, POCKET_ENC_KNOB1, 9);
+	settle(&panel);
+	kit_now(b);
+	CHECK(memcmp(a, b, sizeof a), "another kit");
+	press2(&panel, BUTTON(SAVE), BUTTON(EDIT));
+	turn(&panel, POCKET_ENC_KNOB1, 2);
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(!strncmp(panel.notice, "LOADED", 6), "OCT- loads: %s", panel.notice);
+	CHECK(panel.octave == 0, "and is not the octave here");
+	settle(&panel);
+	kit_now(b);
+	CHECK(!memcmp(a, b, sizeof a), "the kit is back, every parameter, levels and pans too");
+	CHECK(panel.kit == kit && panel.kit_seed == seed && panel.kit_generated, "with its name and seed");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_UP));
+	settle(&panel);
+	kit_now(b);
+	CHECK(memcmp(a, b, sizeof a), "a load is undone by SAVE+OCT+");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_UP));
+	settle(&panel);
+
+	/* a pattern: notes, velocities, tempo, swing, generator settings */
+	press(&panel, BUTTON(SEQ));
+	press(&panel, BUTTON(ARP));
+	pocket_seq_set_step(1, 6, 77, 72);
+	pocket_seq_set_tempo(133);
+	pocket_seq_set_swing(61);
+	panel.density = 66;
+	panel.complexity = 44;
+	panel.style = 5;
+	panel.locks = 1u << 4;
+	const uint16_t pattern_seed = panel.seed;
+	const struct pocket_pattern saved = *pocket_seq_pattern();
+	press2(&panel, BUTTON(SAVE), BUTTON(SEQ));
+	CHECK(panel.page == POCKET_PAGE_STORE && panel.store_kind == POCKET_STORE_PATTERNS, "SAVE+SEQ opens the saved patterns");
+	CHECK(panel.locks == 1u << 4, "and keeps the lock");
+	const long ops = fake_flash_ops;
+
+	/* not while it plays: erasing silences audio */
+	press(&panel, BUTTON(PLAY));
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "STOP TO SAVE") && fake_flash_ops == ops, "a playing pattern is not saved: %s", panel.notice);
+	press(&panel, BUTTON(PLAY));
+	press(&panel, BUTTON(SAVE));
+	CHECK(fake_flash_ops > ops, "stopped, it is");
+
+	/* a slot in use needs the same slot twice */
+	const long once = fake_flash_ops;
+	press(&panel, BUTTON(SAVE));
+	CHECK(fake_flash_ops == once && !strcmp(panel.notice, "OVERWRITE: SAVE AGAIN"), "one press does not overwrite: %s", panel.notice);
+	turn(&panel, POCKET_ENC_KNOB1, 1);
+	turn(&panel, POCKET_ENC_KNOB1, -1);
+	press(&panel, BUTTON(SAVE));
+	CHECK(fake_flash_ops == once, "moving away disarms it");
+	panel.kit_announce = 0;
+	pocket_panel_tick(&panel, POCKET_NOTICE_MS);
+	press(&panel, BUTTON(SAVE));
+	CHECK(fake_flash_ops == once, "the question lapses");
+	press(&panel, BUTTON(SAVE));
+	CHECK(fake_flash_ops > once, "the second press does");
+
+	/* generate over it, load it back, while it plays */
+	press(&panel, BUTTON(SEQ));
+	press(&panel, BUTTON(ARP));
+	panel.density = 10;
+	pocket_seq_set_tempo(90);
+	pocket_seq_set_swing(50);
+	panel.locks = 0;
+	CHECK(memcmp(&saved, pocket_seq_pattern(), sizeof saved), "another pattern");
+	press(&panel, BUTTON(PLAY));
+	press2(&panel, BUTTON(SAVE), BUTTON(SEQ));
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(!memcmp(&saved, pocket_seq_pattern(), sizeof saved), "the pattern is back, notes and velocities");
+	CHECK(pocket_seq_tempo() == 133 && pocket_seq_swing() == 61, "and tempo and swing");
+	CHECK(panel.density == 66 && panel.complexity == 44 && panel.style == 5 && panel.seed == pattern_seed && panel.locks == 1u << 4, "and the generator");
+	CHECK(pocket_seq_playing(), "loading did not stop it");
+	press(&panel, BUTTON(PLAY));
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+	CHECK(memcmp(&saved, pocket_seq_pattern(), sizeof saved), "a load is undone by SAVE+OCT-");
+
+	/* an empty slot: nothing to load */
+	turn(&panel, POCKET_ENC_KNOB1, 5);
+	const struct pocket_pattern now = *pocket_seq_pattern();
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(!memcmp(&now, pocket_seq_pattern(), sizeof now), "an empty slot loads nothing");
+
+	/* a restart: everything in RAM goes, Flash stays */
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press2(&panel, BUTTON(SAVE), BUTTON(EDIT));
+	turn(&panel, POCKET_ENC_KNOB1, 2);
+	press(&panel, BUTTON(OCT_DOWN));
+	settle(&panel);
+	kit_now(b);
+	CHECK(!memcmp(a, b, sizeof a), "the kit survives a restart");
+	press2(&panel, BUTTON(SAVE), BUTTON(SEQ));
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(!memcmp(&saved, pocket_seq_pattern(), sizeof saved) && pocket_seq_tempo() == 133, "the pattern survives a restart");
+
+	/* every saved value is range-checked as it comes in: a good CRC is not a promise */
+	struct saved_probe { uint8_t used, swing, density, complexity, style, mutate, locks, reserved; uint16_t seed, tempo; };
+	press(&panel, BUTTON(SEQ));
+	press2(&panel, BUTTON(SAVE), BUTTON(SEQ));
+	uint8_t* slot = pocket_store_slot(0);
+	struct saved_probe* probe = (struct saved_probe*)slot;
+	memset(slot, 0xff, POCKET_STORE_SLOT_BYTES);
+	(void)probe;
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(panel.style < POCKET_GEN_STYLES && panel.density <= 100 && panel.complexity <= 100 && panel.mutate_strength < POCKET_MUTATE_STRENGTHS && panel.seed < 10000, "out-of-range values are not believed");
+	CHECK(!(panel.locks & 0x80) && pocket_seq_tempo() <= POCKET_SEQ_BPM_MAX && pocket_seq_swing() <= POCKET_SEQ_SWING_MAX, "nor the rest");
+	int stray = 0;
+	for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
+		for (int i = 0; i < POCKET_SEQ_STEPS; i++) stray += POCKET_CELL_VELOCITY(pocket_seq_pattern()->cell[t][i]) > 127 || POCKET_CELL_NOTE(pocket_seq_pattern()->cell[t][i]) > 127;
+	CHECK(!stray, "nor a step out of range: %d", stray);
+	static uint16_t band[POCKET_SCREEN_W * POCKET_BAND_ROWS];
+	for (unsigned line = 4; line < 12; line++) pocket_panel_draw_band(&panel, NULL, line, band); /* no crash on bad records */
+
+	/* what the page says when it cannot save, and that nothing is then written */
+	fake_flash[430080 + 9] = 0x55;
+	fake_flash[430080 + 4096 + 9] = 0x55;
+	memset(fake_flash + 430080, 0x12, 8192);
+	press(&panel, BUTTON(HOME));
+	press2(&panel, BUTTON(SAVE), BUTTON(EDIT));
+	CHECK(panel.store_state == POCKET_STORE_OCCUPIED, "foreign data: %d", panel.store_state);
+	const long before = fake_flash_ops;
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(fake_flash_ops == before, "the page cannot write then");
+	for (unsigned line = 4; line < 12; line++) pocket_panel_draw_band(&panel, NULL, line, band);
+	press(&panel, BUTTON(HOME));
+
+	/* a failed save says so, and the last good one stands */
+	fake_flash_reset();
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press2(&panel, BUTTON(SAVE), BUTTON(EDIT));
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(SAVE));
+	fake_flash_fail_at = fake_flash_ops;
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "SAVE FAILED"), "a failed save says so: %s", panel.notice);
+	fake_flash_fail_at = -1;
+	CHECK(panel.store_state >= 0 && pocket_store_slot(0)[0], "and the last one is still there");
+}
+
 int main(int argc, char** argv)
 {
 	struct pocket_panel panel;
@@ -1073,6 +1252,7 @@ int main(int argc, char** argv)
 	test_one_track();
 	test_midi();
 	test_global();
+	test_saving();
 
 	/* screenshots: each screen as the FM-1 would show it */
 	start_engine(&panel);

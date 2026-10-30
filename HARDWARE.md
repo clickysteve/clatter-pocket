@@ -132,8 +132,9 @@ before any update: migration can erase it.
 5. CPU clock, cache sizes and the real cost of the stock engine per block.
 6. The DAC/codec part and whether the output is AC-coupled.
 7. Physical labels of encoders 0-6 (reported by fm1-emu; not checked on a device).
-8. Whether every Flash write (including the Bluetooth stack's) suspends audio
-   (`fm1_audio_suspend` is referenced by the SDK's Flash code; not proven for all paths).
+8. Whether every Flash write (including the Bluetooth stack's) suspends audio. `fm1_flash_write`
+   and `fm1_flash_erase` call `fm1_audio_suspend` and `_resume` (linked ELF); other paths are not
+   proven. CLATTER Pocket's audio path no longer depends on it: `tools/check-audio-path.py`.
 9. A ROM-level recovery procedure. The SDK contains a mask-ROM USB update entry
    (`platform_enter_mask_usb_update`, reached by SysEx `F0 22 24 35 7D F7` from running
    firmware), but M-VAVE documents no tool or procedure for it (PRE-FLASH-AUDIT.md).

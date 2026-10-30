@@ -23,6 +23,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "lxr_tables_packed.h"
+#include "pocket_lxr.h"
 
 int16_t sine_table[4097];
 int16_t triTable[11][1024];
@@ -115,18 +116,6 @@ static int unpack(const struct lxr_packed_table* t, void* out, size_t n, unsigne
 		x1 = x;
 	}
 	return (size_t)(r.p - t->data) == t->bytes ? 0 : -1;
-}
-
-uint32_t pocket_crc32(uint32_t crc, const void* data, size_t bytes)
-{
-	const uint8_t* p = data;
-	crc = ~crc;
-	while (bytes--)
-	{
-		crc ^= *p++;
-		for (unsigned i = 0; i < 8; i++) crc = crc >> 1 ^ (0xedb88320u & -(crc & 1u));
-	}
-	return ~crc;
 }
 
 #define SAW_ROWS 11

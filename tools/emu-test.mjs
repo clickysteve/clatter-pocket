@@ -117,6 +117,15 @@ class Machine {
     const periods = rises.slice(1).map((v, i) => v - rises[i]).sort((a, b) => a - b);
     return RATE / periods[periods.length >> 1];
   }
+  // The whole chip, and sectors of it put back before anything has run (a restart keeps Flash).
+  flash() { return new Uint8Array(this.x.memory.buffer, this.x.fm1_flash(), this.x.fm1_flash_len()).slice(); }
+  restore(sectors) {
+    const bytes = new Uint8Array(sectors.length * 4100);
+    sectors.forEach(([at, data], i) => { new DataView(bytes.buffer).setUint32(i * 4100, at, true); bytes.set(data, i * 4100 + 4); });
+    const p = this.x.fm1_alloc(bytes.length);
+    new Uint8Array(this.x.memory.buffer, p, bytes.length).set(bytes);
+    if (this.x.fm1_flash_restore(p, bytes.length) !== 0) throw new Error("the emulator refused the sectors");
+  }
   // Which buttons are lit (the emulator's LED levels are since the last look).
   leds() { return new Float32Array(this.x.memory.buffer, this.x.fm1_leds(), 41).slice(); }
   // Onset sample numbers over `ms` of audio (fm1_ms is the emulated CPU's clock, not the output's).
@@ -514,6 +523,219 @@ async function performance(m) {
   m.png(`${out}/page-main-performance.png`);
 }
 
+// Saving: what the firmware really wrote to the emulated chip, a restart, and what it refuses.
+const STORE = 0xe5000, STORE_END = 0xe9000, SECTOR = 4096, USER = 507904, USR = 0xea000, USR_END = 0xfc000;
+const changed = (a, b) => {
+  const out = [];
+  for (let at = 0; at < a.length; at += SECTOR) {
+    for (let i = at; i < at + SECTOR; i++) if (a[i] !== b[i]) { out.push(at); break; }
+  }
+  return out;
+};
+async function storage(pkg) {
+  const fresh = async (sectors = []) => {
+    const n = await new Machine().boot(pkg);
+    if (sectors.length) n.restore(sectors);
+    n.x.fm1_pot(1023);
+    n.run(2500);
+    return n;
+  };
+  const keep = (from) => { // the sectors a restart would find, as they are on the chip
+    const f = from.flash(), out = [];
+    for (let at = 0; at < f.length; at += SECTOR) if (at >= USER && at < 0xff000) out.push([at, f.slice(at, at + SECTOR)]);
+    return out.filter(([, d]) => d.some((b) => b !== 255));
+  };
+  // what a blank device's user partition must look like afterwards, and factory data to protect
+  const factory = new Uint8Array(SECTOR).fill(0x63), library = new Uint8Array(SECTOR).fill(0x00);
+  let m = await fresh([[0xee000, factory], [0xfa000, library]]);
+  const start = m.flash();
+  check(changed(start, start).length === 0 && start.subarray(STORE, STORE_END).every((b) => b === 255), "our sectors start blank");
+
+  // ---- using it writes nothing: only the two save buttons reach Flash
+  m.tap(BUTTON.ARP, 90); m.tap(BUTTON.ENV, 90); m.run(800);
+  m.tap(BUTTON.EDIT, 90); m.tap(BUTTON.SEQ, 90); m.tap(BUTTON.GLO, 90); m.tap(BUTTON.HOME, 90);
+  m.run(300);
+  const idle = changed(start, m.flash()).filter((a) => a >= USER);
+  check(idle.length === 0, "nothing touches the user partition until asked", idle.join());
+
+  // ---- a kit
+  m.tap(BUTTON.EDIT, 90);
+  m.run(200);
+  selectVoice(m, 0);
+  const sound = soundValues(m);
+  m.chord(BUTTON.SAVE, BUTTON.EDIT);
+  m.run(300);
+  shows(m, "SAVED KITS", "SAVE+EDIT opens the saved kits");
+  shows(m, "1 --", "an empty slot");
+  m.png(`${out}/page-saved-empty.png`);
+  m.tap(BUTTON.SAVE, 60);
+  shows(m, "SAVED 1", "SAVE stores the kit, and says so");
+  m.run(300);
+  shows(m, "1 CLASSIC 1", "the slot names it");
+  m.png(`${out}/page-saved-kits.png`);
+  m.tap(BUTTON.SAVE, 60);
+  shows(m, "OVERWRITE: SAVE AGAIN", "a slot in use asks first");
+  m.run(1500);
+  m.tap(BUTTON.ENV, 90); m.run(900);
+  m.tap(BUTTON.EDIT, 90); m.run(300);
+  check(soundValues(m).join() !== sound.join(), "ENV changes the sound", soundValues(m));
+  m.chord(BUTTON.SAVE, BUTTON.EDIT);
+  m.tap(BUTTON.OCTDN, 60);
+  shows(m, "LOADED 1", "OCT- loads it");
+  m.run(300);
+  m.tap(BUTTON.EDIT, 90); m.run(300);
+  check(soundValues(m).join() === sound.join(), `the kit is back (${sound})`, soundValues(m));
+
+  // ---- a pattern, with a recorded note, tempo and swing
+  m.tap(BUTTON.SEQ, 90); m.run(200);
+  m.tap(BUTTON.SCL, 90); m.tap(BUTTON.REC, 90); m.tap(NOTE(72), 60); m.tap(BUTTON.REC, 90); m.tap(BUTTON.SCL, 90);
+  m.turn(ENC.KNOB2, 13); m.turn(ENC.KNOB3, 7);
+  m.run(300);
+  const grid = m.grid().join();
+  m.tap(BUTTON.PLAY);
+  m.chord(BUTTON.SAVE, BUTTON.SEQ);
+  shows(m, "SAVED PATS", "SAVE+SEQ opens the saved patterns");
+  m.tap(BUTTON.SAVE, 60);
+  shows(m, "STOP TO SAVE", "not while it plays");
+  m.tap(BUTTON.PLAY);
+  m.run(300);
+  m.tap(BUTTON.SAVE, 60);
+  shows(m, "SAVED 1", "stopped, it saves");
+  m.run(200);
+  shows(m, "1 MACHINE 133", "the slot names it");
+  m.png(`${out}/page-saved-patterns.png`);
+  m.tap(BUTTON.SEQ, 90);
+  m.tap(BUTTON.ARP, 90);
+  m.turn(ENC.KNOB2, -13); m.turn(ENC.KNOB3, -7);
+  m.run(300);
+  check(m.grid().join() !== grid, "ARP changes the pattern");
+  m.tap(BUTTON.PLAY);
+  m.chord(BUTTON.SAVE, BUTTON.SEQ);
+  m.tap(BUTTON.OCTDN, 60);
+  m.tap(BUTTON.SEQ, 90);
+  m.run(300);
+  check(m.grid().join() === grid, "it is back, while playing", m.grid().join("\n"));
+  shows(m, "133 BPM", "with its tempo");
+  shows(m, "SWING 57", "and swing");
+  shows(m, "PLAY", "loading does not stop the pattern");
+  m.tap(BUTTON.PLAY);
+  m.run(800);
+
+  // ---- what was written, exactly
+  const after = m.flash(), wrote = changed(start, after);
+  const inUser = wrote.filter((a) => a >= USER);
+  check(inUser.length > 0 && inUser.every((a) => a >= STORE && a < STORE_END), `only our sectors changed in the user partition (${inUser.map((a) => a.toString(16))})`, inUser.join());
+  check(wrote.every((a) => a >= 471040), "nothing in the image", wrote.join());
+  check(wrote.filter((a) => a < USER).every((a) => a >= 471040 && a < 503808), "and at most the SDK's own settings", wrote.join());
+  check(after.subarray(0xee000, 0xef000).every((b) => b === 0x63) && after.subarray(0xfa000, 0xfb000).every((b) => b === 0), "factory data is intact");
+  check(!wrote.some((a) => a >= USR && a < USR_END), "the vendor's USR area was not touched");
+
+  // ---- a restart
+  const saved = keep(m);
+  m = await fresh(saved);
+  m.tap(BUTTON.EDIT, 90); m.run(200);
+  selectVoice(m, 0);
+  check(soundValues(m).join() !== sound.join(), "a restart starts from the init kit", soundValues(m));
+  m.chord(BUTTON.SAVE, BUTTON.EDIT);
+  m.run(300);
+  shows(m, "1 CLASSIC 1", "after a restart the kit is listed");
+  m.tap(BUTTON.OCTDN, 60);
+  m.run(400);
+  m.tap(BUTTON.EDIT, 90); m.run(300);
+  check(soundValues(m).join() === sound.join(), "after a restart the kit loads", soundValues(m));
+  m.chord(BUTTON.SAVE, BUTTON.SEQ);
+  m.run(300);
+  shows(m, "1 MACHINE 133", "after a restart the pattern is listed");
+  m.tap(BUTTON.OCTDN, 60);
+  m.tap(BUTTON.SEQ, 90);
+  m.run(300);
+  check(m.grid().join() === grid, "after a restart the pattern loads, note and all", m.grid().join("\n"));
+  shows(m, "133 BPM", "and its tempo");
+
+  // ---- a second save, so that there are two kit banks: then damage to each
+  m.chord(BUTTON.SAVE, BUTTON.EDIT);
+  m.turn(ENC.KNOB1, 1);
+  m.tap(BUTTON.SAVE, 60);
+  m.run(300);
+  shows(m, "2 CLASSIC 1", "a second slot");
+  const two = keep(m), banks = two.filter(([a]) => a === STORE || a === STORE + SECTOR);
+  check(banks.length === 2, "two kit sectors in use, the second save beside the first");
+  const swapped = (fn) => two.map(([a, d]) => { const c = d.slice(); fn(a, c); return [a, c]; }).filter(([, d]) => d.some((b) => b !== 255));
+  const newest = banks.reduce((p, q) => (new DataView(q[1].buffer).getUint32(16, true) > new DataView(p[1].buffer).getUint32(16, true) ? q : p))[0];
+  const older = newest === STORE ? STORE + SECTOR : STORE;
+
+  m = await fresh(swapped((a, d) => { if (a === newest) d[300] ^= 4; }));
+  m.chord(BUTTON.SAVE, BUTTON.EDIT);
+  m.run(300);
+  shows(m, "1 CLASSIC 1", "a corrupted bank: the one before it is used");
+  check(!m.text().includes("2 CLASSIC"), "the damaged save is not shown", m.text());
+  m.tap(BUTTON.OCTDN, 60);
+  shows(m, "LOADED 1", "and loads");
+  m.run(300);
+  m.turn(ENC.KNOB1, 1);
+  m.tap(BUTTON.SAVE, 60);
+  m.run(300);
+  shows(m, "2 CLASSIC 1", "and saving works past the damage");
+
+  // an interrupted save, as the chip is left: half an erase, half a page
+  m = await fresh(swapped((a, d) => { if (a === newest) d.fill(255, 0, 2048); }));
+  m.chord(BUTTON.SAVE, BUTTON.EDIT);
+  m.run(300);
+  shows(m, "1 CLASSIC 1", "an erase cut half way: the last whole bank stands");
+  m = await fresh(swapped((a, d) => { if (a === newest) { d[4] = d[5] = d[6] = d[7] = 255; } }));
+  m.chord(BUTTON.SAVE, BUTTON.EDIT);
+  m.run(300);
+  check(!m.text().includes("2 CLASSIC") && m.text().includes("1 CLASSIC 1"), "a save cut before its commit does not count", m.text());
+
+  // both damaged: nothing believed, nothing crashes, it says so
+  m = await fresh(swapped((a, d) => { if (a === newest || a === older) d[300] ^= 4; }));
+  m.chord(BUTTON.SAVE, BUTTON.EDIT);
+  shows(m, "SAVED DATA DAMAGED", "both banks corrupted: it says so");
+  shows(m, "1 --", "and shows nothing it cannot trust");
+  m.tap(BUTTON.OCTDN, 60);
+  m.run(200);
+  check(!m.text().includes("LOADED"), "and loads nothing");
+
+  // someone else's data in our sectors: never touched
+  const foreign = new Uint8Array(SECTOR).fill(0x42);
+  m = await fresh([[STORE, foreign]]);
+  const held = m.flash();
+  m.chord(BUTTON.SAVE, BUTTON.EDIT);
+  m.run(300);
+  shows(m, "FLASH IN USE: SAVING OFF", "data that is not ours closes the store");
+  m.tap(BUTTON.SAVE, 60);
+  m.tap(BUTTON.SAVE, 60);
+  m.run(300);
+  check(changed(held, m.flash()).filter((a) => a >= USER).length === 0, "and it stays as it was");
+  // a sample bank long enough to reach them, even with them blank
+  const bank = new Uint8Array(SECTOR).fill(255);
+  new DataView(bank.buffer).setUint32(0, 0x53314d46, true);
+  new DataView(bank.buffer).setUint32(8, 400000, true);
+  m = await fresh([[USER + 69632, bank]]);
+  m.chord(BUTTON.SAVE, BUTTON.SEQ);
+  m.run(300);
+  shows(m, "FLASH IN USE: SAVING OFF", "a stock sample bank over them closes the store too");
+
+  // ---- SAFE MODE, with saves on the chip: not a read of them, and every control tried
+  m = await new Machine().boot(pkg);
+  m.restore(saved);
+  m.x.fm1_pot(1023);
+  m.run(300);
+  m.x.fm1_key(BUTTON.HOME, 1);
+  m.run(2200);
+  m.x.fm1_key(BUTTON.HOME, 0);
+  m.run(400);
+  const safe = m.flash();
+  m.chord(BUTTON.SAVE, BUTTON.EDIT);
+  m.tap(BUTTON.SAVE, 60);
+  m.chord(BUTTON.SAVE, BUTTON.SEQ);
+  m.tap(BUTTON.SAVE, 60);
+  m.tap(BUTTON.OCTDN, 60);
+  m.run(300);
+  shows(m, "SAFE MODE - ENGINE OFF", "SAFE MODE ignores the save controls");
+  check(changed(safe, m.flash()).filter((a) => a >= USER).length === 0, "and writes nothing");
+}
+
 async function sequencer(m) {
   m.tap(BUTTON.SEQ, 90);
   m.run(300);
@@ -781,7 +1003,7 @@ async function main() {
   systemPage(m);
   m.run(800);
   const first = m.text();
-  shows(m, "0.4.0 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
+  shows(m, "0.5.0 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
   const heap = /HEAP +(\d+) LINKED/.exec(first);
   check(heap && Number(heap[1]) >= 49152, `SYSTEM shows the heap (${heap?.[1]})`, first);
   const cpu = /CPU MEAN +([\d.]+)%/.exec(first), peak = /CPU PEAK +([\d.]+)%/.exec(first);
@@ -812,6 +1034,8 @@ async function main() {
   const cpuPlaying = /CPU MEAN +([\d.]+)%/.exec(longRun), peakPlaying = /CPU PEAK +([\d.]+)%/.exec(longRun);
   console.log(`     playing: CPU mean ${cpuPlaying?.[1]} %, peak ${peakPlaying?.[1]} %`);
   m.tap(BUTTON.PLAY);
+
+  await storage(pkg);
 
   // ---- SAFE MODE: HOME held at the start point
   m = await new Machine().boot(pkg);
