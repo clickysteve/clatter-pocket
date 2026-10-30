@@ -21,6 +21,7 @@ pocket synthesizer, through M-VAVE's open firmware SDK
 | Pre-flash audit | done ([PRE-FLASH-AUDIT.md](PRE-FLASH-AUDIT.md)); first-test procedure: [FIRST-HARDWARE-TEST.md](FIRST-HARDWARE-TEST.md) |
 | FM-1 firmware, CLATTER Pocket **beside** the stock instrument (HOME + ARP) | compiles, links, passes the checks, but is 53,671 bytes too large for the flash layout |
 | On the device | **nothing has run on hardware** |
+| Website | `site/`, for GitHub Pages: browser demo, tested in Chromium and Chrome; hardware installation **off** until a release is verified ([docs/WEBSITE.md](docs/WEBSITE.md)) |
 | Sequencer and generator | 16 steps, seven tracks with notes, CLATTER's styles, whole-pattern and one-track generation, mutation; **tested in the FM-1 emulator** ([docs/POCKET-SEQUENCER.md](docs/POCKET-SEQUENCER.md)) |
 | Playing it | DRUM and PITCH keyboards, live and step recording, 16 kits and on-device kit generation from LXR parameters, GLOBAL settings; **tested in the FM-1 emulator** ([docs/POCKET-CONTROLS.md](docs/POCKET-CONTROLS.md)) |
 | Saving | 12 kits and 12 patterns in user Flash, written only to sectors checked blank or its own; **tested in the FM-1 emulator, not on a device** ([docs/POCKET-STORAGE.md](docs/POCKET-STORAGE.md)) |
@@ -75,6 +76,8 @@ Firmware: BUILDING.md. **Read HARDWARE.md before flashing anything.**
 - [PRE-FLASH-AUDIT.md](PRE-FLASH-AUDIT.md) - the pre-flash audit: findings, evidence, risks
 - [FIRST-HARDWARE-TEST.md](FIRST-HARDWARE-TEST.md) - first installation, test and recovery
 - [ROADMAP.md](ROADMAP.md) - milestones A-F
+- [docs/WEBSITE.md](docs/WEBSITE.md) - the website, its browser demo, and how a release enables installing
+- [docs/FM1-COMMUNITY.md](docs/FM1-COMMUNITY.md) - how FM-1 firmware is distributed, updated and recovered
 
 ## Layout
 
@@ -85,7 +88,8 @@ ui/               the Pocket panel (platform-independent)
 host/             tests, benchmark, WAV renderer, CLATTER comparison
 firmware/fm1/     FM-1 adapters (replace/: the replacement app), fm1_open patches, build scripts
 third_party/      fm1_open (submodule, pinned)
-tools/            generators, toolchain setup, size estimate
+tools/            generators, toolchain setup, size estimate, website build
+site/             the website (docs/WEBSITE.md)
 ```
 
 ## Licence

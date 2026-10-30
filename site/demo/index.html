@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLATTER Pocket demo</title>
+<meta name="description" content="CLATTER Pocket's firmware in the FM-1 emulator, in your browser. No hardware needed.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../styles.css">
+<script defer src="demo.js"></script>
+</head>
+<body class="demo">
+<a class="skip" href="#device">Skip to the emulator</a>
+<p class="strip" role="status"><b>{{status}}</b> <span>An emulator build of firmware {{emu-version}}. It has never run on a physical FM-1.</span></p>
+<header class="top">
+  <a class="brand" href="../">CLATTER POCKET</a>
+  <nav aria-label="Site"><a href="../#controls">Controls</a><a href="../#quickstart">Quick start</a><a href="../#install">Install</a></nav>
+</header>
+
+<main class="demo-main">
+  <section class="device" id="device" aria-labelledby="h-device">
+    <h1 id="h-device" class="vh">CLATTER Pocket running in the FM-1 emulator</h1>
+    <iframe id="emu" title="FM-1 emulator running CLATTER Pocket. Press Start, then play with the keyboard or by touch." src="emu/?fw=clatter-pocket&amp;mhz=240&amp;embed=1" allow="autoplay; midi"></iframe>
+    <p class="note">Press <b>Start</b> on the emulator: browsers only allow sound after a press. After that the synth has the keyboard; click it again if you click away.</p>
+    <p class="note"><a href="#try">Skip past the emulator</a> · <a href="emu/?fw=clatter-pocket&amp;mhz=240">Open it full page</a></p>
+  </section>
+
+  <aside class="try" id="try" aria-labelledby="h-try">
+    <h2 id="h-try" class="tab">First minute</h2>
+    <ol class="steps">
+      <li><span>Press <b>ENV</b> <kbd>3</kbd> for a new kit.</span></li>
+      <li><span>Press <b>ARP</b> <kbd>9</kbd> for a new pattern.</span></li>
+      <li><span>Press <b>PLAY</b> <kbd>Space</kbd>, and leave it running.</span></li>
+      <li><span>Play the instruments on <kbd>A</kbd> <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd>.</span></li>
+      <li><span>Press <b>LFO</b> <kbd>4</kbd> to mutate the rhythm.</span></li>
+      <li><span>Press <b>SCL</b> <kbd>2</kbd> to play the selected voice chromatically.</span></li>
+      <li><span>Hold <b>SAVE</b> <kbd>8</kbd> and press <b>ENV</b> <kbd>3</kbd>: a new sound for one voice.</span></li>
+    </ol>
+    <h2 class="tab">Keys</h2>
+    <dl class="keys">
+      <div><dt><kbd>1</kbd></dt><dd>FX</dd></div><div><dt><kbd>2</kbd></dt><dd>SCL</dd></div>
+      <div><dt><kbd>3</kbd></dt><dd>ENV</dd></div><div><dt><kbd>4</kbd></dt><dd>LFO</dd></div>
+      <div><dt><kbd>5</kbd></dt><dd>EDIT</dd></div><div><dt><kbd>6</kbd></dt><dd>GLO</dd></div>
+      <div><dt><kbd>7</kbd></dt><dd>HOME</dd></div><div><dt><kbd>8</kbd></dt><dd>SAVE</dd></div>
+      <div><dt><kbd>9</kbd></dt><dd>ARP</dd></div><div><dt><kbd>0</kbd></dt><dd>SEQ</dd></div>
+      <div><dt><kbd>Z</kbd> <kbd>X</kbd></dt><dd>OCT− OCT+</dd></div><div><dt><kbd>R</kbd></dt><dd>REC</dd></div>
+      <div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>SELECT</dd></div><div><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>PRESETS</dd></div>
+      <div><dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>ALGORITHM</dd></div><div><dt>Mouse</dt><dd>the knobs</dd></div>
+    </dl>
+    <h2 class="tab">About this demo</h2>
+    <p>This is the real firmware on an emulated FM-1 CPU, in
+      <a href="https://github.com/joakimeriksson/fm1-emu">fm1-emu</a> by Joakim Eriksson (MIT), at commit <code>{{emulator-commit}}</code>.
+      Timing, sound and load here are the emulator's, not a device's. Saved kits and patterns stay in this browser.</p>
+    <p>The file it runs is for the emulator. It is not a release, and nothing here installs it on hardware:
+      <a href="../#install">see installation status</a>.</p>
+  </aside>
+</main>
+<footer class="foot"><p>Firmware {{emu-version}}, commit <code>{{emu-commit}}</code>. <a href="../#source">Source and licences</a>.</p></footer>
+</body>
+</html>

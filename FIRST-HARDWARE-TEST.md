@@ -192,7 +192,9 @@ in "Before installation".** docs/POCKET-STORAGE.md says what is and is not known
    restarts, not detected over USB): **stop.** No documented user-level recovery exists.
    fm1_open says such a device needs M-VAVE's own tools. Contact M-VAVE support with the
    recorded details. Do not open the device or attempt chip-level programming without the
-   vendor's guidance.
+   vendor's guidance. Community tools for this case are reported, and have not been tried with CLATTER
+   Pocket: docs/FM1-COMMUNITY.md. Community firmwares' OCT− USB rescue is not something this firmware
+   implements.
 
 ## What to report
 

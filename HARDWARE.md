@@ -19,9 +19,9 @@ FM-1 was used.
 | Build | `sdk/Build.ps1` (PowerShell) compiles `app/`, links with the SDK, runs firmware checks (registration tables, SRAM placement of every audio callback, RTOS ABI, heap ≥ 48 KB, allowed sections), packages with `sdk/Package.cs` |
 | Simulator | A WebAssembly build of the application and open engine parts (`web/`, `tools/Build-Web.ps1`, WASI SDK) |
 
-Other FM-1 firmware projects: the fm1_open README mentions "compatible third-party firmware"
-that the workbench can migrate from, but none was found or examined. No community port of
-another synthesis engine to the FM-1 was found.
+Other FM-1 firmware projects: there are about 70, listed by the FM-1 Firmware Hub and fm1-emu;
+[docs/FM1-COMMUNITY.md](docs/FM1-COMMUNITY.md) has how they are distributed and recovered. (An earlier
+version of this document said none was found.)
 
 ## Processor and memory
 
@@ -99,7 +99,8 @@ matching recovery tool". **No such tool is published in fm1_open.** JieLi parts 
 a ROM USB download mode used by JieLi's own tools, and the SDK cites kagaimiq's jl-misctools for
 its packager, but whether and how the FM-1 enters a ROM recovery mode is **unknown** and
 untested. Treat a firmware that does not start, or that breaks USB-MIDI, as possibly
-unrecoverable without vendor help.
+unrecoverable without vendor help. **Reported, 2026-10-30, not tried here:** community tools write
+the firmware area through the chip's ROM bootloader ([docs/FM1-COMMUNITY.md](docs/FM1-COMMUNITY.md#recovery-in-the-community)).
 
 **Backup:** the update protocol has no firmware read-back. The original firmware is
 available as the SDK's V15 image; the Open release is available from the workbench. User
@@ -137,7 +138,8 @@ before any update: migration can erase it.
    proven. CLATTER Pocket's audio path no longer depends on it: `tools/check-audio-path.py`.
 9. A ROM-level recovery procedure. The SDK contains a mask-ROM USB update entry
    (`platform_enter_mask_usb_update`, reached by SysEx `F0 22 24 35 7D F7` from running
-   firmware), but M-VAVE documents no tool or procedure for it (PRE-FLASH-AUDIT.md).
+   firmware), but M-VAVE documents no tool or procedure for it (PRE-FLASH-AUDIT.md). The community
+   reports one ([docs/FM1-COMMUNITY.md](docs/FM1-COMMUNITY.md#recovery-in-the-community)); untried.
    Firmware updates run in the SDK's own `update` task (priority 21, above the application's
    15), and CLATTER Pocket starts its engine only after the updater (SAFE MODE: hold HOME).
 

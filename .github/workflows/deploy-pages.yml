@@ -1,0 +1,72 @@
+# Test the website and publish it on GitHub Pages (Settings -> Pages -> Source: GitHub Actions).
+# This publishes what is in site/. It does not build firmware, and no firmware reaches the site
+# by this route: the demo's package is promoted by hand, and installation stays off unless
+# site/release.json names a release that passes site/installer/gate.mjs (docs/WEBSITE.md).
+
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - tools/build-site.mjs
+      - tools/test-site.mjs
+      - tools/serve-site.mjs
+      - docs/POCKET-CONTROLS.md
+      - docs/POCKET-STORAGE.md
+      - .github/workflows/deploy-pages.yml
+  pull_request:
+    paths:
+      - site/**
+      - tools/build-site.mjs
+      - tools/test-site.mjs
+      - tools/serve-site.mjs
+      - docs/POCKET-CONTROLS.md
+      - docs/POCKET-STORAGE.md
+      - .github/workflows/deploy-pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true      # third_party/fm1_open: its licences go with the site
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Test the site
+        run: node --test tools/test-site.mjs
+
+      - name: Build the site
+        run: node tools/build-site.mjs
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: build/site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

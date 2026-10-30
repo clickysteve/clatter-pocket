@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "version": "0.5.0",
+  "status": "emulator-only",
+  "installEnabled": false,
+  "releaseDate": null,
+  "firmware": null,
+  "verification": null,
+  "compatibility": {
+    "device": "M-VAVE FM-1",
+    "requires": [
+      "An M-VAVE FM-1 running official fm1_open firmware (identity FM-1_8…, update family 7)",
+      "Chrome or Edge on a computer, with MIDI and SysEx allowed",
+      "A USB data cable",
+      "Projects, samples and voices backed up with M-VAVE's official workbench"
+    ]
+  },
+  "notes": [
+    "Firmware 0.5.0: 12 kits and 12 patterns saved in user Flash, DRUM and PITCH keyboards, live and step recording, on-device kit generation.",
+    "Tested on the host and in the FM-1 emulator. Nothing has run on a device."
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "note": "CLATTER Pocket's demo: this one entry replaces fm1-emu's catalogue. Written by tools/promote-emulator-build.mjs.",
+  "default": "clatter-pocket",
+  "firmwares": [
+    {
+      "id": "clatter-pocket",
+      "name": "CLATTER Pocket",
+      "version": "0.5.0 UNVERIFIED",
+      "author": "The CLATTER contributors",
+      "license": "GPL-3.0-only",
+      "about": "A generative drum machine on the LXR sound engine. An emulator build: it has never run on a physical FM-1.",
+      "repo": "https://github.com/clickysteve/clatter-pocket",
+      "package": "clatter-pocket-emulator-only.bin"
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLATTER Pocket installer</title>
+<meta name="description" content="The CLATTER Pocket firmware installer. Disabled until the firmware has been verified on hardware.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../styles.css">
+<script type="module" src="installer.js"></script>
+</head>
+<body class="installer">
+<a class="skip" href="#main">Skip to the content</a>
+<p class="strip" role="status"><b id="strip-status">{{status}}</b> <span>Installing is off.</span></p>
+<header class="top">
+  <a class="brand" href="../">CLATTER POCKET</a>
+  <nav aria-label="Site"><a href="../#install">Status</a><a href="../demo/">Demo</a><a href="../#recovery">Recovery</a></nav>
+</header>
+
+<main id="main" class="installer-main">
+  <h1 class="section">Installer</h1>
+
+  <div class="notice" id="notice" role="status">
+    <p class="notice-head" id="notice-head">INSTALLATION DISABLED</p>
+    <p class="notice-body" id="notice-body">{{not-available}}</p>
+    <p id="notice-detail">Everything below stays off until a release has been tested on a device and is marked so, deliberately, in the site's release configuration. This page contains no firmware, and no code that can reach a device.</p>
+  </div>
+
+  <dl class="facts" id="facts">
+    <div><dt>Firmware</dt><dd id="fact-version">{{version}}</dd></div>
+    <div><dt>Status</dt><dd id="fact-status">{{status}}</dd></div>
+    <div><dt>Package</dt><dd id="fact-package">None published</dd></div>
+    <div><dt>SHA-256</dt><dd id="fact-sha"><code>none</code></dd></div>
+    <div><dt>This browser</dt><dd id="fact-browser">Not checked: this page needs JavaScript.</dd></div>
+  </dl>
+
+  <ol class="wizard">
+    <li class="stage">
+      <h2>Connect the FM-1 by USB</h2>
+      <p>Use a data cable, and close other MIDI software. Keep the FM-1 powered throughout.</p>
+    </li>
+    <li class="stage">
+      <h2>Use a compatible browser</h2>
+      <p>Chrome or Edge on a computer. The FM-1 updates over USB-MIDI SysEx, so the browser asks to allow MIDI.</p>
+    </li>
+    <li class="stage">
+      <h2>Connect to the device</h2>
+      <p><button type="button" class="button" id="connect" disabled>CONNECT FM-1</button></p>
+    </li>
+    <li class="stage">
+      <h2>Check the device and prerequisites</h2>
+      <p>It must be running official fm1_open firmware. Back up projects, samples and voices with <a href="https://open.m-vave.com/fm1-workbench">M-VAVE's workbench</a> first: that backup is not available while CLATTER Pocket is installed.</p>
+      <p id="device-state" role="status" class="dim">No device connected.</p>
+    </li>
+    <li class="stage">
+      <h2>Review the firmware and warnings</h2>
+      <p>Firmware defects may cause data loss or a device that does not start. Installing is at your own risk.</p>
+      <p><label class="check"><input type="checkbox" id="backup" disabled> I have backed up my FM-1, and I can reinstall official firmware with M-VAVE's workbench.</label></p>
+    </li>
+    <li class="stage">
+      <h2>Install</h2>
+      <p><button type="button" class="button primary" id="install" disabled>INSTALL CLATTER POCKET</button></p>
+      <div class="progress" id="progress" hidden><div class="bar"><span id="bar"></span></div><p id="phase" role="status"></p></div>
+    </li>
+    <li class="stage">
+      <h2>Finish</h2>
+      <p>Do not unplug, close this page or let the computer sleep until it says it has finished. It finishes when the FM-1 has restarted and reports this build.</p>
+      <pre class="log" id="log" hidden></pre>
+    </li>
+  </ol>
+
+  <details class="refusals" id="why">
+    <summary>Why it is off</summary>
+    <ul id="why-list"><li>This page needs JavaScript to read the release configuration. Installing stays off without it.</li></ul>
+  </details>
+</main>
+<footer class="foot"><p><a href="../#recovery">Recovery</a> · <a href="../#source">Source and licences</a></p></footer>
+</body>
+</html>

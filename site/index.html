@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLATTER Pocket</title>
+<meta name="description" content="A generative drum machine hiding inside your FM-1. Open-source alternative firmware for the M-VAVE FM-1, on the LXR drum synthesis engine. Unverified: tested in the emulator only.">
+<meta property="og:title" content="CLATTER Pocket">
+<meta property="og:description" content="A generative drum machine hiding inside your FM-1. Try it in the browser. Unverified: tested in the emulator only.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:,">
+<link rel="preload" href="assets/fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/silkscreen-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+<p class="strip" role="status"><b>{{status}}</b> <span>Firmware {{version}} has passed emulator testing. It has never run on a physical FM-1.</span> <a href="#install">Status</a></p>
+
+<header class="top">
+  <a class="brand" href="#main">CLATTER POCKET</a>
+  <nav aria-label="Site">
+    <a href="#features">Features</a><a href="#controls">Controls</a><a href="demo/">Demo</a><a href="#quickstart">Quick start</a><a href="#install">Install</a><a href="#faq">FAQ</a><a href="#source">Source</a>
+  </nav>
+</header>
+
+<main id="main">
+<section class="hero" aria-labelledby="h-title">
+  <h1 id="h-title"><span class="vh">CLATTER POCKET</span><span class="title-wide"><!-- @title-wide --></span><span class="title-stack"><!-- @title-stack --></span></h1>
+  <p class="sub">A generative drum machine hiding inside your FM-1.</p>
+  <p class="lede">Seven voices of authentic LXR drum synthesis. Generative kits, evolving rhythms, live recording and melodic percussion, running directly on the M-VAVE FM-1.</p>
+  <div class="cta">
+    <a class="button primary" href="demo/">TRY IN BROWSER</a>
+    <a class="button" href="#install">INSTALL FIRMWARE</a>
+    <a class="link" href="https://github.com/clickysteve/clatter-pocket">VIEW SOURCE ON GITHUB ↗</a>
+  </div>
+  <figure class="hero-panel">
+    <div class="fm1-frame" id="hero-fm1"><!-- @panel-hero --></div>
+    <figcaption>The FM-1, drawn from the emulator's panel map. The screen is firmware output read from the emulated LCD, not a photograph of a working device.</figcaption>
+  </figure>
+</section>
+
+<section id="features" aria-labelledby="h-features">
+  <h2 id="h-features" class="section"><span>01</span> What it does</h2>
+  <div class="windows">
+    <article class="window wide">
+      <h3 class="tab">Authentic LXR synthesis</h3>
+      <p><b>Synthesis running on the device, not sample playback.</b> The LXR-02's open-source sound engine runs on the FM-1, compiled from the firmware's own DSP files.
+        Seven drum tracks: DRUM 1, 2 and 3, SNARE, CYMBAL, CLOSED HAT and OPEN HAT. They are the LXR's seven triggers on its six voices, because the two hats share one.</p>
+      <p>Host tests match CLATTER's engine to within 3 steps of 16-bit audio.</p>
+    </article>
+    <article class="window">
+      <h3 class="tab">Generative kits</h3>
+      <p>Generate a complete kit, or a new sound for one instrument and leave the rest alone.</p>
+      <p>INIT and 16 factory kits, each a character the generator leans towards:</p>
+      <p class="tags">CLASSIC ANALOG DIGITAL INDUSTRIAL MINIMAL GLITCH TECHNO ELECTRO DUB NOISE METALLIC SOFT BROKEN ACID LO-FI CHAOS</p>
+    </article>
+    <article class="window">
+      <h3 class="tab">Generative rhythms</h3>
+      <p>Generate patterns in CLATTER's 11 rhythmic styles, regenerate one track, or mutate what is already there so it stays related.</p>
+      <p class="tags">MACHINE ELECTRO BREAKS JUNGLE HALFTIME BROKEN GARAGE INDUSTRIAL GLITCH POLYMETER DUB</p>
+    </article>
+    <article class="window">
+      <h3 class="tab">Two keyboard modes</h3>
+      <p><b>DRUM:</b> each key plays an instrument, the same at every octave.</p>
+      <p><b>PITCH:</b> the selected instrument chromatically. The patch does not change, so it returns exactly.</p>
+    </article>
+    <article class="window">
+      <h3 class="tab">Live recording</h3>
+      <p>Record drum performances and pitched percussion straight into the sequencer. Playing, hits overdub onto the nearest step. Stopped, enter and remove steps one at a time.</p>
+      <p>16 steps, seven tracks, a note per track on each step.</p>
+    </article>
+    <article class="window">
+      <h3 class="tab">Saved on the device</h3>
+      <p><b>12 user kits</b> and <b>12 user patterns</b> in user Flash, surviving a restart.</p>
+      <p>A save is checked before it counts, and writes only to sectors found blank or already its own.</p>
+    </article>
+    <article class="window">
+      <h3 class="tab">MIDI input</h3>
+      <p>Note-ons play and record like the keys, at their own velocity, with General MIDI drum notes in DRUM.</p>
+      <p class="dim">Input over DIN was run in the emulator; USB and Bluetooth have not been exercised. There is no MIDI output, no thru and no external clock.</p>
+    </article>
+  </div>
+</section>
+
+<section id="controls" aria-labelledby="h-controls">
+  <h2 id="h-controls" class="section"><span>02</span> The panel</h2>
+  <p class="intro">The buttons do the same thing on every page, and the knobs follow the page. Pick a control to see what it does, then hold SAVE to see its second action. SELECT is an encoder with no push switch, so SAVE is the modifier.</p>
+  <div class="guide" id="guide">
+    <div class="fm1-frame interactive" id="guide-fm1"><!-- @panel-guide --></div>
+    <div class="guide-body">
+      <div class="guide-list" id="guide-list" role="group" aria-label="FM-1 controls" hidden></div>
+      <div class="readout" id="readout" aria-live="polite" hidden></div>
+    </div>
+    <details class="table-wrap" id="control-map">
+      <summary>All <!-- @control-count --> controls as a table</summary>
+      <div class="scroll" tabindex="0" role="region" aria-label="Control map"><!-- @control-table --></div>
+    </details>
+  </div>
+  <p class="source-note">From <a href="https://github.com/clickysteve/clatter-pocket/blob/main/docs/POCKET-CONTROLS.md">POCKET-CONTROLS.md</a> and <a href="https://github.com/clickysteve/clatter-pocket/blob/main/docs/POCKET-STORAGE.md">POCKET-STORAGE.md</a>. Encoder positions come from the emulator, not a device.</p>
+</section>
+
+<section id="demo" aria-labelledby="h-demo">
+  <h2 id="h-demo" class="section"><span>03</span> Try it now</h2>
+  <div class="demo-teaser">
+    <div class="shots" aria-hidden="true">
+      <img src="assets/screens/1-start.png" alt="" width="240" height="240" loading="lazy">
+      <img src="assets/screens/page-sound.png" alt="" width="240" height="240" loading="lazy">
+      <img src="assets/screens/page-saved-kits.png" alt="" width="240" height="240" loading="lazy">
+    </div>
+    <div>
+      <p>The firmware itself, running on an emulated FM-1 in your browser. Keyboard, mouse or touch, with sound, and no hardware.</p>
+      <p>The browser emulator is <a href="https://github.com/joakimeriksson/fm1-emu">fm1-emu</a> by Joakim Eriksson. It runs the same package, with no changes for the demo.</p>
+      <p class="cta"><a class="button primary" href="demo/">TRY IN BROWSER</a></p>
+    </div>
+  </div>
+</section>
+
+<section id="quickstart" aria-labelledby="h-quickstart">
+  <h2 id="h-quickstart" class="section"><span>04</span> Quick start</h2>
+  <p class="intro">In brackets, the key for the same control in the demo.</p>
+  <ol class="steps two">
+    <li><b>Select a kit.</b> Turn PRESETS <kbd>↑ ↓</kbd>. INIT comes first, then the 16 factory kits.</li>
+    <li><b>Generate a rhythm.</b> Turn ALGORITHM <kbd>, .</kbd> to choose a style, then press ARP <kbd>9</kbd>.</li>
+    <li><b>Start playback.</b> Press PLAY <kbd>Space</kbd>. Everything below works while it plays.</li>
+    <li><b>Generate new sounds.</b> Press ENV <kbd>3</kbd> for a kit. Hold SAVE <kbd>8</kbd> and press ENV for the selected voice only.</li>
+    <li><b>Switch keyboard modes.</b> Press SCL <kbd>2</kbd>: KEYS: DRUM becomes KEYS: PITCH. OCT− <kbd>Z</kbd> and OCT+ <kbd>X</kbd> then change the octave.</li>
+    <li><b>Record a pattern.</b> Press REC <kbd>R</kbd>. Playing, what you hit lands on the nearest step. Stopped, it lands on the selected step, and hitting it again removes it.</li>
+    <li><b>Save a kit.</b> Stop first. Hold SAVE and press EDIT <kbd>8</kbd>+<kbd>5</kbd>, choose a slot with KNOB 1, then tap SAVE. On a used slot, tap again while it says OVERWRITE. OCT− loads.</li>
+    <li><b>Save a pattern.</b> The same with SAVE and SEQ <kbd>8</kbd>+<kbd>0</kbd>. A pattern keeps its tempo and swing, and plays with any kit.</li>
+  </ol>
+  <p class="source-note">The full guide is <a href="https://github.com/clickysteve/clatter-pocket/blob/main/docs/POCKET-CONTROLS.md">POCKET-CONTROLS.md</a>.</p>
+</section>
+
+<section id="install" aria-labelledby="h-install">
+  <h2 id="h-install" class="section"><span>05</span> Install</h2>
+  <div class="notice" role="status">
+    <p class="notice-head">{{status}}</p>
+    <p class="notice-body">{{not-available}}</p>
+    <p>Firmware {{version}} has passed its emulator and host tests, but those cannot show how it behaves on a device: its first run on real hardware has not happened. There is nothing to install here yet.</p>
+  </div>
+  <div class="columns">
+    <div>
+      <h3>How it will work</h3>
+      <p>The FM-1 updates over <b>USB-MIDI SysEx</b>, not WebUSB. When a verified release exists, this site will run M-VAVE's own update code, unchanged:</p>
+      <ol class="plain">
+        <li>Connect the FM-1 by USB.</li>
+        <li>Open this site in Chrome or Edge on a computer.</li>
+        <li>Connect, and allow MIDI with SysEx.</li>
+        <li>The page checks the device and the prerequisites.</li>
+        <li>Review the version, the checksum and the warnings.</li>
+        <li>Install.</li>
+        <li>Keep it connected until the FM-1 restarts and reports the new build.</li>
+      </ol>
+      <p><a class="button" href="installer/">OPEN THE INSTALLER</a></p>
+    </div>
+    <div>
+      <h3>What it will need</h3>
+      <ul class="plain">
+        <li>An FM-1 running official fm1_open firmware. The updater will not go over any other firmware: from V15, install official Open with M-VAVE's workbench first.</li>
+        <li>Your projects, samples and voices backed up first with <a href="https://open.m-vave.com/fm1-workbench">M-VAVE's workbench</a>. That backup is not available while CLATTER Pocket is installed.</li>
+        <li>A USB data cable, with other MIDI software closed.</li>
+      </ul>
+      <p><a href="https://github.com/clickysteve/clatter-pocket/blob/main/FIRST-HARDWARE-TEST.md">FIRST-HARDWARE-TEST.md</a> is the procedure the first installation will follow.</p>
+    </div>
+  </div>
+</section>
+
+<section id="recovery" aria-labelledby="h-recovery">
+  <h2 id="h-recovery" class="section"><span>06</span> Recovery</h2>
+  <p class="intro">None of these routes has been tried with CLATTER Pocket on a device.</p>
+  <ul class="plain link-list">
+    <li><a href="https://github.com/clickysteve/clatter-pocket/blob/main/FIRST-HARDWARE-TEST.md#recovery">Recovery procedure</a>: restoring official firmware, and when to stop.</li>
+    <li><a href="https://github.com/clickysteve/clatter-pocket/blob/main/FM1-REPLACEMENT.md#start-up-safe-mode-diagnostics">SAFE MODE</a>: hold HOME 1.5 s after power-on. The engine stays off and the updater keeps running.</li>
+    <li><a href="https://github.com/clickysteve/clatter-pocket/blob/main/HARDWARE.md#updating-recovery-backup">Update, recovery and backup</a>: what is known, and what is not.</li>
+    <li><a href="https://open.m-vave.com/fm1-workbench">M-VAVE's official workbench</a>: the restore route.</li>
+    <li><a href="https://thefirmwarehub.com/kb/#rescue">The FM-1 Firmware Hub's rescue guide</a>: the community's tools, for other firmwares. Its OCT− USB rescue is not something CLATTER Pocket provides or has been tested with.</li>
+  </ul>
+</section>
+
+<section id="faq" aria-labelledby="h-faq">
+  <h2 id="h-faq" class="section"><span>07</span> FAQ</h2>
+  <div class="faq">
+    <details><summary>What is CLATTER Pocket?</summary>
+      <p>An independent, open-source firmware for the M-VAVE FM-1 that makes it a generative drum machine. It brings <a href="https://github.com/clickysteve/clatter">CLATTER</a>'s kit and rhythm generation and the LXR-02's sound engine to the device's own keys, buttons and screen.</p></details>
+    <details><summary>Which hardware does it support?</summary>
+      <p>The M-VAVE FM-1 only. M-VAVE does not document hardware revisions, so whether every unit behaves the same is not known.</p></details>
+    <details><summary>Does it replace the original firmware?</summary>
+      <p>Yes. It replaces the instrument and keeps the platform underneath: USB, Bluetooth, audio, the panel and the update protocol. The stock synth, its sequencer and effects are not available while it is installed, and neither is the workbench's backup of projects, samples and voices.</p></details>
+    <details><summary>Can I restore the original firmware?</summary>
+      <p>That is the design: the FM-1 reports itself as fm1_open, so M-VAVE's official workbench should be able to install official Open or V15 over it. It has not been done on a device. Read <a href="#recovery">Recovery</a>.</p></details>
+    <details><summary>Does it use samples?</summary>
+      <p>No sample playback. Every hit is synthesised live, and a kit is a set of parameters. The LXR engine does use wavetables and twelve short transient tables, as part of its synthesis.</p></details>
+    <details><summary>Can I control it with MIDI?</summary>
+      <p>Note input, yes: notes over DIN, USB and Bluetooth take the same path as the keys. Only DIN has been exercised, in the emulator. There is no MIDI output, no thru and no external clock.</p></details>
+    <details><summary>Can I save patterns and kits?</summary>
+      <p>Yes: 12 of each, in the FM-1's user Flash. Tested on a model of the chip and in the emulator, not on a device. Back up anything you cannot afford to lose; there is no export. GLOBAL settings are not saved.</p></details>
+    <details><summary>Can I try it without hardware?</summary>
+      <p>Yes. <a href="demo/">The demo</a> runs the firmware in the FM-1 emulator, in your browser.</p></details>
+    <details><summary>Is installation currently safe?</summary>
+      <p><b>No, not yet.</b> The firmware has never run on a physical FM-1, so its safety is unknown, and this site will not install it. A firmware that does not start could need recovery tools, or M-VAVE's help.</p></details>
+  </div>
+</section>
+
+<section id="source" aria-labelledby="h-source">
+  <h2 id="h-source" class="section"><span>08</span> Source and releases</h2>
+  <div class="scroll" tabindex="0" role="region" aria-label="Build types">
+  <table class="tiers">
+    <thead><tr><th scope="col">Build</th><th scope="col">What it is</th><th scope="col">Where</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Emulator build</th><td>Firmware {{emu-version}}, commit <code>{{emu-commit}}</code>. Tested in the emulator. For the demo only.</td><td><a href="demo/">Runs in the demo</a></td></tr>
+      <tr><th scope="row">Experimental firmware</th><td>Built from source by you. Unverified, and not safe to assume flashable.</td><td><a href="https://github.com/clickysteve/clatter-pocket/blob/main/BUILDING.md">BUILDING.md</a>. Not published here</td></tr>
+      <tr><th scope="row">Hardware-verified release</th><td>A build tested on a device, end to end, with the way back tested too.</td><td><b>None yet</b></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <ul class="plain link-list columns-list">
+    <li><a href="https://github.com/clickysteve/clatter-pocket">GitHub repository</a></li>
+    <li><a href="https://github.com/clickysteve/clatter-pocket/tree/main/ui">Source code</a></li>
+    <li><a href="https://github.com/clickysteve/clatter-pocket#documents">Documentation</a></li>
+    <li><a href="https://github.com/clickysteve/clatter-pocket/releases">Release notes</a></li>
+    <li><a href="https://github.com/clickysteve/clatter-pocket/releases">Firmware releases</a>, when there are any</li>
+    <li><a href="#recovery">Recovery instructions</a></li>
+    <li><a href="https://github.com/clickysteve/clatter-pocket/blob/main/PRE-FLASH-AUDIT.md">Pre-flash audit</a></li>
+    <li><a href="https://github.com/clickysteve/clatter">CLATTER</a>, the desktop instrument</li>
+  </ul>
+</section>
+</main>
+
+<footer class="foot">
+  <p><b>CLATTER Pocket is an independent project.</b> It is not made, approved, endorsed or supported by Erica Synths or M-VAVE. It contains a modified version of the sound engine of the Erica Synths LXR-02 firmware. "Erica Synths", "LXR" and "LXR-02" are trademarks of Erica Synths; "M-VAVE" and "FM-1" of their owner.</p>
+  <p>GPL-3.0-only with the LXR firmware's additional terms. Firmware builds link M-VAVE's binary SDK under its own terms. <a href="legal/LICENSE.txt">Licence</a> · <a href="legal/NOTICE.txt">Notice</a> · <a href="legal/THIRD_PARTY_NOTICES.txt">Third parties</a> · <a href="legal/fm1_open-LICENSE.txt">fm1_open licence</a> · <a href="legal/fm1_open-THIRD_PARTY.txt">fm1_open third parties</a> · <a href="https://github.com/clickysteve/clatter-pocket">Complete source</a></p>
+  <p>The emulator is <a href="demo/emu/LICENSE">fm1-emu</a> (MIT). Type: Silkscreen and IBM Plex Sans (<a href="assets/fonts/OFL-Silkscreen.txt">OFL</a>, <a href="assets/fonts/OFL-IBM-Plex.txt">OFL</a>). No tracking, no cookies, no backend.</p>
+</footer>
+</body>
+</html>

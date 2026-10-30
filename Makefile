@@ -8,6 +8,7 @@
 #   make emu-test   the built package in the FM-1 emulator (needs node and EMU_WASM)
 #   make firmware   FM-1 firmware (see BUILDING.md; needs the JieLi toolchain)
 #   make packed-tables  regenerate engine/lxr_tables_packed.c from the firmware's tables
+#   make site       the website, into build/site (docs/WEBSITE.md); site-test, site-serve
 #
 # The LXR sources are compiled as CLATTER compiles them for WebAssembly (scripts/build-lxr.mjs
 # in CLATTER): CLATTER's freestanding shim and libm, -O3 -ffast-math -freciprocal-math, so the
@@ -52,7 +53,7 @@ $(PACKED_OBJ): DSP_CFLAGS += -DPOCKET_PACKED_TABLES
 
 TOOLS := $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_seq $(BUILD)/test_kit $(BUILD)/test_store $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/bench $(BUILD)/render $(BUILD)/dump
 
-.PHONY: all test bench render compare compare-sp emu-test firmware packed-tables clean
+.PHONY: all test bench render compare compare-sp emu-test firmware packed-tables site site-test site-serve clean
 all: $(TOOLS) test
 
 # Single-precision variant (make compare-sp): the DSP's double-precision envelope and
@@ -165,6 +166,15 @@ emu-test: $(BUILD)/test_seq $(BUILD)/test_kit
 
 firmware:
 	firmware/fm1/build.sh
+
+site:
+	node tools/build-site.mjs
+
+site-test:
+	node --test tools/test-site.mjs
+
+site-serve: site
+	node tools/serve-site.mjs
 
 clean:
 	rm -rf build
