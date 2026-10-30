@@ -8,17 +8,9 @@
 
 int pocket_midi_drum_trigger(unsigned note)
 {
-	switch (note)
-	{
-	case 35: case 36: return 0;                             /* DRUM 1 (kicks) */
-	case 41: case 43: case 45: return 1;                    /* DRUM 2 (low toms) */
-	case 47: case 48: case 50: return 2;                    /* DRUM 3 (high toms) */
-	case 37: case 38: case 39: case 40: return 3;           /* SNARE (rim, snares, clap) */
-	case 49: case 51: case 52: case 55: case 57: case 59: return 4; /* CYMBAL */
-	case 42: case 44: return 5;                             /* CLOSED HAT (closed, pedal) */
-	case 46: return 6;                                      /* OPEN HAT */
-	default: return -1;
-	}
+	/* notes 35..59: kicks, snares, clap and rim, toms, hats, cymbals */
+	static const int8_t drums[25] = { 0, 0, 3, 3, 3, 3, 1, 5, 1, 5, 1, 6, 2, 2, 4, 2, 4, 4, -1, -1, 4, -1, 4, -1, 4 };
+	return note - 35u < sizeof drums ? drums[note - 35u] : -1;
 }
 
 int pocket_midi_note_on(const uint8_t* m, size_t n, int* channel, int* note, int* velocity)

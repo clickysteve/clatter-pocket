@@ -18,6 +18,7 @@
  * boundary at or after its exact time, never accumulating the difference.
  */
 #include "pocket_seq.h"
+#include "pocket_lxr.h" /* POCKET_CONTROL_CODE */
 
 #ifndef POCKET_BARRIER
 #define POCKET_BARRIER() __atomic_thread_fence(__ATOMIC_SEQ_CST)
@@ -45,7 +46,7 @@ static uint32_t unitPerBlock;
 static uint32_t unitPerSwing;              /* 6 * rate */
 static pocket_seq_emit emit;
 
-void pocket_seq_init(uint32_t sample_rate, unsigned block_frames, pocket_seq_emit fn)
+POCKET_CONTROL_CODE void pocket_seq_init(uint32_t sample_rate, unsigned block_frames, pocket_seq_emit fn)
 {
 	for (unsigned p = 0; p < 2; p++)
 		for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
@@ -81,14 +82,14 @@ int pocket_seq_swing(void) { return swingPercent; }
 
 const struct pocket_pattern* pocket_seq_pattern(void) { return &patterns[live]; }
 
-void pocket_seq_set_step(int track, int step_, int velocity, int note)
+POCKET_CONTROL_CODE void pocket_seq_set_step(int track, int step_, int velocity, int note)
 {
 	if (track < 0 || track >= POCKET_SEQ_TRACKS || step_ < 0 || step_ >= POCKET_SEQ_STEPS) return;
 	velocity = velocity < 0 ? 0 : velocity > 127 ? 127 : velocity;
 	patterns[live].cell[track][step_] = POCKET_CELL(velocity, velocity && note > 0 && note < 128 ? note : 0);
 }
 
-int pocket_seq_quantise(int nearest, int* ahead)
+POCKET_CONTROL_CODE int pocket_seq_quantise(int nearest, int* ahead)
 {
 	uint32_t before, at, length;
 	unsigned sounding;
@@ -110,7 +111,7 @@ int pocket_seq_quantise(int nearest, int* ahead)
 
 void pocket_seq_skip(int track, int step_) { skips[track] = (uint8_t)(step_ + 1); }
 
-struct pocket_pattern* pocket_seq_edit_begin(void)
+POCKET_CONTROL_CODE struct pocket_pattern* pocket_seq_edit_begin(void)
 {
 	struct pocket_pattern* next = &patterns[!live];
 	*next = patterns[live];

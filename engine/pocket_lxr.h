@@ -33,6 +33,13 @@
 extern "C" {
 #endif
 
+/* Control context only: never on a path a sample takes, so compiled for size. */
+#ifdef __clang__
+#define POCKET_CONTROL_CODE __attribute__((minsize))
+#else
+#define POCKET_CONTROL_CODE
+#endif
+
 /* Firmware geometry (Soundengine/config.h, Parameters.h). Checked at compile time in
  * pocket_lxr.c. */
 #define POCKET_LXR_BLOCK 64      /* OUTPUT_DMA_SIZE: samples per engine block */

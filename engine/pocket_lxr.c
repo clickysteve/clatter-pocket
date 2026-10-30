@@ -262,7 +262,7 @@ static int clamp(int v, int lo, int hi)
 	return v < lo ? lo : (v > hi ? hi : v);
 }
 
-int pocket_lxr_set_param(int p, int value)
+POCKET_CONTROL_CODE int pocket_lxr_set_param(int p, int value)
 {
 	if (p <= 0 || p >= END_OF_SOUND_PARAMETERS) return -1;
 	value = clamp(value, 0, 127);
@@ -276,13 +276,13 @@ int pocket_lxr_set_param(int p, int value)
 	return 0;
 }
 
-int pocket_lxr_get_param(int p)
+POCKET_CONTROL_CODE int pocket_lxr_get_param(int p)
 {
 	if (p < 0 || p >= END_OF_SOUND_PARAMETERS) return 0;
 	return paramShadow[p];
 }
 
-int pocket_lxr_trigger_locked(int trig, int velocity, int note, int p1, int v1, int p2, int v2)
+POCKET_CONTROL_CODE int pocket_lxr_trigger_locked(int trig, int velocity, int note, int p1, int v1, int p2, int v2)
 {
 	if (trig < 0 || trig >= POCKET_LXR_TRIGGERS) return -1;
 	if (p1 <= 0 || p1 >= END_OF_SOUND_PARAMETERS) p1 = 0;
@@ -301,17 +301,17 @@ int pocket_lxr_trigger_locked(int trig, int velocity, int note, int p1, int v1, 
 	return push(&e);
 }
 
-int pocket_lxr_trigger(int trig, int velocity, int note)
+POCKET_CONTROL_CODE int pocket_lxr_trigger(int trig, int velocity, int note)
 {
 	return pocket_lxr_trigger_locked(trig, velocity, note, 0, 0, 0, 0);
 }
 
-void pocket_lxr_set_block_hook(pocket_lxr_hook hook)
+POCKET_CONTROL_CODE void pocket_lxr_set_block_hook(pocket_lxr_hook hook)
 {
 	blockHook = hook;
 }
 
-int pocket_lxr_set_master(int gain_q12)
+POCKET_CONTROL_CODE int pocket_lxr_set_master(int gain_q12)
 {
 	struct event e = { 0 };
 	e.type = EV_MASTER;
@@ -319,7 +319,7 @@ int pocket_lxr_set_master(int gain_q12)
 	return push(&e);
 }
 
-int pocket_lxr_set_bpm(int bpm)
+POCKET_CONTROL_CODE int pocket_lxr_set_bpm(int bpm)
 {
 	struct event e = { 0 };
 	e.type = EV_BPM;
@@ -327,7 +327,7 @@ int pocket_lxr_set_bpm(int bpm)
 	return push(&e);
 }
 
-int pocket_lxr_set_dc_block(int on)
+POCKET_CONTROL_CODE int pocket_lxr_set_dc_block(int on)
 {
 	struct event e = { 0 };
 	e.type = EV_DC_BLOCK;
@@ -335,7 +335,7 @@ int pocket_lxr_set_dc_block(int on)
 	return push(&e);
 }
 
-int pocket_lxr_load_init_kit(void)
+POCKET_CONTROL_CODE int pocket_lxr_load_init_kit(void)
 {
 	/* initKit holds the kit header (8 bytes) followed by every sound parameter, as
 	   preset_init() loads it */
@@ -345,12 +345,12 @@ int pocket_lxr_load_init_kit(void)
 	return 0;
 }
 
-int pocket_lxr_init_kit_value(int p)
+POCKET_CONTROL_CODE int pocket_lxr_init_kit_value(int p)
 {
 	return p >= 0 && p + 8 < INIT_KIT_SIZE ? initKit[p + 8] : 0;
 }
 
-void pocket_lxr_stats_read(struct pocket_lxr_stats* out)
+POCKET_CONTROL_CODE void pocket_lxr_stats_read(struct pocket_lxr_stats* out)
 {
 	*out = stats;
 	stats.peak_q23 = 0;
@@ -395,7 +395,7 @@ static void zeroEngineState(void)
  * generator, as CLATTER's clatter_init. The init kit is applied directly here (the audio
  * context is not running yet), every parameter through the firmware's handler.
  */
-int pocket_lxr_init(uint32_t seed)
+POCKET_CONTROL_CODE int pocket_lxr_init(uint32_t seed)
 {
 #ifdef POCKET_PACKED_TABLES
 	/* the firmware's constant tables, unpacked into RAM before anything reads them */

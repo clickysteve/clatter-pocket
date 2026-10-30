@@ -31,7 +31,7 @@ struct pocket_lane {
 	uint64_t digits;                      /* a hex digit per step, first step high: 0-9 */
 	uint8_t ghost;                        /* percent */
 	uint8_t hits_lo, hits_hi, len_lo, len_hi; /* Euclidean lane if hits_hi */
-};
+} __attribute__((packed));
 
 struct pocket_style {
 	const char* name;
@@ -94,7 +94,9 @@ static unsigned weight(unsigned step)
 
 static unsigned digit(const struct pocket_lane* lane, unsigned step)
 {
-	return (unsigned)(lane->digits >> (60u - 4u * step)) & 15u;
+	const uint8_t* bytes = (const uint8_t*)&lane->digits; /* little-endian, host and FM-1 */
+	const unsigned byte = bytes[7u - step / 2u];
+	return step & 1u ? byte & 15u : byte >> 4;
 }
 
 static uint32_t apply_density(uint32_t p, unsigned density)

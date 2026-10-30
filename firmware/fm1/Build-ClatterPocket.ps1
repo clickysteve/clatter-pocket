@@ -494,7 +494,9 @@ try {
         # pocket/flash/ (init-only: the packed tables) and pocket/ui/ (the panel, control task
         # only) are never placed in SRAM, and are optimised for size
         $controlOnly = $source -like 'pocket/flash/*' -or $source -like 'pocket/ui/*'
-        if ($controlOnly) { $options = @($options | Where-Object { $_ -cne '-O2' }) + @('-Oz') }
+        # The parameter table is built once, at start-up: in SRAM with the engine, but for size.
+        $sizeOnly = $controlOnly -or $source -match '/ParameterArray\.c$'
+        if ($sizeOnly) { $options = @($options | Where-Object { $_ -cne '-O2' }) + @('-Oz') }
         $prefix = if ($controlOnly) { 'obj/pocketflash_' } else { 'obj/lxr_' }
         $output = $prefix + ($objectIndex++) + '_' + ($source -replace '[^a-zA-Z0-9._-]', '_') + '.obj'
         $arguments = @($options) + @('-MMD','-MF',($output + '.d'),'-c',(Join-Path $root $source),'-o',$output)

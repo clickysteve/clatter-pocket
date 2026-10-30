@@ -779,10 +779,7 @@ static char* percent(char* buf, uint32_t permille)
 
 static char* concat(char* dst, const char* a, const char* b)
 {
-	char* d = dst;
-	while (*a) *d++ = *a++;
-	while (*b) *d++ = *b++;
-	*d = 0;
+	append(append(dst, a), b);
 	return dst;
 }
 
