@@ -68,8 +68,8 @@ in 0x01C00000–0x01C80000.
 | Touch | None | Verified (no touch API or driver) |
 | Velocity | **Unknown.** The scanner reports on/off only, so keys are treated as unaccented | Verified (scanner) |
 
-Which physical knob is encoder 0..6 is **unknown**; the stock UI calls them K1...
-(`encoders[0]`) and uses `encoders[6]` as its PRESETS/SELECT encoder.
+Encoder positions, from fm1-emu's panel (after Felucca's `controls.jpg`) and fm1_open's use of
+them, not checked on a device: 0 SELECT, 1 ALGORITHM, 2-5 KNOB 1-4, 6 PRESETS.
 
 ## MIDI, USB, storage
 
@@ -131,7 +131,7 @@ before any update: migration can erase it.
    barrier assumes so: `firmware/fm1/pocket_fm1_config.h`.)
 5. CPU clock, cache sizes and the real cost of the stock engine per block.
 6. The DAC/codec part and whether the output is AC-coupled.
-7. Physical labels of encoders 0-6.
+7. Physical labels of encoders 0-6 (reported by fm1-emu; not checked on a device).
 8. Whether every Flash write (including the Bluetooth stack's) suspends audio
    (`fm1_audio_suspend` is referenced by the SDK's Flash code; not proven for all paths).
 9. A ROM-level recovery procedure. The SDK contains a mask-ROM USB update entry

@@ -15,7 +15,7 @@
 #    Wine unless on Windows) with -FirmwareOnly, which checks the SDK and toolchain hashes,
 #    compiles, links, runs fm1_open's firmware checks plus CLATTER Pocket's, and packages
 #    build/fm1/tree/build/dx7/generated/FM1_OFFICIAL_OPEN.fwsc;
-# 3. copies the package to build/fm1/clatter-pocket-fm1-UNVERIFIED.fwsc.
+# 3. moves the package to build/fm1/clatter-pocket-fm1-UNVERIFIED.fwsc.
 #
 # NOTHING HERE FLASHES A DEVICE. Read HARDWARE.md (recovery) before installing any build.
 # Environment: FM1_PI32_TOOLCHAIN (the toolchain's pi32 folder), PWSH (default pwsh),
@@ -122,7 +122,9 @@ fi
 out="$out_dir/clatter-pocket-fm1-UNVERIFIED.fwsc"
 [[ $stock == 1 ]] && out="$out_dir/fm1_open-stock-$actual.fwsc"
 [[ $replace == 1 ]] && out="$out_dir/clatter-pocket-fm1-replace-UNVERIFIED.fwsc"
-cp "$tree/build/dx7/generated/FM1_OFFICIAL_OPEN.fwsc" "$out"
+# moved, not copied: stock and CLATTER Pocket packages are the same size (the layout padding)
+# and the SDK names both FM1_OFFICIAL_OPEN.fwsc, so only the clearly named one is left
+mv "$tree/build/dx7/generated/FM1_OFFICIAL_OPEN.fwsc" "$out"
 cp "$tree/build/dx7/firmware-report.json" "$out_dir/"
 echo "== $out"
 echo "   firmware checks: ${out_dir#$repo/}/firmware-report.json, link map: ${out_dir#$repo/}/tree/build/dx7/sdk.map"

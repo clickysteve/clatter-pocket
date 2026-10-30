@@ -7,9 +7,9 @@ whether to start, and every step can be the point to stop.
 
 Candidate:
 - `clatter-pocket-fm1-replace-UNVERIFIED.fwsc`, SHA-256
-  `b8c13d2c4d3a40879164261e45cf9b30124b4837ccb0bf7b3c823ca0f30e7890`;
+  `8dcccacf5d382de416034cd46a857422868c38c3b2a1f85ec478fa60d8e5c18a`;
 - installer `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-  `53a4e2e02f43421f696cd9518721f63cd90d1b752c77ba944907d01be85f2640`.
+  `c72d0b9bb98d28bfb63975915305785379ff3cdbb37b162648efcf1171eea82e`.
 
 Both are produced by:
 
@@ -89,19 +89,23 @@ The page runs M-VAVE's own update code (`sdk/WebUpdate.js`, unchanged, in a mini
 ## First boot
 
 Expected on screen:
-1. "CLATTER POCKET" with the footer "HOLD HOME NOW FOR SAFE MODE";
-2. about 1.5 s later, "LXR ENGINE READY" with the footer "KEYS/PLAY HIT  ENC 7 VOICE";
+1. a black start screen: "CLATTER POCKET", "LXR DRUM MACHINE", "HOLD HOME NOW FOR SAFE MODE",
+   the version and 8 hex digits (the build);
+2. about 1.5 s later, the MAIN page: "CLATTER POCKET" over "LXR ENGINE READY";
 3. "MIDI WAITING";
-4. a level meter;
-5. CPU, XRUN, CLIP and DROP figures, and BUILD followed by 8 hex digits.
+4. the seven activity cells and a level meter.
+
+Press **GLO** for SYSTEM: version, build, CPU, OVERRUNS, CLIPPED, DROPPED, HEAP. The emulator
+shows this same sequence (docs/POCKET-UI.md); the stock interface here means the wrong package
+is installed.
 
 Record:
 - the time to the start screen and to READY;
-- the BUILD digits: the first 8 of the build identity on the installer page, in upper case;
+- the build digits: the first 8 of the build identity on the installer page, in upper case;
 - any restart;
 - the CPU and peak figures with nothing playing (the engine's cost is the same playing or
   not);
-- the XRUN count after one minute;
+- the OVERRUNS count after one minute;
 - temperature by touch after 5 minutes.
 
 If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
@@ -110,19 +114,22 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
 
 1. MASTER low. Press **PLAY**: DRUM 1 sounds once at its programmed pitch.
 2. Raise MASTER: the level follows smoothly. Fully down is silent.
-3. The level meter moves with each hit; CLIP stays 0 at moderate MASTER. Listen for
+3. The level meter moves with each hit and the DRUM 1 cell flashes; CLIPPED stays 0 at
+   moderate MASTER. Listen for
    distortion, clicks and dropouts.
-4. Play several keys: DRUM 1 at different pitches. Turn encoder 7: the VOICE line changes.
+4. Play several keys: DRUM 1 at different pitches. Turn **SELECT**: the VOICE line changes.
    Play each of the seven voices.
-5. Turn encoders 1 to 3: pitch, decay and level of the selected voice change. Record which
-   physical knobs these are, since the labels are not verified.
+5. Press **EDIT**. Turn KNOB 1 to 4: pitch, decay, filter and drive change on the next hit.
+   Press **FX**. KNOB 1 and 2: level and pan. Press OCT− and OCT+, then SEQ, GLO and HOME: the
+   page name changes. Record any control that differs from docs/POCKET-UI.md: the encoder
+   positions come from the emulator, not a device.
 6. Watch for 2 minutes: no stuck or endless sounds (a voice whose DECAY is at 127 sustains
-   by design), XRUN not rising, no interruptions.
+   by design), OVERRUNS not rising, no interruptions.
 
 ## MIDI test
 
 1. **USB MIDI from the computer.** Send note-on 36, velocity 100, on any channel: DRUM 1;
-   the MIDI line shows the count, HITS and NOTE 36.
+   the MIDI line shows NOTE 36 DRUM 1, briefly inverted.
 2. Then:
    - 38: SNARE;
    - 42: CL HAT;

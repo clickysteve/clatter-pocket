@@ -69,10 +69,8 @@ static void update_status(uint32_t now)
 	next.overruns = dma.overruns;
 	next.clipped = engine.clipped_samples;
 	next.dropped = engine.events_dropped;
-	if (next.cpu_permille != status.cpu_permille || next.cpu_peak_permille != status.cpu_peak_permille ||
-	    next.overruns != status.overruns || next.clipped != status.clipped || next.dropped != status.dropped)
-		panel.dirty |= POCKET_PANEL_STATUS_BANDS;
-	status = next;
+	next.state = POCKET_STATE_READY;
+	pocket_panel_update_status(&panel, &status, &next);
 }
 
 static void paint(void)
@@ -103,6 +101,7 @@ static void enter(uint32_t now)
 		initialised = 1;
 	}
 	pocket_panel_init(&panel);
+	status.state = POCKET_STATE_READY;
 	status_ms = now - STATUS_MS;
 	active = 1;
 	fm1_device_fence();

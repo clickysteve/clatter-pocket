@@ -19,7 +19,7 @@
  * HOME at that moment (SAFE MODE) leaves the engine off: a way to reach the updater if the
  * engine misbehaves.
  *
- * NOT RUN ON HARDWARE. See FIRST-HARDWARE-TEST.md.
+ * NOT RUN ON HARDWARE (it runs in the FM-1 emulator: docs/POCKET-UI.md). See FIRST-HARDWARE-TEST.md.
  *
  * Copyright (C) 2026 The CLATTER contributors
  * SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception
@@ -34,6 +34,9 @@
 #include "pocket_lxr.h"
 #include "pocket_midi.h"
 #include "pocket_panel.h"
+
+/* The linker's runtime heap (the SDK has no call for the free heap). */
+extern char _HEAP_BEGIN[], _HEAP_END[];
 
 /* MIDI ring ordering, as the engine's event ring (pocket_fm1_config.h) */
 #ifndef POCKET_BARRIER
@@ -60,7 +63,7 @@ static volatile uint8_t render_enabled, output_level;
 static volatile uint32_t ticks_sum, ticks_peak, ticks_blocks;
 
 static uint8_t state = POCKET_STATE_STARTING;
-static uint32_t block_ticks, status_ms, init_ms;
+static uint32_t block_ticks, status_ms, init_ms, tick_ms;
 static unsigned knob_level = ~0U;
 static struct pocket_panel panel;
 static struct pocket_panel_status status;
@@ -70,9 +73,8 @@ static uint16_t band_pixels[POCKET_SCREEN_W * POCKET_BAND_ROWS] __attribute__((a
 static uint8_t radio_pending = 2;
 
 /* MIDI routing task -> control task (single producer, single consumer) */
-static uint8_t midi_trigger[MIDI_RING], midi_velocity[MIDI_RING];
+static uint8_t midi_trigger[MIDI_RING], midi_velocity[MIDI_RING], midi_note[MIDI_RING];
 static volatile uint32_t midi_head, midi_tail, midi_messages;
-static volatile uint8_t midi_last;
 
 static inline __attribute__((always_inline)) uint32_t elapsed(uint32_t start, uint32_t end)
 {
@@ -118,6 +120,7 @@ static void update_status(uint32_t now)
 	struct fm1_audio_stats dma;
 	fm1_audio_stats_read(&dma);
 	struct pocket_panel_status next = status;
+	next.master = output_level;
 	if (blocks && block_ticks)
 	{
 		next.cpu_permille = (uint16_t)((uint64_t)sum * 1000U / blocks / block_ticks);
@@ -132,9 +135,7 @@ static void update_status(uint32_t now)
 	}
 	next.state = state;
 	next.midi_messages = midi_messages;
-	next.midi_last = midi_last;
-	if (memcmp(&next, &status, sizeof next)) panel.dirty |= POCKET_PANEL_STATUS_BANDS;
-	status = next;
+	pocket_panel_update_status(&panel, &status, &next);
 }
 
 static void paint(unsigned limit)
@@ -182,7 +183,10 @@ static void drain_midi(void)
 	{
 		const unsigned i = tail & (MIDI_RING - 1U);
 		if (state == POCKET_STATE_READY && pocket_lxr_trigger(midi_trigger[i], midi_velocity[i], MIDI_NOTE) == 0)
+		{
 			status.midi_hits++;
+			pocket_panel_midi_hit(&panel, midi_trigger[i], midi_note[i]);
+		}
 		tail++;
 	}
 	POCKET_BARRIER();
@@ -195,6 +199,7 @@ static void set_state(uint8_t next, const char* footer)
 	panel.footer = footer;
 	panel.dirty = (uint16_t)((1u << POCKET_BANDS) - 1u);
 	status.state = next;
+	status_ms -= STATUS_MS; /* the status lines at once */
 }
 
 /* The engine starts here, on the control task, after the SDK has started the updater, USB
@@ -203,7 +208,7 @@ static void start(uint32_t now, const struct fm1_controls* controls)
 {
 	if (controls->buttons & (1u << POCKET_BTN_HOME))
 	{
-		set_state(POCKET_STATE_SAFE, "SAFE MODE  UPDATE VIA WORKBENCH");
+		set_state(POCKET_STATE_SAFE, "UPDATE VIA WORKBENCH");
 		return;
 	}
 	if (pocket_lxr_init(now ? now : 1) != 0)
@@ -216,7 +221,7 @@ static void start(uint32_t now, const struct fm1_controls* controls)
 	fm1_device_fence();
 	render_enabled = 1;
 	panel.previous_buttons = controls->buttons; /* a button held now does not act */
-	set_state(POCKET_STATE_READY, "KEYS/PLAY HIT  ENC 7 VOICE");
+	set_state(POCKET_STATE_READY, "");
 }
 
 void groove_screen_init(void)
@@ -224,7 +229,7 @@ void groove_screen_init(void)
 	fm1_controls_init();
 	for (unsigned key = 0; key < 41; key++) fm1_led_set(key, 0);
 	fm1_screen_init();
-	init_ms = fm1_millis();
+	init_ms = tick_ms = fm1_millis();
 	status_ms = init_ms - STATUS_MS;
 	static const char hex[] = "0123456789ABCDEF";
 	for (unsigned i = 0; i < 4; i++)
@@ -233,6 +238,7 @@ void groove_screen_init(void)
 		status.build[2 * i + 1] = hex[fm1_build_id[i] & 15];
 	}
 	status.build[8] = 0;
+	status.heap_bytes = (uint32_t)(_HEAP_END - _HEAP_BEGIN);
 	pocket_panel_init(&panel);
 	set_state(POCKET_STATE_STARTING, "HOLD HOME NOW FOR SAFE MODE");
 	paint(POCKET_BANDS);
@@ -243,6 +249,8 @@ void groove_screen_control(void)
 	struct fm1_controls controls;
 	fm1_controls_read(&controls);
 	const uint32_t now = fm1_millis();
+	pocket_panel_tick(&panel, now - tick_ms);
+	tick_ms = now;
 	master(controls.knob);
 	radio();
 	if (state == POCKET_STATE_STARTING && now - init_ms >= START_MS) start(now, &controls);
@@ -268,12 +276,12 @@ void fm1_app_midi_received(unsigned source, const uint8_t* m, size_t n)
 	midi_messages++;
 	int trigger, velocity;
 	if (!pocket_midi_parse(m, n, &trigger, &velocity)) return;
-	midi_last = m[1];
 	const uint32_t head = midi_head;
 	if (head - midi_tail >= MIDI_RING) return;
 	const unsigned i = head & (MIDI_RING - 1U);
 	midi_trigger[i] = (uint8_t)trigger;
 	midi_velocity[i] = (uint8_t)velocity;
+	midi_note[i] = m[1];
 	POCKET_BARRIER();
 	midi_head = head + 1U;
 	fm1_control_request();

@@ -1,65 +1,159 @@
 /*
- * pocket_panel.c - CLATTER Pocket's first panel. See pocket_panel.h.
+ * pocket_panel.c - CLATTER Pocket's hardware interface. See pocket_panel.h; the control map
+ * and the screens are in docs/POCKET-UI.md.
  *
  * Copyright (C) 2026 The CLATTER contributors
  * SPDX-License-Identifier: GPL-3.0-only
  *
- * Input mapping (documented in README.md):
- *   note keys      trigger the selected voice, chromatic: the 13th key (F4) plays note 60,
- *                  the voice's programmed pitch
- *   PLAY           trigger the selected voice at its programmed pitch
- *   encoder 1/2/3  pitch (COARSE), amp decay, level (VOLUME) of the selected voice
- *   encoder 7      select the voice: DRUM 1-3, SNARE, CYMBAL, CL HAT, OP HAT
- *   HOME + ARP     leave CLATTER Pocket mode
+ * Only what the firmware can do is on screen: every knob moves an engine parameter that the
+ * host tests hear change, and with no sequencer yet, PATTERN says so instead of showing steps
+ * (a tempo knob would do nothing: no LFO of the init kit is tempo-synced). Nothing here erases or
+ * saves, so no control is destructive.
+ *
  * Drawing: the Slop Factory 1-bit look (black on white, inverted title and footer), a 3x5
- * pixel font drawn at twice its size for the 240x240 panel.
+ * pixel font at twice its size, a band at a time so a page costs one 240x16 buffer.
  */
 #include "pocket_panel.h"
-#include "pocket_lxr.h"
 #include "pocket_params.h"
 
 static const char* const triggerNames[POCKET_LXR_TRIGGERS] = {
 	"DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "CL HAT", "OP HAT"
 };
-static const uint8_t pitchParam[POCKET_LXR_TRIGGERS] = {
-	POCKET_PAR_COARSE1, POCKET_PAR_COARSE2, POCKET_PAR_COARSE3, POCKET_PAR_COARSE4,
-	POCKET_PAR_COARSE5, POCKET_PAR_COARSE6, POCKET_PAR_COARSE6
+static const char* const cellNames[POCKET_LXR_TRIGGERS] = { "D1", "D2", "D3", "SN", "CY", "CH", "OH" };
+static const char* const pageNames[POCKET_PAGES] = { "MAIN", "PATTERN", "SOUND", "MIXER", "SYSTEM" };
+static const char* const pageFooters[POCKET_PAGES] = {
+	"SEL VOICE  KEYS PLAY HIT",
+	"PLACEHOLDER  KEYS PLAY HIT",
+	"SEL VOICE  KNOBS EDIT",
+	"SEL VOICE  KNOBS EDIT",
+	"SEL VOICE  KEYS PLAY HIT"
 };
-static const uint8_t decayParam[POCKET_LXR_TRIGGERS] = {
-	POCKET_PAR_VELOD1, POCKET_PAR_VELOD2, POCKET_PAR_VELOD3, POCKET_PAR_VELOD4,
-	POCKET_PAR_VELOD5, POCKET_PAR_VELOD6_CLOSED, POCKET_PAR_VELOD6_OPEN
+static const uint8_t controlParams[POCKET_CTLS][POCKET_LXR_TRIGGERS] = {
+	{ POCKET_PAR_COARSE1, POCKET_PAR_COARSE2, POCKET_PAR_COARSE3, POCKET_PAR_COARSE4,
+	  POCKET_PAR_COARSE5, POCKET_PAR_COARSE6, POCKET_PAR_COARSE6 },
+	{ POCKET_PAR_VELOD1, POCKET_PAR_VELOD2, POCKET_PAR_VELOD3, POCKET_PAR_VELOD4,
+	  POCKET_PAR_VELOD5, POCKET_PAR_VELOD6_CLOSED, POCKET_PAR_VELOD6_OPEN },
+	{ POCKET_PAR_FILTER_FREQ_1, POCKET_PAR_FILTER_FREQ_2, POCKET_PAR_FILTER_FREQ_3, POCKET_PAR_FILTER_FREQ_4,
+	  POCKET_PAR_FILTER_FREQ_5, POCKET_PAR_FILTER_FREQ_6, POCKET_PAR_FILTER_FREQ_6 },
+	{ POCKET_PAR_DRIVE1, POCKET_PAR_DRIVE2, POCKET_PAR_DRIVE3, POCKET_PAR_SNARE_DISTORTION,
+	  POCKET_PAR_CYMBAL_DISTORTION, POCKET_PAR_HAT_DISTORTION, POCKET_PAR_HAT_DISTORTION },
+	{ POCKET_PAR_VOL1, POCKET_PAR_VOL2, POCKET_PAR_VOL3, POCKET_PAR_VOL4,
+	  POCKET_PAR_VOL5, POCKET_PAR_VOL6, POCKET_PAR_VOL6 },
+	{ POCKET_PAR_PAN1, POCKET_PAR_PAN2, POCKET_PAR_PAN3, POCKET_PAR_PAN4,
+	  POCKET_PAR_PAN5, POCKET_PAR_PAN6, POCKET_PAR_PAN6 }
 };
-static const uint8_t levelParam[POCKET_LXR_TRIGGERS] = {
-	POCKET_PAR_VOL1, POCKET_PAR_VOL2, POCKET_PAR_VOL3, POCKET_PAR_VOL4,
-	POCKET_PAR_VOL5, POCKET_PAR_VOL6, POCKET_PAR_VOL6
-};
-static const char* const controlNames[POCKET_CTLS] = { "PITCH", "DECAY", "LEVEL" };
+static const char* const controlNames[POCKET_CTLS] = { "PITCH", "DECAY", "FILTER", "DRIVE", "LEVEL", "PAN" };
 
-/* bands of the layout */
-enum { B_TITLE = 0, B_STATE = 1, B_VOICE = 2, B_MIDI = 3, B_CTL0 = 4, B_LEVEL = 10, B_HITS = 11, B_CPU = 12,
-	B_ERRORS = 13, B_FOOTER = 14 };
+/* The frame of every page; the page's own bands are B_BODY..B_ACTIVITY-1. */
+enum { B_TITLE = 0, B_STATE = 1, B_VOICE = 2, B_MIDI = 3, B_BODY = 4, B_ACTIVITY = 12, B_LEVEL = 13, B_FOOTER = 14 };
 #define ALL_BANDS ((uint16_t)((1u << POCKET_BANDS) - 1))
+#define BODY_BANDS ((uint16_t)(((1u << B_ACTIVITY) - 1) & ~((1u << B_BODY) - 1)))
 
 void pocket_panel_init(struct pocket_panel* panel)
 {
+	*panel = (struct pocket_panel){ 0 };
 	panel->trigger = POCKET_TRIG_DRUM1;
-	panel->previous_keys = 0;
+	panel->midi_trigger = 0xff;
 	panel->previous_buttons = ~0u; /* buttons held on entry do not act */
 	panel->dirty = ALL_BANDS;
-	panel->hits = 0;
-	panel->footer = "KEYS/PLAY HIT  HOME+ARP EXIT";
+	panel->footer = "";
 }
 
 int pocket_panel_param(const struct pocket_panel* panel, int c)
 {
-	const uint8_t* table = c == POCKET_CTL_PITCH ? pitchParam : c == POCKET_CTL_DECAY ? decayParam : levelParam;
-	return table[panel->trigger];
+	return controlParams[c][panel->trigger];
 }
 
 static void hit(struct pocket_panel* panel, int note)
 {
-	if (pocket_lxr_trigger(panel->trigger, 127, note) == 0) panel->hits++;
-	panel->dirty |= 1u << B_HITS;
+	if (pocket_lxr_trigger(panel->trigger, 127, note) == 0)
+	{
+		panel->hits++;
+		panel->flash_ms[panel->trigger] = POCKET_FLASH_MS;
+		panel->dirty |= (1u << B_ACTIVITY) | (1u << (B_BODY + 5));
+	}
+}
+
+void pocket_panel_midi_hit(struct pocket_panel* panel, int trigger, unsigned note)
+{
+	if (trigger < 0 || trigger >= POCKET_LXR_TRIGGERS) return;
+	panel->midi_trigger = (uint8_t)trigger;
+	panel->midi_note = (uint8_t)note;
+	panel->midi_flash_ms = POCKET_MIDI_FLASH_MS;
+	panel->flash_ms[trigger] = POCKET_FLASH_MS;
+	panel->dirty |= (1u << B_MIDI) | (1u << B_ACTIVITY);
+}
+
+static uint16_t less(uint16_t left, uint32_t elapsed)
+{
+	return left > elapsed ? (uint16_t)(left - elapsed) : 0;
+}
+
+void pocket_panel_tick(struct pocket_panel* panel, uint32_t elapsed_ms)
+{
+	for (int t = 0; t < POCKET_LXR_TRIGGERS; t++)
+	{
+		if (!panel->flash_ms[t]) continue;
+		panel->flash_ms[t] = less(panel->flash_ms[t], elapsed_ms);
+		if (!panel->flash_ms[t]) panel->dirty |= 1u << B_ACTIVITY;
+	}
+	if (panel->midi_flash_ms)
+	{
+		panel->midi_flash_ms = less(panel->midi_flash_ms, elapsed_ms);
+		if (!panel->midi_flash_ms) panel->dirty |= 1u << B_MIDI;
+	}
+	if (panel->alert_ms)
+	{
+		panel->alert_ms = less(panel->alert_ms, elapsed_ms);
+		if (!panel->alert_ms) panel->dirty |= 1u << B_STATE;
+	}
+}
+
+void pocket_panel_update_status(struct pocket_panel* panel, struct pocket_panel_status* status,
+                                const struct pocket_panel_status* next)
+{
+	if (next->overruns > status->overruns)
+	{
+		panel->alert_ms = POCKET_ALERT_MS;
+		panel->alert_overruns = next->overruns;
+		panel->dirty |= 1u << B_STATE;
+	}
+	if (next->state != status->state) panel->dirty = ALL_BANDS;
+	if (next->midi_messages != status->midi_messages) panel->dirty |= 1u << B_MIDI;
+	if (next->level != status->level) panel->dirty |= 1u << B_LEVEL;
+	if (panel->page == POCKET_PAGE_SYSTEM && (next->cpu_permille != status->cpu_permille
+		|| next->cpu_peak_permille != status->cpu_peak_permille || next->overruns != status->overruns
+		|| next->clipped != status->clipped || next->dropped != status->dropped))
+		panel->dirty |= BODY_BANDS;
+	if (panel->page == POCKET_PAGE_MIXER && next->master != status->master) panel->dirty |= BODY_BANDS;
+	*status = *next;
+}
+
+static void go(struct pocket_panel* panel, unsigned page)
+{
+	if (page == panel->page) return;
+	panel->page = (uint8_t)page;
+	panel->dirty = ALL_BANDS;
+}
+
+static void navigate(struct pocket_panel* panel, uint32_t pressed)
+{
+	if (pressed & (1u << POCKET_BTN_OCT_UP)) go(panel, (panel->page + 1u) % POCKET_PAGES);
+	if (pressed & (1u << POCKET_BTN_OCT_DOWN)) go(panel, (panel->page + POCKET_PAGES - 1u) % POCKET_PAGES);
+	if (pressed & (1u << POCKET_BTN_HOME)) go(panel, POCKET_PAGE_MAIN);
+	if (pressed & (1u << POCKET_BTN_SEQ)) go(panel, POCKET_PAGE_PATTERN);
+	if (pressed & (1u << POCKET_BTN_EDIT)) go(panel, POCKET_PAGE_SOUND);
+	if (pressed & (1u << POCKET_BTN_FX)) go(panel, POCKET_PAGE_MIXER);
+	if (pressed & (1u << POCKET_BTN_GLO)) go(panel, POCKET_PAGE_SYSTEM);
+}
+
+static void edit(struct pocket_panel* panel, int control, int band, int delta)
+{
+	const int p = pocket_panel_param(panel, control);
+	int v = pocket_lxr_get_param(p) + delta;
+	v = v < 0 ? 0 : v > 127 ? 127 : v;
+	pocket_lxr_set_param(p, v);
+	panel->dirty |= 3u << band;
 }
 
 int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_input* in)
@@ -71,21 +165,24 @@ int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_inp
 	panel->previous_keys = in->keys;
 	if (exit) return 1;
 
-	if (in->encoders[6])
+	navigate(panel, pressedButtons);
+	if (in->encoders[POCKET_ENC_SELECT])
 	{
-		int t = (panel->trigger + in->encoders[6]) % POCKET_LXR_TRIGGERS;
+		int t = (panel->trigger + in->encoders[POCKET_ENC_SELECT]) % POCKET_LXR_TRIGGERS;
 		if (t < 0) t += POCKET_LXR_TRIGGERS;
 		panel->trigger = (uint8_t)t;
-		panel->dirty = ALL_BANDS;
+		panel->dirty |= (1u << B_VOICE) | BODY_BANDS;
 	}
-	for (int c = 0; c < POCKET_CTLS; c++)
+	if (panel->page == POCKET_PAGE_SOUND)
 	{
-		if (!in->encoders[c]) continue;
-		const int p = pocket_panel_param(panel, c);
-		int v = pocket_lxr_get_param(p) + in->encoders[c];
-		v = v < 0 ? 0 : v > 127 ? 127 : v;
-		pocket_lxr_set_param(p, v);
-		panel->dirty |= 3u << (B_CTL0 + 2 * c);
+		for (int c = 0; c < 4; c++)
+			if (in->encoders[POCKET_ENC_KNOB1 + c]) edit(panel, POCKET_CTL_PITCH + c, B_BODY + 2 * c, in->encoders[POCKET_ENC_KNOB1 + c]);
+	}
+	else if (panel->page == POCKET_PAGE_MIXER)
+	{
+		for (int c = 0; c < 2; c++)
+			if (in->encoders[POCKET_ENC_KNOB1 + c]) edit(panel, POCKET_CTL_LEVEL + c, B_BODY + 2 * c, in->encoders[POCKET_ENC_KNOB1 + c]);
+		if (in->encoders[POCKET_ENC_KNOB1]) panel->dirty |= BODY_BANDS; /* the channel bars */
 	}
 	if (pressedButtons & (1u << POCKET_BTN_PLAY)) hit(panel, 60);
 	for (int k = 0; k < POCKET_KEYS; k++)
@@ -96,8 +193,9 @@ int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_inp
 /* ------------------------------------------------------------------ drawing */
 #define INK 0x0000u
 #define PAPER 0xffffu
-#define SCALE 2
-#define ADVANCE (4 * SCALE)
+#define ACCENT 0xfbe0u  /* amber: the start-up screen's second line */
+#define ADVANCE 8
+#define MARGIN 8
 
 /* 3x5 glyphs, rows top to bottom, 3 bits per row (bit 2 = left), packed row 0 high. */
 static uint16_t glyph(char c)
@@ -115,6 +213,7 @@ static uint16_t glyph(char c)
 	case '-': return 0x01c0;
 	case '/': return 0x12a4;
 	case '+': return 0x05d0;
+	case ',': return 0x0014;
 	default: return 0;
 	}
 }
@@ -125,16 +224,22 @@ static void fill(uint16_t* px, int x, int y, int w, int h, uint16_t color)
 		for (int c = x < 0 ? 0 : x; c < x + w && c < POCKET_SCREEN_W; c++) px[r * POCKET_SCREEN_W + c] = color;
 }
 
-static int text(uint16_t* px, int x, int y, const char* s, uint16_t color)
+/* Text at `scale` times the font; y may be outside the band, so text can span bands. */
+static int text_scaled(uint16_t* px, int x, int y, const char* s, uint16_t color, int scale)
 {
-	for (; *s; s++, x += ADVANCE)
+	for (; *s; s++, x += 4 * scale)
 	{
 		const uint16_t g = glyph(*s);
 		for (int r = 0; r < 5; r++)
 			for (int c = 0; c < 3; c++)
-				if (g & (1u << (14 - 3 * r - c))) fill(px, x + c * SCALE, y + r * SCALE, SCALE, SCALE, color);
+				if (g & (1u << (14 - 3 * r - c))) fill(px, x + c * scale, y + r * scale, scale, scale, color);
 	}
 	return x;
+}
+
+static int text(uint16_t* px, int x, int y, const char* s, uint16_t color)
+{
+	return text_scaled(px, x, y, s, color, 2);
 }
 
 /* decimal into buf, returns buf */
@@ -171,109 +276,231 @@ static char* concat(char* dst, const char* a, const char* b)
 	return dst;
 }
 
+static void label_value(uint16_t* px, const char* label, const char* value)
+{
+	const int y = (POCKET_BAND_ROWS - 10) / 2;
+	text(px, MARGIN, y, label, INK);
+	text(px, 96, y, value, INK);
+}
+
+static void label_number(uint16_t* px, const char* label, uint32_t value)
+{
+	char a[12];
+	label_value(px, label, number(a, value, 0));
+}
+
+/* Two bands of one control: name and value, then a bar. */
+static void control(uint16_t* px, int control, int value, const char* knob, unsigned second)
+{
+	const int y = (POCKET_BAND_ROWS - 10) / 2;
+	if (!second)
+	{
+		char a[12];
+		text(px, MARGIN, y, knob, INK);
+		text(px, MARGIN + 7 * ADVANCE, y, controlNames[control], INK);
+		text(px, POCKET_SCREEN_W - MARGIN - 3 * ADVANCE, y, number(a, (uint32_t)value, 3), INK);
+		return;
+	}
+	const int w = POCKET_SCREEN_W - 2 * MARGIN;
+	fill(px, MARGIN, 2, w, POCKET_BAND_ROWS - 4, INK);
+	fill(px, MARGIN + 1, 3, w - 2, POCKET_BAND_ROWS - 6, PAPER);
+	if (control == POCKET_CTL_PAN)
+	{
+		const int mid = MARGIN + w / 2, at = MARGIN + 2 + (w - 5) * value / 127;
+		fill(px, mid, 3, 1, POCKET_BAND_ROWS - 6, INK);
+		fill(px, at - 1, 4, 3, POCKET_BAND_ROWS - 8, INK);
+	}
+	else
+		fill(px, MARGIN + 2, 4, (w - 4) * value / 127, POCKET_BAND_ROWS - 8, INK);
+}
+
+static const char* const knobNames[4] = { "KNOB 1", "KNOB 2", "KNOB 3", "KNOB 4" };
+
+static void draw_main(const struct pocket_panel* panel, unsigned line, uint16_t* px)
+{
+	if (line == 0) label_value(px, "MODE", "LIVE HITS");
+	if (line == 1) label_value(px, "PATTERN", "NO SEQ YET");
+	if (line == 2) label_value(px, "TEMPO", "NO SEQ YET");
+	if (line == 3) label_value(px, "TRANSPORT", "NO SEQ YET");
+	if (line == 5) label_number(px, "HITS", panel->hits);
+}
+
+static void draw_pattern(unsigned line, uint16_t* px)
+{
+	const int y = (POCKET_BAND_ROWS - 10) / 2;
+	if (line == 0) text(px, MARGIN, y, "PLACEHOLDER", INK);
+	if (line == 2) text(px, MARGIN, y, "NO SEQUENCER IN THIS BUILD", INK);
+	if (line == 3) text(px, MARGIN, y, "NO PATTERNS, STEPS OR TEMPO", INK);
+	if (line == 5) text(px, MARGIN, y, "PLAY VOICES FROM THE KEYS", INK);
+	if (line == 6) text(px, MARGIN, y, "OR OVER MIDI", INK);
+}
+
+static void draw_sound(const struct pocket_panel* panel, unsigned line, uint16_t* px)
+{
+	const int c = POCKET_CTL_PITCH + (int)line / 2;
+	control(px, c, pocket_lxr_get_param(pocket_panel_param(panel, c)), knobNames[line / 2], line & 1);
+}
+
+/* A level bar per voice (the hats share theirs), selected voice underlined. */
+static void draw_channels(const struct pocket_panel* panel, unsigned line, uint16_t* px)
+{
+	static const uint8_t volumes[6] = { POCKET_PAR_VOL1, POCKET_PAR_VOL2, POCKET_PAR_VOL3, POCKET_PAR_VOL4,
+		POCKET_PAR_VOL5, POCKET_PAR_VOL6 };
+	static const char* const names[6] = { "D1", "D2", "D3", "SN", "CY", "HH" };
+	const int top = -(int)line * POCKET_BAND_ROWS, height = 2 * POCKET_BAND_ROWS - 2;
+	const int selected = panel->trigger > 5 ? 5 : panel->trigger;
+	for (int v = 0; v < 6; v++)
+	{
+		const int x = MARGIN + v * 38, h = height * pocket_lxr_get_param(volumes[v]) / 127;
+		fill(px, x, top + height - h, 20, h, INK);
+		text(px, x + 2, top + height + 2, names[v], INK);
+		if (v == selected) fill(px, x, top + height + 13, 20, 2, INK);
+	}
+}
+
+static void draw_mixer(const struct pocket_panel* panel, const struct pocket_panel_status* status, unsigned line, uint16_t* px)
+{
+	if (line < 4)
+	{
+		const int c = POCKET_CTL_LEVEL + (int)line / 2;
+		control(px, c, pocket_lxr_get_param(pocket_panel_param(panel, c)), knobNames[line / 2], line & 1);
+	}
+	else if (line == 4)
+		label_number(px, "MASTER", status->master);
+	else
+		draw_channels(panel, line - 5, px);
+}
+
+static void draw_system(const struct pocket_panel_status* status, unsigned line, uint16_t* px)
+{
+	char a[12];
+	if (line == 0) label_value(px, "VERSION", POCKET_FW_VERSION);
+	if (line == 1) label_value(px, "BUILD", status->build);
+	if (line == 2) label_value(px, "CPU MEAN", percent(a, status->cpu_permille));
+	if (line == 3) label_value(px, "CPU PEAK", percent(a, status->cpu_peak_permille));
+	if (line == 4) label_number(px, "OVERRUNS", status->overruns);
+	if (line == 5) label_number(px, "CLIPPED", status->clipped);
+	if (line == 6) label_number(px, "DROPPED", status->dropped);
+	if (line == 7)
+	{
+		if (status->heap_bytes)
+		{
+			char b[24];
+			label_value(px, "HEAP", concat(b, number(a, status->heap_bytes, 0), " LINKED"));
+		}
+		else
+			label_value(px, "HEAP", "UNKNOWN");
+	}
+}
+
+/* The start-up, SAFE MODE and error screen: unmistakably not the stock instrument. */
+static void draw_identity(const struct pocket_panel* panel, const struct pocket_panel_status* status,
+                          unsigned band, uint16_t* px)
+{
+	static const char* const states[] = { "STARTING", "LXR ENGINE READY", "SAFE MODE - ENGINE OFF",
+		"ENGINE ERROR - TABLES" };
+	const int top = -(int)band * POCKET_BAND_ROWS;
+	fill(px, 0, 0, POCKET_SCREEN_W, POCKET_BAND_ROWS, INK);
+	text_scaled(px, 36, top + 56, "CLATTER POCKET", PAPER, 3);
+	text(px, 56, top + 84, "LXR DRUM MACHINE", ACCENT);
+	text(px, MARGIN, top + 136, states[status->state < 4 ? status->state : 3], PAPER);
+	text(px, MARGIN, top + 152, panel->footer, PAPER);
+	text(px, MARGIN, top + 200, POCKET_FW_VERSION, PAPER);
+	text(px, MARGIN, top + 216, status->build, PAPER);
+}
+
 void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocket_panel_status* status,
                             unsigned band, uint16_t* px)
 {
+	static const struct pocket_panel_status none = { 0 };
+	const int y = (POCKET_BAND_ROWS - 10) / 2;
 	char a[24], b[48];
-	const int y = (POCKET_BAND_ROWS - 5 * SCALE) / 2;
+	if (!status) status = &none;
+	if (status->state != POCKET_STATE_READY)
+	{
+		draw_identity(panel, status, band, px);
+		return;
+	}
 	fill(px, 0, 0, POCKET_SCREEN_W, POCKET_BAND_ROWS, PAPER);
 	if (band == B_TITLE || band == B_FOOTER)
 	{
 		fill(px, 0, 0, POCKET_SCREEN_W, POCKET_BAND_ROWS, INK);
 		if (band == B_TITLE)
 		{
-			text(px, 8, y, "CLATTER POCKET", PAPER);
-			text(px, POCKET_SCREEN_W - 8 - 3 * ADVANCE, y, "LXR", PAPER);
+			const char* name = pageNames[panel->page];
+			int n = 0;
+			while (name[n]) n++;
+			text(px, MARGIN, y, "CLATTER POCKET", PAPER);
+			text(px, POCKET_SCREEN_W - MARGIN - n * ADVANCE, y, name, PAPER);
 		}
 		else
-			text(px, 8, y, panel->footer, PAPER);
+			text(px, MARGIN, y, pageFooters[panel->page], PAPER);
 		return;
 	}
-	if (band == B_STATE && status)
+	if (band == B_STATE)
 	{
-		static const char* const states[] = { "STARTING", "LXR ENGINE READY", "SAFE MODE - ENGINE OFF",
-			"ENGINE ERROR - TABLES" };
-		text(px, 8, y, states[status->state < 4 ? status->state : 3], INK);
-		return;
-	}
-	if (band == B_MIDI && status)
-	{
-		char n1[12], n2[12], n3[12], l1[24], line[48];
-		if (!status->midi_messages)
-			text(px, 8, y, "MIDI WAITING", INK);
-		else
+		if (panel->alert_ms)
 		{
-			concat(b, "MIDI ", number(n1, status->midi_messages, 0));
-			concat(l1, " HITS ", number(n2, status->midi_hits, 0));
-			concat(line, b, l1);
-			concat(b, line, " NOTE ");
-			text(px, 8, y, concat(line, b, number(n3, status->midi_last, 0)), INK);
+			fill(px, 0, 0, POCKET_SCREEN_W, POCKET_BAND_ROWS, INK);
+			text(px, MARGIN, y, concat(b, "AUDIO OVERRUN ", number(a, panel->alert_overruns, 0)), PAPER);
+		}
+		else
+			text(px, MARGIN, y, "LXR ENGINE READY", INK);
+		return;
+	}
+	if (band == B_VOICE)
+	{
+		const int x = text(px, MARGIN, y, "VOICE ", INK);
+		fill(px, x - 2, 0, 6 * ADVANCE + 4, POCKET_BAND_ROWS, INK);
+		text(px, x, y, triggerNames[panel->trigger], PAPER);
+		return;
+	}
+	if (band == B_MIDI)
+	{
+		if (panel->midi_trigger < POCKET_LXR_TRIGGERS)
+		{
+			if (panel->midi_flash_ms) fill(px, 0, 0, POCKET_SCREEN_W, POCKET_BAND_ROWS, INK);
+			const uint16_t ink = panel->midi_flash_ms ? PAPER : INK;
+			const int x = text(px, MARGIN, y, concat(b, "MIDI NOTE ", number(a, panel->midi_note, 0)), ink);
+			text(px, x + ADVANCE, y, triggerNames[panel->midi_trigger], ink);
+		}
+		else if (status->midi_messages)
+			text(px, MARGIN, y, concat(b, "MIDI MESSAGES ", number(a, status->midi_messages, 0)), INK);
+		else
+			text(px, MARGIN, y, "MIDI WAITING", INK);
+		return;
+	}
+	if (band == B_ACTIVITY)
+	{
+		for (int t = 0; t < POCKET_LXR_TRIGGERS; t++)
+		{
+			const int x = 4 + t * 33;
+			const uint16_t ink = panel->flash_ms[t] ? PAPER : INK;
+			fill(px, x, 0, 34, POCKET_BAND_ROWS - 1, INK);
+			if (!panel->flash_ms[t]) fill(px, x + 1, 1, 32, POCKET_BAND_ROWS - 3, PAPER);
+			text(px, x + 9, y, cellNames[t], ink);
 		}
 		return;
 	}
-	if (band == B_LEVEL && status)
+	if (band == B_LEVEL)
 	{
-		const int x = text(px, 8, y, "LEVEL", INK) + ADVANCE;
-		const int w = POCKET_SCREEN_W - 8 - x;
+		const int x = text(px, MARGIN, y, "LEVEL", INK) + ADVANCE;
+		const int w = POCKET_SCREEN_W - MARGIN - x;
 		fill(px, x, 3, w, POCKET_BAND_ROWS - 6, INK);
 		fill(px, x + 1, 4, w - 2, POCKET_BAND_ROWS - 8, PAPER);
 		fill(px, x + 2, 5, (w - 4) * (status->level > 100 ? 100 : status->level) / 100, POCKET_BAND_ROWS - 10, INK);
 		return;
 	}
-	if (band == B_VOICE)
+	if (band >= B_BODY && band < B_ACTIVITY)
 	{
-		const int x = text(px, 8, y, "VOICE ", INK);
-		fill(px, x - 2, 0, (int)(6 * ADVANCE) + 4, POCKET_BAND_ROWS, INK);
-		text(px, x, y, triggerNames[panel->trigger], PAPER);
-		text(px, POCKET_SCREEN_W - 8 - 5 * ADVANCE, y, "ENC 7", INK);
-		return;
-	}
-	if (band >= B_CTL0 && band < B_CTL0 + 2 * POCKET_CTLS)
-	{
-		const int c = (int)(band - B_CTL0) / 2;
-		const int value = pocket_lxr_get_param(pocket_panel_param(panel, c));
-		if (((band - B_CTL0) & 1) == 0)
+		const unsigned line = band - B_BODY;
+		switch (panel->page)
 		{
-			text(px, 8, y, concat(b, "ENC ", number(a, (uint32_t)c + 1, 0)), INK);
-			text(px, 8 + 7 * ADVANCE, y, controlNames[c], INK);
-			text(px, POCKET_SCREEN_W - 8 - 3 * ADVANCE, y, number(a, (uint32_t)value, 3), INK);
+		case POCKET_PAGE_MAIN: draw_main(panel, line, px); break;
+		case POCKET_PAGE_PATTERN: draw_pattern(line, px); break;
+		case POCKET_PAGE_SOUND: draw_sound(panel, line, px); break;
+		case POCKET_PAGE_MIXER: draw_mixer(panel, status, line, px); break;
+		default: draw_system(status, line, px); break;
 		}
-		else
-		{
-			const int w = POCKET_SCREEN_W - 16;
-			fill(px, 8, 2, w, POCKET_BAND_ROWS - 4, INK);
-			fill(px, 9, 3, w - 2, POCKET_BAND_ROWS - 6, PAPER);
-			fill(px, 10, 4, (w - 4) * value / 127, POCKET_BAND_ROWS - 8, INK);
-		}
-		return;
-	}
-	if (band == B_HITS)
-	{
-		text(px, 8, y, concat(b, "HITS ", number(a, panel->hits, 0)), INK);
-		if (status && status->build[0])
-		{
-			const int x = text(px, POCKET_SCREEN_W - 8 - 14 * ADVANCE, y, "BUILD ", INK);
-			text(px, x, y, status->build, INK); /* uppercase hex: the font has no lower case */
-		}
-		return;
-	}
-	if (band == B_CPU && status)
-	{
-		char c[12], d[12];
-		concat(b, "CPU ", percent(c, status->cpu_permille));
-		concat(a, "  PEAK ", percent(d, status->cpu_peak_permille));
-		char line[48];
-		text(px, 8, y, concat(line, b, a), INK);
-		return;
-	}
-	if (band == B_ERRORS && status)
-	{
-		char n1[12], n2[12], n3[12], l1[24], l2[24], line[48];
-		concat(l1, "XRUN ", number(n1, status->overruns, 0));
-		concat(l2, " CLIP ", number(n2, status->clipped, 0));
-		concat(b, l1, l2);
-		concat(l1, " DROP ", number(n3, status->dropped, 0));
-		text(px, 8, y, concat(line, b, l1), INK);
-		return;
 	}
 }

@@ -34,14 +34,14 @@ the stock instrument; it does not fit the flash.)
 |---|---|
 | note keys | play the selected LXR voice chromatically (13th key = programmed pitch) |
 | PLAY | play the selected voice |
-| encoder 1 / 2 / 3 | pitch / decay / level of the selected voice |
-| encoder 7 | select DRUM 1-3, SNARE, CYMBAL, CL HAT, OP HAT |
+| SELECT | select DRUM 1-3, SNARE, CYMBAL, CL HAT, OP HAT |
+| OCT− / OCT+, HOME, SEQ, EDIT, FX, GLO | pages: MAIN, PATTERN, SOUND, MIXER, SYSTEM |
+| KNOB 1-4 | SOUND: pitch, decay, filter, drive. MIXER: level, pan |
 | MASTER | master volume (stock) |
 | HOME + ARP | (overlay build only) back to the stock instrument |
 
-The screen shows the engine's CPU share per audio block (mean and peak), DMA overruns,
-clipped samples and dropped events. Encoder numbering is the SDK's; the physical knobs are
-still to be identified.
+docs/POCKET-UI.md has the interface, how to load it in the FM-1 emulator, and its results.
+There is no sequencer yet. The encoder positions come from the emulator, not a device.
 
 ![The Pocket panel, rendered by the host tests](docs/panel.png)
 

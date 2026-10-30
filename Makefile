@@ -5,6 +5,7 @@
 #   make bench      host timing of the engine per FM-1 audio block
 #   make render     render demo WAVs into build/host/
 #   make compare    compare with CLATTER's WebAssembly engine (needs node and CLATTER_DIR)
+#   make emu-test   the built package in the FM-1 emulator (needs node and EMU_WASM)
 #   make firmware   FM-1 firmware (see BUILDING.md; needs the JieLi toolchain)
 #   make packed-tables  regenerate engine/lxr_tables_packed.c from the firmware's tables
 #
@@ -16,6 +17,7 @@
 CC ?= cc
 BUILD := build/host
 CLATTER_DIR ?= ../clatter
+EMU_WASM ?= fm1_web.wasm
 
 LXR_SRC := $(shell find lxr/upstream/Core/Src -name '*.c' ! -name MidiParser.c | sort)
 LXR_FX := lxr/upstream/Core/Src/Soundengine/FxBus.c $(wildcard lxr/upstream/Core/Src/Soundengine/DSPAudio/FX/*.c)
@@ -50,7 +52,7 @@ $(PACKED_OBJ): DSP_CFLAGS += -DPOCKET_PACKED_TABLES
 
 TOOLS := $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/bench $(BUILD)/render $(BUILD)/dump
 
-.PHONY: all test bench render compare compare-sp firmware packed-tables clean
+.PHONY: all test bench render compare compare-sp emu-test firmware packed-tables clean
 all: $(TOOLS) test
 
 # Single-precision variant (make compare-sp): the DSP's double-precision envelope and
@@ -141,6 +143,10 @@ compare: $(BUILD)/dump
 compare-sp: $(BUILD)/dump_sp
 	$(BUILD)/dump_sp > $(BUILD)/pocket_dump_sp.bin
 	node host/compare/compare_clatter.mjs $(CLATTER_DIR)/src/audio/lxr/lxr.wasm $(BUILD)/pocket_dump_sp.bin
+
+emu-test:
+	node tools/emu-test.mjs --wasm $(EMU_WASM) --stock build/fm1-stock/fm1_open-stock-4c7496d.fwsc
+	python3 tools/check-firmware.py
 
 firmware:
 	firmware/fm1/build.sh

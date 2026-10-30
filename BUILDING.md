@@ -23,6 +23,7 @@ node 22+ (comparison with CLATTER), LLVM with the ARM target (`tools/size-estima
 | `make compare CLATTER_DIR=../clatter` | runs `host/compare/script.txt` on CLATTER's committed `lxr.wasm` and on this engine; compares every voice block by block |
 | `make compare-sp CLATTER_DIR=...` | the same with the DSP's double arithmetic in single precision |
 | `tools/size-estimate.sh` | footprint and soft-float report of the FM-1 configuration on a Cortex-M4F stand-in (`SP=1` for single precision) |
+| `make emu-test EMU_WASM=…` | the built package in the FM-1 emulator (docs/POCKET-UI.md); `EMU_WASM` is `fm1_web.wasm` from fm1-emu, then `tools/check-firmware.py` |
 | `python3 tools/gen-param-header.py` | regenerate `engine/pocket_params.h` from the firmware's `Parameters.h` |
 
 On macOS the firmware's ELF section attributes are mapped to `annotate` (`Makefile`).
@@ -107,8 +108,9 @@ What `build.sh` does:
    (paths, Wine, CLATTER Pocket sources, linker placement, SRAM checks). Everything else,
    including the hash checks, all compiler/linker flags, `Test-Firmware` and the packager, is
    upstream's;
-3. copies the package to `build/fm1/clatter-pocket-fm1-UNVERIFIED.fwsc` and the firmware
-   report to `build/fm1/firmware-report.json`.
+3. moves the package to `build/fm1/clatter-pocket-fm1-UNVERIFIED.fwsc` (the SDK's name for it,
+   `FM1_OFFICIAL_OPEN.fwsc`, is the same for stock builds, so it is not left behind) and copies
+   the firmware report to `build/fm1/firmware-report.json`.
 
 `-FirmwareOnly` is the SDK's local-test mode; distributable packages (`-Package`) need a
 matching public source archive URL (GPL) and are not set up.

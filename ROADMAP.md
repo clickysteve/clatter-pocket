@@ -29,6 +29,9 @@ checked as far as possible without the toolchain or device), **open**.
   stability, firmware behaviours (infinite decay, decimator hold)
 - **done** numerical equivalence with CLATTER's WebAssembly engine (within 3 LSB)
 - **done** host CPU, memory and soft-float assessment
+- **done (emulator; not on hardware)** the first hardware interface: start screen, MAIN,
+  PATTERN placeholder, SOUND, MIXER and SYSTEM pages, trigger, MIDI and overrun feedback, 49
+  checks in the FM-1 emulator on the real package (docs/POCKET-UI.md)
 - **prepared** FM-1 integration: audio hook, control hook, Pocket panel (kick and the other
   six triggers: pitch, decay, level, keys and PLAY), on-device timing display
 - **done: flash budget.** CLATTER Pocket replaces the stock instrument application, the
@@ -80,7 +83,8 @@ workbench.
 
 ## F - Hardware polish
 
-PATTERN / SOUND / GENERATE / MIXER / SETTINGS pages for 27 keys, 14 buttons, 7 encoders and
+PATTERN (now a placeholder), GENERATE and SETTINGS pages, and more of SOUND and MIXER (first
+versions: docs/POCKET-UI.md), for 27 keys, 14 buttons, 7 encoders and
 240 × 240; documented input map; performance work; release packaging (`-Package` with a
 public source archive, GPL); decide whether CLATTER Pocket replaces or sits beside the stock
 instrument.

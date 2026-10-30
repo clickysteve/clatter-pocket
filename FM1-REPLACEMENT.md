@@ -16,14 +16,16 @@ below. `python3 tools/make-installer-page.py` makes an installer page for it.
 | | |
 |---|---|
 | Package | `clatter-pocket-fm1-replace-UNVERIFIED.fwsc`, 492,084 bytes |
-| Package SHA-256 | `b8c13d2c4d3a40879164261e45cf9b30124b4837ccb0bf7b3c823ca0f30e7890` |
-| ELF SHA-256 | `2d3ce3a6b1e0765fe8c41f8ac7298fa9d1ebc86fd807dfe7a04dabcf248524f1` |
+| Package SHA-256 | `8dcccacf5d382de416034cd46a857422868c38c3b2a1f85ec478fa60d8e5c18a` |
+| ELF SHA-256 | `12b83bd411ba8cdf0e1e0c4578ca0d33f0e4193d1489389c9a7e47f332968d2e` |
 | Built from | fm1_open 4c7496d, JieLi 2.5.3, `--replace --single-precision` |
 | Reproducible | two builds from an empty `build/` gave identical bytes |
+| Checks | `python3 tools/check-firmware.py`; `make emu-test` runs it in the emulator |
 
-**Status, 2026-10-29: built and packaged; not flashed; not run on hardware.** Everything
-below comes from the link map, the ELF, the SDK's firmware report and packager, and host
-tests. None of it comes from a device. PRE-FLASH-AUDIT.md has the full audit;
+**Status, 2026-10-30: built and packaged; runs in the FM-1 emulator; not flashed; not run on
+hardware.** Everything below comes from the link map, the ELF, the SDK's firmware report and
+packager, host tests and the emulator. None of it comes from a device. docs/POCKET-UI.md has
+the interface, and why an early emulator run appeared to show the stock interface. PRE-FLASH-AUDIT.md has the full audit;
 FIRST-HARDWARE-TEST.md has the test procedure.
 
 ## The flash budget
@@ -39,7 +41,8 @@ The first report gave 479,232: that figure left out the boot area, BTIF and the 
 | Stock fm1_open V14 | 453,576 | 345 free |
 | Beside stock, tables as compiled | 586,920 | 132,999 over |
 | Beside stock, tables packed | 507,592 | 53,671 over |
-| **Replacing the stock application, tables packed, `-Oz` control code** | **421,212** | **32,709 free** |
+| Replacing the stock application, tables packed, `-Oz` control code (first interface) | 421,212 | 32,709 free |
+| **The same with the page interface (docs/POCKET-UI.md)** | **423,100** | **30,821 free** |
 
 The SDK's binary library (`libfm1_engine.a`) is a single pre-linked object. `--gc-sections`
 removes what nothing references any more, but the library still references its own
@@ -63,7 +66,7 @@ Removing it would require changing the binary SDK, which this project does not d
 | Flash bytes, from the link map | Stock | Replacement |
 |---|---|---|
 | SDK library | 375,348 | 358,071 |
-| fm1_open application. Stock: all of `app/`. Replacement: what is kept, the board layer, `audio_output.c` and the build identity | 73,570 | 4,563 |
+| (Figures in this table are from the first interface, image 421,212.) fm1_open application. Stock: all of `app/`. Replacement: what is kept, the board layer, `audio_output.c` and the build identity | 73,570 | 4,563 |
 | CLATTER Pocket application unit | | 1,219 |
 | CLATTER Pocket engine (LXR-02 DSP, parameter handler, engine host, panel, MIDI, unpacker, `sqrtf`) | | 28,871 |
 | LXR tables, packed (from 102,238) | | 23,892 |
@@ -125,7 +128,7 @@ from the replacement, by input file, with sizes, 60,831 bytes in total. It is ge
 | MIDI in over USB, BLE and DIN/TRS | kept; General MIDI drum notes on any channel trigger the seven LXR voices at their programmed pitch |
 | MIDI out | linked (SDK), unused |
 | BLE roles, scan and connect | Peripheral at start-up; the rest of the API is linked (the SDK check requires it), with no page yet |
-| 27 keys, 14 buttons, 7 encoders, LCD | kept (`app/board/panel.c`): the CLATTER Pocket panel and start-up diagnostics |
+| 27 keys, 14 buttons, 7 encoders, LCD | kept (`app/board/panel.c`): the CLATTER Pocket interface (docs/POCKET-UI.md) |
 | LEDs | switched off |
 | **Firmware update over USB-MIDI** | kept, in the SDK, untouched: handled before application SysEx, in the higher-priority `update` task (PRE-FLASH-AUDIT.md) |
 | User partition | **untouched**; readable again after reinstalling stock |
@@ -146,13 +149,9 @@ running.
 - **ENGINE ERROR:** if the packed tables do not unpack, the engine is not started and the
   output stays silent.
 
-The screen shows:
-- the engine state: STARTING, LXR ENGINE READY, SAFE MODE or ENGINE ERROR;
-- MIDI activity: WAITING, or messages, hits and the last note;
-- an output level meter;
-- the audio CPU share (mean and peak per block), DMA overruns, clipped samples and dropped
-  events;
-- the build identity: the first 8 hex digits of `fm1_build_id`.
+Until the engine runs, and in SAFE MODE and on an engine error, the screen is the start
+screen: CLATTER POCKET, LXR DRUM MACHINE, the state, the version and the build identity (the
+first 8 hex digits of `fm1_build_id`). After that it is the interface in docs/POCKET-UI.md.
 
 `-DPOCKET_DIAGNOSTICS=0` removes the per-block timing from the audio interrupt.
 
@@ -177,8 +176,8 @@ package must keep the stock layout.
 | | Stock | Replacement |
 |---|---|---|
 | `.ram0_data` (SRAM code and initialised data) | 80,968 | 104,924 |
-| `.ram0_bss` | 195,232 | 284,492 (of which 102,238 are the unpacked LXR tables) |
-| Runtime heap (SDK minimum 49,152) | 247,340 | **134,124** (84,972 above the minimum) |
+| `.ram0_bss` | 195,232 | 284,588 (of which 102,238 are the unpacked LXR tables) |
+| Runtime heap (SDK minimum 49,152) | 247,340 | **134,028** (84,876 above the minimum) |
 
 CLATTER Pocket allocates nothing at runtime: no allocator call in its code (checked in the
 ELF). The heap is left to the SDK's RTOS, Bluetooth and USB, which the 49,152-byte minimum
