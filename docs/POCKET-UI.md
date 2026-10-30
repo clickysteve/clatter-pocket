@@ -90,19 +90,21 @@ of them. They are not checked on a device.
 |---|---|
 | SELECT | selected voice, on every page: DRUM 1-3, SNARE, CYMBAL, CL HAT, OP HAT |
 | note keys | play the selected voice chromatically (the 13th key is its programmed pitch) |
-| PLAY | play the selected voice at its programmed pitch |
+| PLAY | start or stop the sequencer, on every page |
 | OCT− / OCT+ | previous / next page, wrapping |
 | HOME | MAIN |
 | SEQ | PATTERN |
 | EDIT | SOUND |
 | FX | MIXER |
 | GLO | SYSTEM |
-| KNOB 1-4 | SOUND: PITCH, DECAY, FILTER, DRIVE. MIXER: LEVEL, PAN. Elsewhere nothing |
+| KNOB 1-4 | SOUND: PITCH, DECAY, FILTER, DRIVE. MIXER: LEVEL, PAN. PATTERN: POCKET-SEQUENCER.md. Elsewhere nothing |
 | MASTER | output level (the pot, as stock) |
 | HOME held 1.5 s after power-on | SAFE MODE |
 
-SCL, ENV, LFO, SAVE, ARP, REC, ALGORITHM and PRESETS do nothing. **No control erases, saves or
-updates anything.** The earlier "ENC 1/2/3" and "ENC 7" labels were matrix indices: they were
+PATTERN adds its own controls: ALGORITHM, REC, ARP, LFO, ENV, SAVE, SCL and the knobs, in
+[POCKET-SEQUENCER.md](POCKET-SEQUENCER.md). They act only on PATTERN. PRESETS does nothing. **No
+control writes Flash or updates anything**; the one thing a control can lose is the pattern, and ENV
+undoes that. The earlier "ENC 1/2/3" and "ENC 7" labels were matrix indices: they were
 physically SELECT, ALGORITHM, KNOB 1 and PRESETS.
 
 SAFE MODE is unchanged: HOME is read once, at the 1.5 s point, and a button held then does not
@@ -110,11 +112,13 @@ act afterwards. So HOME's page function cannot reach SAFE MODE, or the reverse.
 
 ## Pages
 
-- **MAIN**: mode, hits. Pattern, tempo and transport say NO SEQ YET.
-- **PATTERN**: a labelled placeholder. There is no sequencer in this firmware (ROADMAP C), so
-  it shows no pattern, step or tempo. A tempo knob is deliberately left out:
-  `pocket_lxr_set_bpm` only reaches tempo-synced LFOs and the init kit has none, so it would do
-  nothing.
+- **MAIN**: transport, tempo, swing, style, hits from the sequence and from the keys, and a row
+  showing how many tracks play each step, with the playhead.
+- **PATTERN**: the step editor. Line 1 is the transport, tempo and swing (or the style); then a
+  ruler of the same activity row with the playhead and the selected step; then seven rows of 16
+  cells, bars as tall as their velocity; then the four knobs' fields. All 16 steps fit, 12 pixels
+  each, with the beats set apart, so there is no paging. The playhead has a band to itself, so a
+  step redraws one band, not the grid.
 - **SOUND**: four parameters of the selected voice: COARSE, velocity decay, filter frequency,
   and drive (DRIVE1-3, or the snare, cymbal and hat distortion). The hats share pitch, filter
   and drive; each has its own decay.
@@ -128,8 +132,10 @@ labelled LINKED. The SDK has no call for what is free.
 
 ## Audio and MIDI feedback
 
-Nothing was added to the audio path: `clatter_pocket_render` is unchanged.
-- Trigger feedback comes from the control task, which sends the triggers.
+`clatter_pocket_render` is unchanged. The sequencer's clock runs inside the engine's render, at
+the start of each block (POCKET-SEQUENCER.md).
+- Trigger feedback comes from the control task, which sends the key triggers and reads which tracks
+  the sequencer played. The screen follows the audio; it never drives it.
 - MIDI: the routing task queues trigger, velocity and note; the control task starts the voice
   and updates the screen at once.
 - The level meter, CPU, overruns, clipped and dropped are the existing diagnostics, read twice
@@ -141,21 +147,22 @@ So there is no per-voice level measurement: the cells show triggers, the meter t
 
 | Command | Covers |
 |---|---|
-| `make test` | `test_panel`, on the real engine: navigation, wrapping, unassigned buttons, knob scope, selection, clamping, **every control of every voice changes the rendered audio**, pan direction, MIDI and audio activity, the overrun warning, redraw masks, every band of every page in every state stays in its buffer |
+| `make test` | `test_seq` and `test_panel`, on the real engine: the sequencer (POCKET-SEQUENCER.md), navigation, wrapping, unassigned buttons, knob scope, selection, clamping, **every control of every voice changes the rendered audio**, pan direction, MIDI and audio activity, the overrun warning, redraw masks, every band of every page in every state stays in its buffer |
 | `make emu-test EMU_WASM=…` | `tools/emu-test.mjs`: the package in the emulator (below) |
 | `python3 tools/check-firmware.py` | size and headroom, heap, stock layout, SRAM and Flash placement, no user-flash code, from the ELF |
 
 ### Emulator results
 
-49 checks pass, on the package in FM1-REPLACEMENT.md, in the emulator's WebAssembly core (master `93cb7ee`) at
+93 checks pass, on the package in FM1-REPLACEMENT.md, in the emulator's WebAssembly core (master `93cb7ee`) at
 240 MHz: start screen, no stock text, silence until played, every page by its button and by
-OCT−/OCT+, the seven voices, PLAY and key audio, parameter editing, DIN MIDI to the voice and
-the screen, SYSTEM figures, 20 s of hits without a reset, SAFE MODE silent with the engine off,
-and the stock package failing the identity check. The deployed page was also driven by hand.
+OCT−/OCT+, the seven voices, key audio, parameter editing, DIN MIDI to the voice and
+the screen, SYSTEM figures, the sequencer with measured timing (POCKET-SEQUENCER.md), 20 s of the
+sequence with hits through it, without a reset, SAFE MODE silent with the engine off, and the stock
+package failing the identity check.
 
 Limits of what this shows:
 - **Not run:** USB MIDI (the emulator's controller raises no interrupt yet) and BLE.
-- **The CPU figure, 27.9 %, is not a device measurement.** The emulator counts about one
+- **The CPU figure, 28.2 % playing, is not a device measurement.** The emulator counts about one
   instruction per cycle and models no cache or Flash wait states.
 - The firmware update path was not exercised.
 - Timing, the real screen, knob directions and sound are for the hardware test.
@@ -166,8 +173,8 @@ Limits of what this shows:
   for this interface; the safety properties are rechecked by `tools/check-firmware.py` and the
   emulator run, and the bootloader, update identity, flash layout, engine and audio path are
   unchanged.
-- No sequencer, patterns, tempo or transport.
-- Parameters are not saved; a restart returns to the init kit.
+- Parameters and patterns are not saved; a restart returns to the init kit and seed 1.
 - One parameter set per page: the other LXR parameters are reachable only from CLATTER's
   engine API.
-- Velocity is fixed at 127 from the keys.
+- Velocity is fixed at 127 from the keys (the scanner reports on and off). Steps and MIDI have
+  velocity.

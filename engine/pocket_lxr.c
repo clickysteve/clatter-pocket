@@ -114,6 +114,7 @@ static uint8_t paramShadow[END_OF_SOUND_PARAMETERS]; /* control's view */
 static AutomationNode lockNodes[POCKET_LXR_TRIGGERS][2];
 static int32_t masterGain = POCKET_GAIN_UNITY;       /* audio's copy */
 static uint8_t dcBlock;                              /* audio's copy */
+static pocket_lxr_hook blockHook;                    /* set while the audio context is held off */
 /* DC blocker: y = x - x1 + R y1, R = 1 - 2 pi 5 Hz / 44.1 kHz, Q30 */
 #define DC_R_Q30 1072976913
 static int64_t dcX1[2], dcY1[2];
@@ -226,6 +227,16 @@ IN_ITCM_RAM static void apply(const struct event* e)
 	}
 }
 
+IN_ITCM_RAM void pocket_lxr_trigger_now(int trig, int velocity)
+{
+	struct event e = { 0 };
+	e.type = EV_TRIGGER;
+	e.a = (uint8_t)trig;
+	e.b = (uint8_t)velocity;
+	e.c = 60; /* the programmed pitch */
+	apply(&e);
+}
+
 IN_ITCM_RAM static void drain(void)
 {
 	const uint32_t head = ringHead;
@@ -293,6 +304,11 @@ int pocket_lxr_trigger_locked(int trig, int velocity, int note, int p1, int v1, 
 int pocket_lxr_trigger(int trig, int velocity, int note)
 {
 	return pocket_lxr_trigger_locked(trig, velocity, note, 0, 0, 0, 0);
+}
+
+void pocket_lxr_set_block_hook(pocket_lxr_hook hook)
+{
+	blockHook = hook;
 }
 
 int pocket_lxr_set_master(int gain_q12)
@@ -391,6 +407,7 @@ int pocket_lxr_init(uint32_t seed)
 	ringHead = ringTail = 0;
 	masterGain = POCKET_GAIN_UNITY;
 	dcBlock = 0;
+	blockHook = 0;
 	dcX1[0] = dcX1[1] = dcY1[0] = dcY1[1] = 0;
 	for (unsigned i = 0; i < sizeof stats; i++) ((uint8_t*)&stats)[i] = 0;
 #ifdef POCKET_PACKED_TABLES
@@ -540,6 +557,7 @@ IN_ITCM_RAM void pocket_lxr_render_q23(int32_t* out, unsigned frames, int accumu
 	for (unsigned f = 0; f + POCKET_LXR_BLOCK <= frames; f += POCKET_LXR_BLOCK)
 	{
 		drain();
+		if (blockHook) blockHook();
 		renderBlock();
 		/* int16 full scale is Q23 full scale shifted by 8; master gain is Q12 */
 		const int64_t gain = masterGain;

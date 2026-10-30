@@ -30,8 +30,8 @@ checked as far as possible without the toolchain or device), **open**.
 - **done** numerical equivalence with CLATTER's WebAssembly engine (within 3 LSB)
 - **done** host CPU, memory and soft-float assessment
 - **done (emulator; not on hardware)** the first hardware interface: start screen, MAIN,
-  PATTERN placeholder, SOUND, MIXER and SYSTEM pages, trigger, MIDI and overrun feedback, 49
-  checks in the FM-1 emulator on the real package (docs/POCKET-UI.md)
+  PATTERN, SOUND, MIXER and SYSTEM pages, trigger, MIDI and overrun feedback, 93 checks in the
+  FM-1 emulator on the real package (docs/POCKET-UI.md)
 - **prepared** FM-1 integration: audio hook, control hook, Pocket panel (kick and the other
   six triggers: pitch, decay, level, keys and PLAY), on-device timing display
 - **done: flash budget.** CLATTER Pocket replaces the stock instrument application, the
@@ -61,19 +61,26 @@ checked as far as possible without the toolchain or device), **open**.
 
 ## C - Basic drum machine
 
-Port the sequencer core from CLATTER/DOWNBEAT as portable C (`seq/`): 10 logical tracks
-mapped onto the LXR voices, pattern length, steps with velocity, tempo, swing, start/stop, an
-explicit sample-timestamped event scheduler driven by the audio block count (never by UI
-timing), save/load in the user Flash partition with CRC'd, versioned, two-sector records.
-Tests: step timing to the sample, swing, velocity, tempo changes, wrap. Then a PATTERN page.
+- **done (emulator; not on hardware)** a portable sequencer core (`seq/`): 16 steps, seven tracks,
+  velocity, tempo, swing, start/stop, exact sample-based timing in the audio interrupt, live
+  editing, undo; the PATTERN page. Timing tested to the sample on the host and by measuring the
+  emulated audio (docs/POCKET-SEQUENCER.md)
+- **done** tracks: one per LXR trigger, CLATTER's ten roles folded as its default project routes them
+- **open** save/load in the user Flash partition with CRC'd, versioned, two-sector records (the
+  first code here to touch user Flash, so it needs its own audit)
+- **open** more than one pattern, chaining, track lengths
+- **open** MIDI clock in and out, and note output
 
 ## D - Generative CLATTER
 
-Seeded, deterministic, on-device: human-readable seeds (CLATTER's documented hash), pattern
-generation per style, conditional triggers and probability (pass counter), every-N, mutation,
-kit generation and mutation within instrument-aware ranges, wildness/character. Port from
-CLATTER's TypeScript after checking each algorithm's CPU and memory cost. Test seed
-reproducibility against CLATTER's outputs.
+- **done (emulator; not on hardware)** seeded, deterministic generation on the device: CLATTER's
+  11 styles, DENSITY, COMPLEXITY, SEED, instrument roles, fills, Euclidean lanes, track locks; and
+  MUTATE at three strengths
+- **open** VARIATION and multi-bar phrases; per-step probability, conditional trigs, every-N
+- **open** parameter locks per step (the engine has them)
+- **open** kit generation and mutation within instrument-aware ranges, wildness/character
+- **open** human-readable seeds (CLATTER's documented hash) and seed compatibility with CLATTER:
+  today's patterns follow its rules but are not byte-identical
 
 ## E - Persistence and compatibility
 
@@ -83,8 +90,7 @@ workbench.
 
 ## F - Hardware polish
 
-PATTERN (now a placeholder), GENERATE and SETTINGS pages, and more of SOUND and MIXER (first
-versions: docs/POCKET-UI.md), for 27 keys, 14 buttons, 7 encoders and
+A SETTINGS page, and more of SOUND and MIXER (first versions: docs/POCKET-UI.md), for 27 keys, 14 buttons, 7 encoders and
 240 × 240; documented input map; performance work; release packaging (`-Package` with a
 public source archive, GPL); decide whether CLATTER Pocket replaces or sits beside the stock
 instrument.

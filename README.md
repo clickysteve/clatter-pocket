@@ -17,11 +17,12 @@ pocket synthesizer, through M-VAVE's open firmware SDK
 | | |
 |---|---|
 | LXR engine (all six voices, seven triggers, the firmware's parameter handler, modulation, locks) | runs natively; 177 host checks pass; matches CLATTER's engine to within 3 LSB; the FM-1's packed tables unpack byte-identical |
-| FM-1 firmware, CLATTER Pocket **replacing** the stock instrument application | **builds and packages** reproducibly with the FM-1 toolchain: 421,212-byte image (32,709 bytes under the 453,921 limit), stock flash layout, all SDK firmware checks pass, user partition untouched, installer page ([FM1-REPLACEMENT.md](FM1-REPLACEMENT.md)) |
+| FM-1 firmware, CLATTER Pocket **replacing** the stock instrument application | **builds and packages** reproducibly with the FM-1 toolchain: 430,908-byte image (23,013 bytes under the 453,921 limit), stock flash layout, all SDK firmware checks pass, user partition untouched, installer page ([FM1-REPLACEMENT.md](FM1-REPLACEMENT.md)) |
 | Pre-flash audit | done ([PRE-FLASH-AUDIT.md](PRE-FLASH-AUDIT.md)); first-test procedure: [FIRST-HARDWARE-TEST.md](FIRST-HARDWARE-TEST.md) |
 | FM-1 firmware, CLATTER Pocket **beside** the stock instrument (HOME + ARP) | compiles, links, passes the checks, but is 53,671 bytes too large for the flash layout |
 | On the device | **nothing has run on hardware** |
-| Sequencer, generation, storage | not started (ROADMAP.md) |
+| Sequencer and generator | 16 steps, seven tracks, CLATTER's styles, GENERATE and MUTATE on the FM-1's controls; **tested in the FM-1 emulator** ([docs/POCKET-SEQUENCER.md](docs/POCKET-SEQUENCER.md)) |
+| Storage | not started: patterns and sounds are lost at restart (ROADMAP.md) |
 
 ## What it does on the FM-1 (once installed)
 
@@ -33,7 +34,7 @@ the stock instrument; it does not fit the flash.)
 | Control | Action |
 |---|---|
 | note keys | play the selected LXR voice chromatically (13th key = programmed pitch) |
-| PLAY | play the selected voice |
+| PLAY | start or stop the sequencer |
 | SELECT | select DRUM 1-3, SNARE, CYMBAL, CL HAT, OP HAT |
 | OCT− / OCT+, HOME, SEQ, EDIT, FX, GLO | pages: MAIN, PATTERN, SOUND, MIXER, SYSTEM |
 | KNOB 1-4 | SOUND: pitch, decay, filter, drive. MIXER: level, pan |
@@ -41,7 +42,7 @@ the stock instrument; it does not fit the flash.)
 | HOME + ARP | (overlay build only) back to the stock instrument |
 
 docs/POCKET-UI.md has the interface, how to load it in the FM-1 emulator, and its results.
-There is no sequencer yet. The encoder positions come from the emulator, not a device.
+PATTERN has its own controls ([docs/POCKET-SEQUENCER.md](docs/POCKET-SEQUENCER.md)). The encoder positions come from the emulator, not a device.
 
 ![The Pocket panel, rendered by the host tests](docs/panel.png)
 

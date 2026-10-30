@@ -34,6 +34,7 @@
 #include "pocket_lxr.h"
 #include "pocket_midi.h"
 #include "pocket_panel.h"
+#include "pocket_seq.h"
 
 /* The linker's runtime heap (the SDK has no call for the free heap). */
 extern char _HEAP_BEGIN[], _HEAP_END[];
@@ -217,6 +218,10 @@ static void start(uint32_t now, const struct fm1_controls* controls)
 		return;
 	}
 	pocket_lxr_set_dc_block(1);
+	/* the sequencer's clock is the engine's block count, at the real output rate */
+	pocket_seq_init(FM1_AUDIO_HARDWARE_RATE, POCKET_LXR_BLOCK, pocket_lxr_trigger_now);
+	pocket_panel_start_sequencer(&panel);
+	pocket_lxr_set_block_hook(pocket_seq_block);
 	block_ticks = (uint32_t)((uint64_t)fm1_device_clock() * FM1_BLOCK_FRAMES / FM1_AUDIO_HARDWARE_RATE);
 	fm1_device_fence();
 	render_enabled = 1;

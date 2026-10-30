@@ -102,7 +102,17 @@ int pocket_lxr_load_init_kit(void);
 /* Copy and reset the statistics (peak and backlog reset; counters keep counting). */
 void pocket_lxr_stats_read(struct pocket_lxr_stats* out);
 
+/* Called in the audio context at the start of every engine block, after queued events and
+ * before the block renders: what it triggers sounds from that block. Set only before the audio
+ * context starts (pocket_lxr_init clears it). */
+typedef void (*pocket_lxr_hook)(void);
+void pocket_lxr_set_block_hook(pocket_lxr_hook hook);
+
 /* ---------------------------------------------------------------- audio context */
+/* Trigger at once, at the programmed pitch: for the block hook, which must not use the ring
+ * (the control context is its only producer). The same path as pocket_lxr_trigger.
+ * `trig` and `velocity` (1-127) are not checked. */
+void pocket_lxr_trigger_now(int trig, int velocity);
 /* Render `frames` stereo frames (a multiple of POCKET_LXR_BLOCK) of the six voices, each
  * panned as the firmware pans it at trigger time, as signed Q23 interleaved L/R. With
  * `accumulate`, adds to `out` (saturating) instead of overwriting it. */

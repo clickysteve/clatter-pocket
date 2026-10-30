@@ -14,6 +14,7 @@
 
 #include <stdint.h>
 #include "pocket_lxr.h"
+#include "pocket_seq.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,7 +35,7 @@ enum {
 	POCKET_ENC_SELECT, POCKET_ENC_ALGORITHM, POCKET_ENC_KNOB1, POCKET_ENC_KNOB2, POCKET_ENC_KNOB3,
 	POCKET_ENC_KNOB4, POCKET_ENC_PRESETS
 };
-#define POCKET_FW_VERSION "0.2.0 UNVERIFIED"
+#define POCKET_FW_VERSION "0.3.0 UNVERIFIED"
 
 struct pocket_panel_input {
 	uint32_t keys;                      /* held note keys */
@@ -82,6 +83,18 @@ struct pocket_panel {
 	uint16_t midi_flash_ms, alert_ms;
 	uint32_t alert_overruns;            /* overruns behind the warning */
 	const char* footer;                 /* message of the start-up, SAFE MODE and error screens */
+	/* PATTERN. The pattern, tempo, swing and transport are the sequencer's (pocket_seq.h). */
+	uint8_t step;                       /* selected step */
+	uint8_t generator_knobs;            /* the knobs set the generator, not the step */
+	uint8_t density, complexity;        /* 0-100 */
+	uint8_t style;                      /* pocket_gen.h */
+	uint8_t mutate_strength;            /* POCKET_MUTATE_* */
+	uint8_t locks;                      /* tracks GENERATE and MUTATE leave alone, bit per track */
+	uint8_t settings_changed;           /* a generator setting moved since the last GENERATE */
+	uint16_t seed;                      /* 0-9999 */
+	uint16_t mutations;                 /* since the last GENERATE: each one differs */
+	int16_t shown_position;             /* what the screen and the cells last showed */
+	uint32_t shown_steps;
 };
 
 /* The screen is drawn in bands of POCKET_BAND_ROWS rows of POCKET_SCREEN_W pixels, RGB565. */
@@ -95,14 +108,16 @@ struct pocket_panel {
 	(((now) & (1u << POCKET_BTN_HOME)) && ((now) & ~(previous) & (1u << POCKET_BTN_ARP)))
 
 void pocket_panel_init(struct pocket_panel* panel);
-/* Apply one control poll: navigation, triggers on key/PLAY presses, parameter steps from
- * encoders. Returns 1 when the exit gesture was made (the caller leaves Pocket mode). */
+/* The first pattern, once the sequencer is initialised and the engine runs. */
+void pocket_panel_start_sequencer(struct pocket_panel* panel);
+/* Apply one control poll: navigation, the transport, the step editor, triggers on key presses,
+ * parameter steps from encoders. Returns 1 when the exit gesture was made (the caller leaves Pocket mode). */
 int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_input* in);
 /* The parameter (PAR_*) behind control c for the selected trigger. */
 int pocket_panel_param(const struct pocket_panel* panel, int c);
 /* A voice triggered from MIDI (the adapter has already sent it to the engine). */
 void pocket_panel_midi_hit(struct pocket_panel* panel, int trigger, unsigned note);
-/* Time passing: ends activity indications and the warning. */
+/* Time passing: follows the sequencer, ends activity indications and the warning. */
 void pocket_panel_tick(struct pocket_panel* panel, uint32_t elapsed_ms);
 /* New measurements: stores them, redraws what shows them, raises the overrun warning. */
 void pocket_panel_update_status(struct pocket_panel* panel, struct pocket_panel_status* status,

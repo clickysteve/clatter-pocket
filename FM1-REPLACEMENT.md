@@ -16,8 +16,8 @@ below. `python3 tools/make-installer-page.py` makes an installer page for it.
 | | |
 |---|---|
 | Package | `clatter-pocket-fm1-replace-UNVERIFIED.fwsc`, 492,084 bytes |
-| Package SHA-256 | `8dcccacf5d382de416034cd46a857422868c38c3b2a1f85ec478fa60d8e5c18a` |
-| ELF SHA-256 | `12b83bd411ba8cdf0e1e0c4578ca0d33f0e4193d1489389c9a7e47f332968d2e` |
+| Package SHA-256 | `ab1869da3db532dfc5117c2bb15adb6cf029e5d433e3a7fad6f9298d2c35ea70` |
+| ELF SHA-256 | `be6f27e6023559c4efd1aae98acd5d53696fbad9f60031c49c1b6323a6cd9c62` |
 | Built from | fm1_open 4c7496d, JieLi 2.5.3, `--replace --single-precision` |
 | Reproducible | two builds from an empty `build/` gave identical bytes |
 | Checks | `python3 tools/check-firmware.py`; `make emu-test` runs it in the emulator |
@@ -25,7 +25,8 @@ below. `python3 tools/make-installer-page.py` makes an installer page for it.
 **Status, 2026-10-30: built and packaged; runs in the FM-1 emulator; not flashed; not run on
 hardware.** Everything below comes from the link map, the ELF, the SDK's firmware report and
 packager, host tests and the emulator. None of it comes from a device. docs/POCKET-UI.md has
-the interface, and why an early emulator run appeared to show the stock interface. PRE-FLASH-AUDIT.md has the full audit;
+the interface, and why an early emulator run appeared to show the stock interface;
+docs/POCKET-SEQUENCER.md has the sequencer. PRE-FLASH-AUDIT.md has the full audit, of commit `b3092fe`;
 FIRST-HARDWARE-TEST.md has the test procedure.
 
 ## The flash budget
@@ -42,7 +43,8 @@ The first report gave 479,232: that figure left out the boot area, BTIF and the 
 | Beside stock, tables as compiled | 586,920 | 132,999 over |
 | Beside stock, tables packed | 507,592 | 53,671 over |
 | Replacing the stock application, tables packed, `-Oz` control code (first interface) | 421,212 | 32,709 free |
-| **The same with the page interface (docs/POCKET-UI.md)** | **423,100** | **30,821 free** |
+| The same with the page interface (docs/POCKET-UI.md) | 423,100 | 30,821 free |
+| **The same with the sequencer (docs/POCKET-SEQUENCER.md)** | **430,908** | **23,013 free** |
 
 The SDK's binary library (`libfm1_engine.a`) is a single pre-linked object. `--gc-sections`
 removes what nothing references any more, but the library still references its own
@@ -80,7 +82,7 @@ rounded to 4 KiB. The VM holds Bluetooth paired devices
 (`get_remote_device_info_from_vm`) and syscfg items, and the SDK validates its area by ID
 (`vm_check_id`, `vm_area_check`, `vm_reset`, `_vm_area_erase`). Left alone, a smaller
 image would move the VM's start into flash the previous firmware used for code. So
-CLATTER Pocket builds pad the packaged application with 28,614 erased-flash bytes (`0xFF`,
+CLATTER Pocket builds pad the packaged application with erased-flash bytes (`0xFF`,
 after the last section; never executed or copied), and the build fails unless the result
 is the stock layout. `tools/fwsc-layout.py` decodes the records of both packages:
 
@@ -125,7 +127,7 @@ from the replacement, by input file, with sizes, 60,831 bytes in total. It is ge
 | Audio output (I2S DMA, 44.1 kHz, 128-frame blocks, Q23 stereo) | kept (`app/board/audio.c`); CLATTER Pocket renders the instrument |
 | MASTER knob | output level 0 to 127 with the stock ramp (`audio_output.c`) |
 | USB audio in (mixed) and out (recording); Bluetooth audio in (mixed) | kept (`audio_output.c`); Bluetooth enabled at start-up like stock (on, music and MIDI, BLE Peripheral) |
-| MIDI in over USB, BLE and DIN/TRS | kept; General MIDI drum notes on any channel trigger the seven LXR voices at their programmed pitch |
+| MIDI in over USB, BLE and DIN/TRS | kept; General MIDI drum notes on any channel trigger the seven LXR voices at their programmed pitch and velocity |
 | MIDI out | linked (SDK), unused |
 | BLE roles, scan and connect | Peripheral at start-up; the rest of the API is linked (the SDK check requires it), with no page yet |
 | 27 keys, 14 buttons, 7 encoders, LCD | kept (`app/board/panel.c`): the CLATTER Pocket interface (docs/POCKET-UI.md) |
@@ -133,7 +135,7 @@ from the replacement, by input file, with sizes, 60,831 bytes in total. It is ge
 | **Firmware update over USB-MIDI** | kept, in the SDK, untouched: handled before application SysEx, in the higher-priority `update` task (PRE-FLASH-AUDIT.md) |
 | User partition | **untouched**; readable again after reinstalling stock |
 | Workbench project, sample and voice backup | **not available** while CLATTER Pocket is installed: back up first |
-| Stock instrument, sequencer, arpeggiator, effects | not available (code partly present, unreachable) |
+| Stock instrument, sequencer, arpeggiator, effects | not available (code partly present, unreachable); CLATTER Pocket has its own sequencer |
 
 ## Start-up, safe mode, diagnostics
 
@@ -175,9 +177,9 @@ package must keep the stock layout.
 
 | | Stock | Replacement |
 |---|---|---|
-| `.ram0_data` (SRAM code and initialised data) | 80,968 | 104,924 |
-| `.ram0_bss` | 195,232 | 284,588 (of which 102,238 are the unpacked LXR tables) |
-| Runtime heap (SDK minimum 49,152) | 247,340 | **134,028** (84,876 above the minimum) |
+| `.ram0_data` (SRAM code and initialised data) | 80,968 | 105,756 |
+| `.ram0_bss` | 195,232 | 284,876 (of which 102,238 are the unpacked LXR tables) |
+| Runtime heap (SDK minimum 49,152) | 247,340 | **132,908** (83,756 above the minimum) |
 
 CLATTER Pocket allocates nothing at runtime: no allocator call in its code (checked in the
 ELF). The heap is left to the SDK's RTOS, Bluetooth and USB, which the 49,152-byte minimum
@@ -204,8 +206,9 @@ Nothing unpacks in the audio interrupt. `make test` checks:
 ## Compiler settings
 
 - **Control-task-only code** stays in flash and is compiled with `-Oz`: the CLATTER Pocket
-  application unit, the panel, MIDI parsing and the table unpacker.
-- **The LXR DSP** keeps `-O2` and stays in SRAM: it runs in the audio interrupt.
+  application unit, the panel, the pattern generator, MIDI parsing and the table unpacker.
+- **The LXR DSP** and the sequencer's clock keep `-O2` and stay in SRAM: they run in the audio
+  interrupt.
 - **Single precision** (`--single-precision`): no CLATTER Pocket function calls a software
   double routine (checked in the ELF).
 - **`sqrtf`:** the shim's wrappers are renamed so `sqrtf` resolves to a real,

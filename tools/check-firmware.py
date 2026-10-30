@@ -65,7 +65,9 @@ def within(symbol, area):
 
 for symbol in ("groove_screen_init", "groove_screen_control", "pocket_panel_draw_band", "pocket_panel_apply"):
     check(within(symbol, FLASH), f"{symbol} linked, in Flash")
-for symbol in ("clatter_pocket_render", "clatter_pocket_output_level", "pocket_lxr_render_q23", "sqrtf"):
+check(within("pocket_gen_generate", FLASH) and within("pocket_gen_mutate", FLASH), "the generator in Flash: only a button runs it")
+for symbol in ("clatter_pocket_render", "clatter_pocket_output_level", "pocket_lxr_render_q23", "sqrtf",
+               "pocket_seq_block", "pocket_lxr_trigger_now"):
     check(within(symbol, SRAM), f"{symbol} in SRAM")
 check(within("lxr_packed_sine_table", FLASH), "packed tables in Flash, not SRAM")
 for symbol in ("fm1_flash_read", "fm1_flash_write", "fm1_flash_erase", "fm1_flash_map"):

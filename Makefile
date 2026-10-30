@@ -1,7 +1,7 @@
 # CLATTER Pocket - host build (the portable engine, its tests and tools).
 #
 #   make            build the host tools and run the tests
-#   make test       unit tests of the engine (the real LXR DSP, natively compiled)
+#   make test       unit tests of the engine (the real LXR DSP, natively compiled), panel, sequencer
 #   make bench      host timing of the engine per FM-1 audio block
 #   make render     render demo WAVs into build/host/
 #   make compare    compare with CLATTER's WebAssembly engine (needs node and CLATTER_DIR)
@@ -31,7 +31,7 @@ DSP_CFLAGS := -O3 -ffast-math -freciprocal-math -ffp-contract=off -ffreestanding
 # WebAssembly build. Natively the platform provides those; rename CLATTER's out of the way.
 LIBM_RENAMES := -Dmemset=lxr_unused_memset -Dmemcpy=lxr_unused_memcpy -Dmemmove=lxr_unused_memmove \
 	-D__extendhfsf2=lxr_unused_extendhfsf2 -D__truncsfhf2=lxr_unused_truncsfhf2
-HOST_CFLAGS := -O2 -Wall -Wextra -Wno-unused-function -std=c11 -Iengine -Iui -Ihost
+HOST_CFLAGS := -O2 -Wall -Wextra -Wno-unused-function -std=c11 -Iengine -Iui -Iseq -Ihost
 # The firmware places its hot code and state in the STM32's tightly coupled memories with
 # section attributes (config.h: IN_ITCM_RAM, INDTCM, INDTCMZ). Mach-O rejects ELF section
 # names; on macOS turn them into inert annotations. (The FM-1 linker script maps the sections
@@ -50,7 +50,7 @@ PACKED_SRC := $(filter-out $(LXR_TABLES),$(LXR_NOFX)) $(BRIDGE) $(ENGINE) engine
 PACKED_OBJ := $(call obj,packed,$(PACKED_SRC))
 $(PACKED_OBJ): DSP_CFLAGS += -DPOCKET_PACKED_TABLES
 
-TOOLS := $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/bench $(BUILD)/render $(BUILD)/dump
+TOOLS := $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_seq $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/bench $(BUILD)/render $(BUILD)/dump
 
 .PHONY: all test bench render compare compare-sp emu-test firmware packed-tables clean
 all: $(TOOLS) test
@@ -96,8 +96,13 @@ $(BUILD)/lxr_tables.bin: $(BUILD)/dump_tables
 	$(BUILD)/dump_tables $@
 packed-tables: $(BUILD)/lxr_tables.bin
 	python3 tools/pack-lxr-tables.py $< engine/lxr_tables_packed.c
-$(BUILD)/test_panel: host/tests/test_panel.c ui/pocket_panel.c ui/pocket_panel.h $(BUILD)/liblxr_nofx.a
-	$(CC) $(HOST_CFLAGS) $< ui/pocket_panel.c $(BUILD)/liblxr_nofx.a -lm -o $@
+SEQ := seq/pocket_seq.c seq/pocket_gen.c
+SEQ_DEPS := $(SEQ) seq/pocket_seq.h seq/pocket_gen.h seq/pocket_styles.h
+$(BUILD)/test_panel: host/tests/test_panel.c ui/pocket_panel.c ui/pocket_panel.h $(SEQ_DEPS) $(BUILD)/liblxr_nofx.a
+	$(CC) $(HOST_CFLAGS) $< ui/pocket_panel.c $(SEQ) $(BUILD)/liblxr_nofx.a -lm -o $@
+# The sequencer and generator alone, with AddressSanitizer and the undefined-behaviour checks.
+$(BUILD)/test_seq: host/tests/test_seq.c $(SEQ_DEPS)
+	$(CC) $(HOST_CFLAGS) -fsanitize=address,undefined -fno-omit-frame-pointer $< $(SEQ) -o $@
 # MIDI input, with AddressSanitizer: a read past a message fails the test.
 $(BUILD)/test_midi: host/tests/test_midi.c ui/pocket_midi.c ui/pocket_midi.h
 	$(CC) $(HOST_CFLAGS) -fsanitize=address -fno-omit-frame-pointer $< ui/pocket_midi.c -o $@
@@ -117,7 +122,7 @@ $(BUILD)/dump_packed: host/compare/dump.c $(BUILD)/liblxr_packed.a
 $(BUILD)/dump_sp: host/compare/dump.c $(BUILD)/liblxr_sp.a
 	$(CC) $(HOST_CFLAGS) $< $(BUILD)/liblxr_sp.a -lm -o $@
 
-test: $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/lxr_tables.bin $(BUILD)/dump_tables_packed $(BUILD)/dump_nofx $(BUILD)/dump_packed
+test: $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_seq $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/lxr_tables.bin $(BUILD)/dump_tables_packed $(BUILD)/dump_nofx $(BUILD)/dump_packed
 	$(BUILD)/test_engine
 	$(BUILD)/test_engine_nofx
 	$(BUILD)/test_engine_packed
@@ -127,6 +132,7 @@ test: $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed
 	$(BUILD)/dump_packed > $(BUILD)/voices_packed.f32
 	cmp $(BUILD)/voices_nofx.f32 $(BUILD)/voices_packed.f32 && echo "packed tables: comparison script renders bit-identical voices"
 	$(BUILD)/test_panel $(BUILD)/panel.ppm
+	$(BUILD)/test_seq
 	$(BUILD)/test_midi
 	$(BUILD)/test_fm1_libm
 
@@ -144,7 +150,7 @@ compare-sp: $(BUILD)/dump_sp
 	$(BUILD)/dump_sp > $(BUILD)/pocket_dump_sp.bin
 	node host/compare/compare_clatter.mjs $(CLATTER_DIR)/src/audio/lxr/lxr.wasm $(BUILD)/pocket_dump_sp.bin
 
-emu-test:
+emu-test: $(BUILD)/test_seq
 	node tools/emu-test.mjs --wasm $(EMU_WASM) --stock build/fm1-stock/fm1_open-stock-4c7496d.fwsc
 	python3 tools/check-firmware.py
 

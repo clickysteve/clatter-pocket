@@ -6,15 +6,15 @@
  * SPDX-License-Identifier: GPL-3.0-only
  *
  * Only what the firmware can do is on screen: every knob moves an engine parameter that the
- * host tests hear change, and with no sequencer yet, PATTERN says so instead of showing steps
- * (a tempo knob would do nothing: no LFO of the init kit is tempo-synced). Nothing here erases or
- * saves, so no control is destructive.
+ * host tests hear change, or the sequencer. Nothing here touches Flash; the one thing a control
+ * can lose is a pattern, and ENV undoes that.
  *
  * Drawing: the Slop Factory 1-bit look (black on white, inverted title and footer), a 3x5
  * pixel font at twice its size, a band at a time so a page costs one 240x16 buffer.
  */
 #include "pocket_panel.h"
 #include "pocket_params.h"
+#include "pocket_gen.h"
 
 static const char* const triggerNames[POCKET_LXR_TRIGGERS] = {
 	"DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "CL HAT", "OP HAT"
@@ -22,12 +22,13 @@ static const char* const triggerNames[POCKET_LXR_TRIGGERS] = {
 static const char* const cellNames[POCKET_LXR_TRIGGERS] = { "D1", "D2", "D3", "SN", "CY", "CH", "OH" };
 static const char* const pageNames[POCKET_PAGES] = { "MAIN", "PATTERN", "SOUND", "MIXER", "SYSTEM" };
 static const char* const pageFooters[POCKET_PAGES] = {
-	"SEL VOICE  KEYS PLAY HIT",
-	"PLACEHOLDER  KEYS PLAY HIT",
+	"PLAY START/STOP  KEYS HIT",
+	"REC STEP ARP GEN LFO MUTATE",
 	"SEL VOICE  KNOBS EDIT",
 	"SEL VOICE  KNOBS EDIT",
-	"SEL VOICE  KEYS PLAY HIT"
+	"PLAY START/STOP  KEYS HIT"
 };
+static const char* const mutateNames[POCKET_MUTATE_STRENGTHS] = { "LOW", "MED", "BIG" };
 static const uint8_t controlParams[POCKET_CTLS][POCKET_LXR_TRIGGERS] = {
 	{ POCKET_PAR_COARSE1, POCKET_PAR_COARSE2, POCKET_PAR_COARSE3, POCKET_PAR_COARSE4,
 	  POCKET_PAR_COARSE5, POCKET_PAR_COARSE6, POCKET_PAR_COARSE6 },
@@ -48,6 +49,10 @@ static const char* const controlNames[POCKET_CTLS] = { "PITCH", "DECAY", "FILTER
 enum { B_TITLE = 0, B_STATE = 1, B_VOICE = 2, B_MIDI = 3, B_BODY = 4, B_ACTIVITY = 12, B_LEVEL = 13, B_FOOTER = 14 };
 #define ALL_BANDS ((uint16_t)((1u << POCKET_BANDS) - 1))
 #define BODY_BANDS ((uint16_t)(((1u << B_ACTIVITY) - 1) & ~((1u << B_BODY) - 1)))
+/* PATTERN's bands within the body, and MAIN's line that follows the pattern. */
+enum { L_TRANSPORT = 0, L_RULER = 1, L_GRID = 2, L_GRID_LAST = 6, L_LEGEND = 7, L_MAIN_HITS = 4, L_MAIN_RULER = 6 };
+#define GRID_BANDS ((uint16_t)(((2u << (B_BODY + L_GRID_LAST)) - 1) & ~((1u << (B_BODY + L_GRID)) - 1)))
+#define PATTERN_CHANGED ((uint16_t)(GRID_BANDS | (1u << (B_BODY + L_RULER)) | (1u << (B_BODY + L_MAIN_RULER))))
 
 void pocket_panel_init(struct pocket_panel* panel)
 {
@@ -57,6 +62,30 @@ void pocket_panel_init(struct pocket_panel* panel)
 	panel->previous_buttons = ~0u; /* buttons held on entry do not act */
 	panel->dirty = ALL_BANDS;
 	panel->footer = "";
+	panel->density = 50;
+	panel->complexity = 30;
+	panel->seed = 1;
+	panel->mutate_strength = POCKET_MUTATE_MEDIUM;
+	panel->shown_position = POCKET_SEQ_NOT_PLAYING;
+}
+
+static void generate(struct pocket_panel* panel)
+{
+	const struct pocket_gen_settings settings = { panel->seed, panel->density, panel->complexity, panel->style, panel->locks };
+	pocket_gen_generate(pocket_seq_edit_begin(), &settings);
+	pocket_seq_edit_commit();
+	panel->mutations = 0;
+	panel->settings_changed = 0;
+	panel->dirty |= PATTERN_CHANGED;
+}
+
+void pocket_panel_start_sequencer(struct pocket_panel* panel)
+{
+	/* the LXR's velocity gain is a per-voice switch, off in the init kit: without it every step
+	   sounds at full level. 127, the keys' velocity, is unity, so a key sounds as it did. */
+	for (int v = 0; v < POCKET_LXR_VOICES; v++) pocket_lxr_set_param(POCKET_PAR_VOLUME_MOD_ON_OFF1 + v, 1);
+	generate(panel);
+	(void)pocket_seq_edit_begin(); /* nothing to undo yet: both patterns the same */
 }
 
 int pocket_panel_param(const struct pocket_panel* panel, int c)
@@ -89,6 +118,26 @@ static uint16_t less(uint16_t left, uint32_t elapsed)
 	return left > elapsed ? (uint16_t)(left - elapsed) : 0;
 }
 
+/* What the audio context played since the last look. The screen follows it; it cannot lag it. */
+static void follow_sequencer(struct pocket_panel* panel)
+{
+	const int position = pocket_seq_position();
+	if (position != panel->shown_position)
+	{
+		panel->shown_position = (int16_t)position;
+		panel->dirty |= panel->page == POCKET_PAGE_PATTERN ? 1u << (B_BODY + L_RULER) : 1u << (B_BODY + L_MAIN_RULER);
+	}
+	const uint32_t steps = pocket_seq_steps_played();
+	if (steps != panel->shown_steps)
+	{
+		panel->shown_steps = steps;
+		const unsigned tracks = pocket_seq_last_tracks();
+		for (int t = 0; t < POCKET_LXR_TRIGGERS; t++)
+			if (tracks & (1u << t)) panel->flash_ms[t] = POCKET_FLASH_MS;
+		if (tracks) panel->dirty |= (1u << B_ACTIVITY) | (panel->page == POCKET_PAGE_MAIN ? 1u << (B_BODY + L_MAIN_HITS) : 0u);
+	}
+}
+
 void pocket_panel_tick(struct pocket_panel* panel, uint32_t elapsed_ms)
 {
 	for (int t = 0; t < POCKET_LXR_TRIGGERS; t++)
@@ -107,6 +156,7 @@ void pocket_panel_tick(struct pocket_panel* panel, uint32_t elapsed_ms)
 		panel->alert_ms = less(panel->alert_ms, elapsed_ms);
 		if (!panel->alert_ms) panel->dirty |= 1u << B_STATE;
 	}
+	follow_sequencer(panel);
 }
 
 void pocket_panel_update_status(struct pocket_panel* panel, struct pocket_panel_status* status,
@@ -156,6 +206,93 @@ static void edit(struct pocket_panel* panel, int control, int band, int delta)
 	panel->dirty |= 3u << band;
 }
 
+static int limited(int v, int lo, int hi)
+{
+	return v < lo ? lo : v > hi ? hi : v;
+}
+
+static int wrapped(int v, int size)
+{
+	v %= size;
+	return v < 0 ? v + size : v;
+}
+
+/* The knobs of PATTERN: on the step (and the tempo and swing), or on the generator. */
+static void pattern_knobs(struct pocket_panel* panel, const int16_t* knob)
+{
+	if (!(knob[0] | knob[1] | knob[2] | knob[3])) return;
+	if (panel->generator_knobs)
+	{
+		panel->density = (uint8_t)limited(panel->density + 5 * knob[0], 0, 100);
+		panel->complexity = (uint8_t)limited(panel->complexity + 5 * knob[1], 0, 100);
+		panel->seed = (uint16_t)wrapped(panel->seed + knob[2], 10000);
+		panel->style = (uint8_t)wrapped(panel->style + knob[3], POCKET_GEN_STYLES);
+		panel->settings_changed = 1;
+		panel->dirty |= (1u << (B_BODY + L_TRANSPORT)) | (1u << (B_BODY + L_LEGEND));
+		return;
+	}
+	const int v = pocket_seq_pattern()->vel[panel->trigger][panel->step];
+	if (knob[0] && v)
+	{
+		pocket_seq_set_step(panel->trigger, panel->step, limited(v + 4 * knob[0], 1, 127));
+		panel->dirty |= GRID_BANDS;
+	}
+	if (knob[1])
+	{
+		pocket_seq_set_tempo(pocket_seq_tempo() + knob[1]);
+		pocket_lxr_set_bpm(pocket_seq_tempo()); /* the engine's tempo-synced LFOs */
+	}
+	if (knob[2]) pocket_seq_set_swing(pocket_seq_swing() + knob[2]);
+	if (knob[3]) panel->mutate_strength = (uint8_t)limited(panel->mutate_strength + knob[3], 0, POCKET_MUTATE_STRENGTHS - 1);
+	panel->dirty |= (1u << (B_BODY + L_TRANSPORT)) | (1u << (B_BODY + L_LEGEND));
+}
+
+static void pattern_controls(struct pocket_panel* panel, const struct pocket_panel_input* in, uint32_t pressed)
+{
+	const int step = in->encoders[POCKET_ENC_ALGORITHM];
+	if (step)
+	{
+		panel->step = (uint8_t)wrapped(panel->step + step, POCKET_SEQ_STEPS);
+		panel->dirty |= (1u << B_VOICE) | GRID_BANDS | (1u << (B_BODY + L_RULER)) | (1u << (B_BODY + L_LEGEND));
+	}
+	pattern_knobs(panel, &in->encoders[POCKET_ENC_KNOB1]);
+	if (pressed & (1u << POCKET_BTN_REC))
+	{
+		const int v = pocket_seq_pattern()->vel[panel->trigger][panel->step];
+		pocket_seq_set_step(panel->trigger, panel->step, v ? 0 : POCKET_SEQ_VEL_DEFAULT);
+		panel->dirty |= PATTERN_CHANGED | (1u << (B_BODY + L_LEGEND));
+	}
+	if (pressed & (1u << POCKET_BTN_SCL))
+	{
+		panel->generator_knobs = !panel->generator_knobs;
+		panel->dirty |= (1u << (B_BODY + L_TRANSPORT)) | (1u << (B_BODY + L_LEGEND));
+	}
+	if (pressed & (1u << POCKET_BTN_SAVE))
+	{
+		panel->locks ^= (uint8_t)(1u << panel->trigger);
+		panel->dirty |= (1u << B_VOICE) | GRID_BANDS;
+	}
+	if (pressed & (1u << POCKET_BTN_ARP))
+	{
+		/* a setting moved: that seed with that setting. Otherwise the next seed. */
+		if (!panel->settings_changed) panel->seed = (uint16_t)wrapped(panel->seed + 1, 10000);
+		generate(panel);
+		panel->dirty |= 1u << (B_BODY + L_LEGEND);
+	}
+	if (pressed & (1u << POCKET_BTN_LFO))
+	{
+		struct pocket_pattern* next = pocket_seq_edit_begin();
+		pocket_gen_mutate(next, ((uint32_t)panel->seed << 16) | panel->mutations++, panel->mutate_strength, panel->locks);
+		pocket_seq_edit_commit();
+		panel->dirty |= PATTERN_CHANGED;
+	}
+	if (pressed & (1u << POCKET_BTN_ENV))
+	{
+		pocket_seq_undo();
+		panel->dirty |= PATTERN_CHANGED | (1u << (B_BODY + L_LEGEND));
+	}
+}
+
 int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_input* in)
 {
 	const uint32_t pressedButtons = in->buttons & ~panel->previous_buttons;
@@ -173,7 +310,14 @@ int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_inp
 		panel->trigger = (uint8_t)t;
 		panel->dirty |= (1u << B_VOICE) | BODY_BANDS;
 	}
-	if (panel->page == POCKET_PAGE_SOUND)
+	if (pressedButtons & (1u << POCKET_BTN_PLAY))
+	{
+		pocket_seq_play(!pocket_seq_playing());
+		panel->dirty |= (1u << B_BODY); /* MAIN's and PATTERN's first line */
+	}
+	if (panel->page == POCKET_PAGE_PATTERN)
+		pattern_controls(panel, in, pressedButtons);
+	else if (panel->page == POCKET_PAGE_SOUND)
 	{
 		for (int c = 0; c < 4; c++)
 			if (in->encoders[POCKET_ENC_KNOB1 + c]) edit(panel, POCKET_CTL_PITCH + c, B_BODY + 2 * c, in->encoders[POCKET_ENC_KNOB1 + c]);
@@ -184,7 +328,6 @@ int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_inp
 			if (in->encoders[POCKET_ENC_KNOB1 + c]) edit(panel, POCKET_CTL_LEVEL + c, B_BODY + 2 * c, in->encoders[POCKET_ENC_KNOB1 + c]);
 		if (in->encoders[POCKET_ENC_KNOB1]) panel->dirty |= BODY_BANDS; /* the channel bars */
 	}
-	if (pressedButtons & (1u << POCKET_BTN_PLAY)) hit(panel, 60);
 	for (int k = 0; k < POCKET_KEYS; k++)
 		if (pressedKeys & (1u << k)) hit(panel, 48 + k);
 	return 0;
@@ -314,25 +457,150 @@ static void control(uint16_t* px, int control, int value, const char* knob, unsi
 		fill(px, MARGIN + 2, 4, (w - 4) * value / 127, POCKET_BAND_ROWS - 8, INK);
 }
 
+/* The step grid: 16 steps fit the 240 pixels, so there are no pages. Beats are set apart. */
+#define GRID_X 30
+#define CELL_W 12
+#define ROW_H 11
+#define GRID_ROWS_TOP 1  /* in the first grid band */
+
+static int step_x(int step)
+{
+	return GRID_X + step * CELL_W + (step / 4) * 2;
+}
+
+/* A step: a bar as tall as its velocity, a dot when off. */
+static void cell(uint16_t* px, int x, int y, int velocity, int selected)
+{
+	if (selected)
+	{
+		fill(px, x, y, CELL_W - 1, ROW_H, INK);
+		fill(px, x + 1, y + 1, CELL_W - 3, ROW_H - 2, PAPER);
+	}
+	if (velocity)
+	{
+		const int h = 1 + velocity * 7 / 127;
+		fill(px, x + 2, y + ROW_H - 2 - h, CELL_W - 5, h, INK);
+	}
+	else
+		fill(px, x + 4, y + 4, 2, 2, INK);
+}
+
+static void draw_grid(const struct pocket_panel* panel, unsigned line, uint16_t* px)
+{
+	const struct pocket_pattern* pattern = pocket_seq_pattern();
+	const int top = GRID_ROWS_TOP - (int)line * POCKET_BAND_ROWS;
+	for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
+	{
+		const int y = top + t * ROW_H;
+		if (y + ROW_H <= 0 || y >= POCKET_BAND_ROWS) continue;
+		const int selected = t == panel->trigger;
+		if (selected) fill(px, MARGIN - 2, y - 1, 20, ROW_H + 1, INK);
+		text_scaled(px, MARGIN, y, cellNames[t], selected ? PAPER : INK, 2);
+		if (panel->locks & (1u << t)) fill(px, GRID_X - 5, y + 1, 3, ROW_H - 3, ACCENT);
+		for (int s = 0; s < POCKET_SEQ_STEPS; s++)
+			cell(px, step_x(s), y, pattern->vel[t][s], selected && s == panel->step);
+	}
+}
+
+/* A row of the pattern's activity: how many tracks play each step, the playhead over it. */
+static void draw_ruler(const struct pocket_panel* panel, int cursor, uint16_t* px)
+{
+	const struct pocket_pattern* pattern = pocket_seq_pattern();
+	const int position = pocket_seq_position();
+	for (int s = 0; s < POCKET_SEQ_STEPS; s++)
+	{
+		const int x = step_x(s), here = s == position;
+		int tracks = 0;
+		for (int t = 0; t < POCKET_SEQ_TRACKS; t++) tracks += pattern->vel[t][s] != 0;
+		if (here) fill(px, x, 1, CELL_W - 1, 13, ACCENT);
+		if (tracks) fill(px, x + 2, 13 - 2 * tracks, CELL_W - 5, 2 * tracks, INK);
+		if (!(s & 3)) fill(px, x, 13, CELL_W - 1, 1, INK);
+		if (cursor && s == panel->step) fill(px, x, 14, CELL_W - 1, 2, INK);
+	}
+}
+
+/* Stop or the inverted PLAY. Returns the x after it. */
+static int transport(uint16_t* px, int y)
+{
+	const int playing = pocket_seq_playing();
+	if (playing) fill(px, MARGIN - 2, 0, 4 * ADVANCE + 2, POCKET_BAND_ROWS, INK);
+	return text(px, MARGIN, y, playing ? "PLAY" : "STOP", playing ? PAPER : INK);
+}
+
+static char* append(char* d, const char* s)
+{
+	while (*s) *d++ = *s++;
+	*d = 0;
+	return d;
+}
+
+static char* append_number(char* d, uint32_t v)
+{
+	char a[12];
+	return append(d, number(a, v, 0));
+}
+
+static void draw_transport(const struct pocket_panel* panel, uint16_t* px)
+{
+	const int y = (POCKET_BAND_ROWS - 10) / 2;
+	char b[24], *d = b;
+	transport(px, y);
+	d = append_number(d, (uint32_t)pocket_seq_tempo());
+	append(d, " BPM");
+	text(px, 48, y, b, INK);
+	if (panel->generator_knobs)
+		text(px, 112, y, pocket_gen_style_name(panel->style), INK);
+	else
+	{
+		d = append(b, "SWING ");
+		append_number(d, (uint32_t)pocket_seq_swing());
+		text(px, 128, y, b, INK);
+	}
+}
+
+/* The four knobs' fields, in knob order. */
+static void draw_legend(const struct pocket_panel* panel, uint16_t* px)
+{
+	char b[40], *d = b;
+	if (panel->generator_knobs)
+	{
+		d = append_number(append(d, "DEN"), panel->density);
+		d = append_number(append(d, " CPX"), panel->complexity);
+		d = append_number(append(d, " SEED"), panel->seed);
+		append(d, " STYLE");
+	}
+	else
+	{
+		const int v = pocket_seq_pattern()->vel[panel->trigger][panel->step];
+		d = append(d, "VEL");
+		d = v ? append_number(d, (uint32_t)v) : append(d, "--");
+		d = append_number(append(d, " BPM"), (uint32_t)pocket_seq_tempo());
+		d = append_number(append(d, " SWG"), (uint32_t)pocket_seq_swing());
+		d = append(append(d, " MUT"), mutateNames[panel->mutate_strength]);
+	}
+	text(px, MARGIN, (POCKET_BAND_ROWS - 10) / 2, b, INK);
+}
+
 static const char* const knobNames[4] = { "KNOB 1", "KNOB 2", "KNOB 3", "KNOB 4" };
 
 static void draw_main(const struct pocket_panel* panel, unsigned line, uint16_t* px)
 {
-	if (line == 0) label_value(px, "MODE", "LIVE HITS");
-	if (line == 1) label_value(px, "PATTERN", "NO SEQ YET");
-	if (line == 2) label_value(px, "TEMPO", "NO SEQ YET");
-	if (line == 3) label_value(px, "TRANSPORT", "NO SEQ YET");
+	char a[12], b[16];
+	if (line == 0) transport(px, (POCKET_BAND_ROWS - 10) / 2);
+	if (line == 1) label_value(px, "TEMPO", concat(b, number(a, (uint32_t)pocket_seq_tempo(), 0), " BPM"));
+	if (line == 2) label_number(px, "SWING", (uint32_t)pocket_seq_swing());
+	if (line == 3) label_value(px, "STYLE", pocket_gen_style_name(panel->style));
+	if (line == L_MAIN_HITS) label_number(px, "SEQ HITS", pocket_seq_triggers());
 	if (line == 5) label_number(px, "HITS", panel->hits);
+	if (line == L_MAIN_RULER) draw_ruler(panel, 0, px);
 }
 
-static void draw_pattern(unsigned line, uint16_t* px)
+static void draw_pattern(const struct pocket_panel* panel, unsigned line, uint16_t* px)
 {
-	const int y = (POCKET_BAND_ROWS - 10) / 2;
-	if (line == 0) text(px, MARGIN, y, "PLACEHOLDER", INK);
-	if (line == 2) text(px, MARGIN, y, "NO SEQUENCER IN THIS BUILD", INK);
-	if (line == 3) text(px, MARGIN, y, "NO PATTERNS, STEPS OR TEMPO", INK);
-	if (line == 5) text(px, MARGIN, y, "PLAY VOICES FROM THE KEYS", INK);
-	if (line == 6) text(px, MARGIN, y, "OR OVER MIDI", INK);
+	if (line == L_TRANSPORT) draw_transport(panel, px);
+	else if (line == L_RULER) draw_ruler(panel, 1, px);
+	else if (line == L_LEGEND) draw_legend(panel, px);
+	else draw_grid(panel, line - L_GRID, px);
 }
 
 static void draw_sound(const struct pocket_panel* panel, unsigned line, uint16_t* px)
@@ -453,6 +721,11 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 		const int x = text(px, MARGIN, y, "VOICE ", INK);
 		fill(px, x - 2, 0, 6 * ADVANCE + 4, POCKET_BAND_ROWS, INK);
 		text(px, x, y, triggerNames[panel->trigger], PAPER);
+		if (panel->page == POCKET_PAGE_PATTERN)
+		{
+			text(px, 128, y, concat(b, "STEP ", number(a, panel->step + 1u, 0)), INK);
+			if (panel->locks & (1u << panel->trigger)) text(px, 200, y, "LOCK", INK);
+		}
 		return;
 	}
 	if (band == B_MIDI)
@@ -497,7 +770,7 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 		switch (panel->page)
 		{
 		case POCKET_PAGE_MAIN: draw_main(panel, line, px); break;
-		case POCKET_PAGE_PATTERN: draw_pattern(line, px); break;
+		case POCKET_PAGE_PATTERN: draw_pattern(panel, line, px); break;
 		case POCKET_PAGE_SOUND: draw_sound(panel, line, px); break;
 		case POCKET_PAGE_MIXER: draw_mixer(panel, status, line, px); break;
 		default: draw_system(status, line, px); break;

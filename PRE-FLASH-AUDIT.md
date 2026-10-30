@@ -229,7 +229,7 @@ Concurrency:
 
 | | |
 |---|---|
-| Keys, PLAY | trigger the selected voice: keys chromatically from note 48, PLAY at 60 (HOST: panel) |
+| Keys, PLAY | trigger the selected voice: keys chromatically from note 48, PLAY at 60 (HOST: panel). Since this audit PLAY is the sequencer's transport (docs/POCKET-SEQUENCER.md) |
 | Encoders | 1 to 3 set pitch, decay and level of the selected voice; 7 selects the voice (HOST). Physical labels unverified (HARDWARE) |
 | MASTER | ADC 0 to 1023 maps to level 0 to 127 with a 4-count dead band (SOURCE) |
 | HOME | at the 1.5 s point, SAFE MODE; otherwise unused. HOME+ARP does nothing in replacement mode (SOURCE) |

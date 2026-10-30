@@ -24,7 +24,8 @@ Layers, each independent of the one above:
 | LXR-02 synthesis, unchanged | `lxr/upstream/` (byte-identical to CLATTER's import of the firmware, `lxr/MANIFEST.sha256`) | `lxr/shim` |
 | CLATTER's port glue | `lxr/shim/` (HAL/CMSIS intrinsics, libc headers), `lxr/bridge/lxr_params.c` (the firmware's parameter handler), `lxr/bridge/libm.c` | nothing platform-specific |
 | Engine host | `engine/pocket_lxr.c/.h`, `engine/fx_off.c` / `fx_on.c`, `engine/pocket_params.h` (generated) | the two above |
-| Panel | `ui/pocket_panel.c/.h` | engine host API only |
+| Sequencer and generator | `seq/` | nothing (voices reached by a function pointer) |
+| Panel | `ui/pocket_panel.c/.h` | engine host and sequencer APIs only |
 | FM-1 adapter | `firmware/fm1/app/clatter_pocket/`, `fm1_open.patch`, `pocket_fm1_config.h` | SDK API |
 | Host harness | `host/` | engine host, panel |
 
@@ -44,8 +45,8 @@ Layers, each independent of the one above:
   bounded. The firmware's own parameter handler runs in the audio context. A kit reload is
   247 events, spread over eight blocks.
 - **Trigger timing** is the LXR's own: hits take effect at 64-sample block boundaries
-  (1.45 ms), as on the LXR-02. A sequencer will timestamp events in samples; the engine can
-  split blocks at 64-sample granularity without changing the firmware.
+  (1.45 ms), as on the LXR-02. The sequencer's clock runs at those boundaries, in exact integer
+  arithmetic (docs/POCKET-SEQUENCER.md).
 - **Block size.** The FM-1 delivers 128-frame blocks; the engine renders two LXR blocks per
   FM-1 block. Sample rate: the firmware's coefficients are for `REAL_FS` = 44 140 Hz; the
   FM-1 runs at 44 100 (hardware 44 118) Hz, so pitches are 1.6 cents flat and envelopes

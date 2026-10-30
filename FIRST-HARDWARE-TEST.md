@@ -112,7 +112,7 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
 
 ## First audio test
 
-1. MASTER low. Press **PLAY**: DRUM 1 sounds once at its programmed pitch.
+1. MASTER low. Press the **13th note key**: DRUM 1 sounds once at its programmed pitch.
 2. Raise MASTER: the level follows smoothly. Fully down is silent.
 3. The level meter moves with each hit and the DRUM 1 cell flashes; CLIPPED stays 0 at
    moderate MASTER. Listen for
