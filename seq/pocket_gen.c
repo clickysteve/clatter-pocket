@@ -24,7 +24,7 @@
 #include "pocket_gen.h"
 
 enum { KICK, LOW_TOM, HIGH_TOM, SNARE, CYMBAL, CLOSED_HAT, OPEN_HAT };
-enum { SALT_GEN = 1, SALT_VEL = 2, SALT_FILL = 4, SALT_SHAPE = 28, SALT_MUTATE = 29 };
+enum { SALT_GEN = 1, SALT_VEL = 2, SALT_FILL = 4, SALT_SHAPE = 28, SALT_MUTATE = 29, SALT_TRACK = 30 };
 #define CERTAIN 65535u
 
 struct pocket_lane {
@@ -59,7 +59,7 @@ static uint32_t fmix(uint32_t h)
 	return h;
 }
 
-static uint32_t mixin(uint32_t h, uint32_t k)
+uint32_t pocket_gen_mix(uint32_t h, uint32_t k)
 {
 	return fmix((h ^ k) + 0x6a09e667u + (h << 6) + (h >> 2));
 }
@@ -67,7 +67,7 @@ static uint32_t mixin(uint32_t h, uint32_t k)
 /* 0..65535 for (seed, purpose, track, step) */
 static uint32_t chance(uint32_t seed, uint32_t salt, uint32_t track, uint32_t step)
 {
-	return mixin(mixin(mixin(mixin(0x9e3779b9u, seed), salt), track), step) >> 16;
+	return pocket_gen_mix(pocket_gen_mix(pocket_gen_mix(pocket_gen_mix(0x9e3779b9u, seed), salt), track), step) >> 16;
 }
 
 static uint32_t next(uint32_t* state)
@@ -79,7 +79,7 @@ static uint32_t next(uint32_t* state)
 }
 
 /* uniform below n */
-static unsigned below(uint32_t* state, unsigned n)
+unsigned pocket_gen_below(uint32_t* state, unsigned n)
 {
 	return (unsigned)(((next(state) >> 16) * n) >> 16);
 }
@@ -133,7 +133,7 @@ static uint32_t lane_euclid(const struct pocket_lane* lane, const struct pocket_
 	return euclid(len, scaled ? scaled : 1u, chance(s->seed, SALT_GEN, t, 779) * len >> 16);
 }
 
-static void lane_row(uint8_t* row, const struct pocket_lane* lane, const struct pocket_gen_settings* s, unsigned t)
+static void lane_row(uint16_t* row, const struct pocket_lane* lane, const struct pocket_gen_settings* s, unsigned t)
 {
 	const unsigned c = s->complexity;
 	const uint32_t euclidRow = lane->hits_hi ? lane_euclid(lane, s, t) : 0;
@@ -174,14 +174,14 @@ static void lane_row(uint8_t* row, const struct pocket_lane* lane, const struct 
 			}
 		}
 		if (chance(s->seed, SALT_GEN, t, i) < apply_density(p, s->density))
-			row[i] = (uint8_t)velocity_for(strength, chance(s->seed, SALT_VEL, t, i));
+			row[i] = (uint16_t)velocity_for(strength, chance(s->seed, SALT_VEL, t, i));
 		else
 			row[i] = 0;
 	}
 }
 
 /* A fill into the end of the bar (fillBar). High toms lead, low toms follow. */
-static void fill_row(uint8_t* row, const struct pocket_gen_settings* s, unsigned t)
+static void fill_row(uint16_t* row, const struct pocket_gen_settings* s, unsigned t)
 {
 	const unsigned fills = 20u + s->complexity * 60u / 100u;
 	if (chance(s->seed, SALT_FILL, t, 100) * 100u >> 16 >= fills) return;
@@ -194,13 +194,13 @@ static void fill_row(uint8_t* row, const struct pocket_gen_settings* s, unsigned
 		if (t == HIGH_TOM) percent = percent * (256u - k * 154u / 256u) / 256u;
 		if (t == LOW_TOM) percent = percent * (102u + k * 154u / 256u) / 256u;
 		if (chance(s->seed, SALT_FILL, t, i) * 100u >> 16 < percent)
-			row[i] = (uint8_t)(60u + (k * 55u >> 8) + (chance(s->seed, SALT_VEL, t, i + 32u) * 16u >> 16));
+			row[i] = (uint16_t)(60u + (k * 55u >> 8) + (chance(s->seed, SALT_VEL, t, i + 32u) * 16u >> 16));
 	}
 }
 
-static void rotate_row(uint8_t* row, unsigned by)
+static void rotate_row(uint16_t* row, unsigned by)
 {
-	uint8_t was[POCKET_SEQ_STEPS];
+	uint16_t was[POCKET_SEQ_STEPS];
 	for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++) was[i] = row[i];
 	for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++) row[(i + by) & (POCKET_SEQ_STEPS - 1u)] = was[i];
 }
@@ -215,7 +215,7 @@ static void shape(struct pocket_pattern* p, const struct pocket_gen_settings* s)
 	{
 		const unsigned t = displaced[i];
 		if (!(s->locks >> t & 1u) && (chance(s->seed, SALT_SHAPE, t, 0) * 100u >> 16) < (c - 60u) * 2u)
-			rotate_row(p->vel[t], 1u + (chance(s->seed, SALT_SHAPE, t, 1) * 15u >> 16));
+			rotate_row(p->cell[t], 1u + (chance(s->seed, SALT_SHAPE, t, 1) * 15u >> 16));
 	}
 	if (c <= 80u) return;
 	if (!(s->locks >> CLOSED_HAT & 1u))
@@ -224,7 +224,7 @@ static void shape(struct pocket_pattern* p, const struct pocket_gen_settings* s)
 		const unsigned len = primes[chance(s->seed, SALT_SHAPE, CLOSED_HAT, 2) * 4u >> 16];
 		const uint32_t row = euclid(len, 2u + (chance(s->seed, SALT_SHAPE, CLOSED_HAT, 3) * (len - 2u) >> 16), chance(s->seed, SALT_SHAPE, CLOSED_HAT, 4) * len >> 16);
 		for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++)
-			p->vel[CLOSED_HAT][i] = row >> i & 1u ? (uint8_t)velocity_for(weight(i), chance(s->seed, SALT_VEL, CLOSED_HAT, i + 64u)) : 0;
+			p->cell[CLOSED_HAT][i] = row >> i & 1u ? (uint16_t)velocity_for(weight(i), chance(s->seed, SALT_VEL, CLOSED_HAT, i + 64u)) : 0;
 	}
 }
 
@@ -234,22 +234,46 @@ static void arrange(struct pocket_pattern* p, const struct pocket_gen_settings* 
 	const struct pocket_style* style = &styles[s->style];
 	const unsigned locks = s->locks;
 	const unsigned anchored = s->complexity <= 80u;
-	uint8_t* kick = p->vel[KICK];
+	uint16_t* kick = p->cell[KICK];
 	for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++)
 	{
-		if (!(locks >> CLOSED_HAT & 1u) && p->vel[OPEN_HAT][i]) p->vel[CLOSED_HAT][i] = 0;
-		if (!(locks >> KICK & 1u) && style->separate && (i == 4u || i == 12u) && p->vel[SNARE][i] > 90u) kick[i] = 0;
+		if (!(locks >> CLOSED_HAT & 1u) && p->cell[OPEN_HAT][i]) p->cell[CLOSED_HAT][i] = 0;
+		if (!(locks >> KICK & 1u) && style->separate && (i == 4u || i == 12u) && POCKET_CELL_VELOCITY(p->cell[SNARE][i]) > 90u) kick[i] = 0;
 	}
 	if (!(locks >> KICK & 1u) && anchored && !style->lanes[KICK].hits_hi && !kick[0])
-		kick[0] = (uint8_t)velocity_for(256u, chance(s->seed, SALT_VEL, KICK, 0));
+		kick[0] = (uint16_t)velocity_for(256u, chance(s->seed, SALT_VEL, KICK, 0));
 	for (unsigned t = LOW_TOM; t <= HIGH_TOM; t++)
 		for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++)
-			if (!(locks >> t & 1u) && kick[i] && anchored) p->vel[t][i] = 0;
+			if (!(locks >> t & 1u) && kick[i] && anchored) p->cell[t][i] = 0;
 	/* never an empty bar: a generated pattern always plays something */
 	unsigned hits = 0;
 	for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
-		for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++) hits += p->vel[t][i] != 0;
+		for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++) hits += p->cell[t][i] != 0;
 	if (!hits && !(locks & 1u)) kick[0] = 100;
+}
+
+void pocket_gen_track(struct pocket_pattern* p, const struct pocket_gen_settings* s, unsigned track, unsigned take)
+{
+	struct pocket_gen_settings one = *s;
+	one.locks = (uint8_t)(POCKET_GEN_ALL_TRACKS & ~(1u << track));
+	uint16_t was[POCKET_SEQ_STEPS];
+	for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++) was[i] = p->cell[track][i];
+	/* a lane can draw nothing, or be all certainties and draw what is there: neither is a new rhythm */
+	for (unsigned tries = 0; tries < 8u; tries++)
+	{
+		one.seed = pocket_gen_mix(pocket_gen_mix(s->seed, track + SALT_TRACK), take + tries);
+		pocket_gen_generate(p, &one);
+		unsigned hits = 0, differs = 0;
+		for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++)
+		{
+			hits += p->cell[track][i] != 0;
+			differs += (p->cell[track][i] != 0) != (was[i] != 0);
+		}
+		if (hits && differs) return;
+	}
+	const uint32_t row = euclid(POCKET_SEQ_STEPS, 3u + (chance(one.seed, SALT_TRACK, track, 0) * 6u >> 16), 1u + (chance(one.seed, SALT_TRACK, track, 1) * 15u >> 16));
+	for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++)
+		p->cell[track][i] = row >> i & 1u ? (uint16_t)velocity_for(weight(i), chance(one.seed, SALT_VEL, track, i)) : 0;
 }
 
 void pocket_gen_generate(struct pocket_pattern* p, const struct pocket_gen_settings* s)
@@ -258,19 +282,19 @@ void pocket_gen_generate(struct pocket_pattern* p, const struct pocket_gen_setti
 	for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
 	{
 		if (s->locks >> t & 1u) continue;
-		lane_row(p->vel[t], &style->lanes[t], s, t);
-		if (style->fills >> t & 1u) fill_row(p->vel[t], s, t);
+		lane_row(p->cell[t], &style->lanes[t], s, t);
+		if (style->fills >> t & 1u) fill_row(p->cell[t], s, t);
 	}
 	shape(p, s);
 	arrange(p, s);
 }
 
 /* ------------------------------------------------------------------ mutation */
-enum { OP_ADD, OP_REMOVE, OP_SHIFT, OP_VELOCITY, OP_ACCENT, OP_SWAP, OP_DENSITY, OP_REST, OP_RECOMBINE, OP_ROTATE, OP_REVERSE, OPS };
+enum { OP_ADD, OP_REMOVE, OP_SHIFT, OP_VELOCITY, OP_ACCENT, OP_SWAP, OP_DENSITY, OP_REST, OP_RECOMBINE, OP_ROTATE, OP_REVERSE, OP_PITCH, OPS };
 
 /* mutate.ts's weights, and the strength from which each edit is allowed, in 0..256. */
-static const uint8_t opWeight[OPS] = { 24, 20, 16, 12, 8, 8, 5, 4, 5, 3, 2 };
-static const uint8_t opFrom[OPS] = { 0, 0, 0, 0, 0, 38, 77, 90, 102, 154, 154 };
+static const uint8_t opWeight[OPS] = { 24, 20, 16, 12, 8, 8, 5, 4, 5, 3, 2, 6 };
+static const uint8_t opFrom[OPS] = { 0, 0, 0, 0, 0, 38, 77, 90, 102, 154, 154, 0 };
 /* strength 0.2, 0.5, 0.85 of 256, and their 1.4th powers (how many edits) */
 static const uint8_t strengths[POCKET_MUTATE_STRENGTHS] = { 51, 128, 218 };
 static const uint8_t editShare[POCKET_MUTATE_STRENGTHS] = { 27, 97, 204 };
@@ -283,7 +307,7 @@ struct mutation {
 enum { WANT_HIT, WANT_REST, WANT_HIT_WEAK, WANT_ANY_OFF_BAR, WANT_REMOVABLE, WANT_NEAR_HIT };
 
 /* A step wanted by `want`, weak metric positions preferred at low strength (pickPos), or -1. */
-static int pick(struct mutation* m, const uint8_t* row, unsigned want)
+static int pick(struct mutation* m, const uint16_t* row, unsigned want)
 {
 	unsigned total = 0, weights[POCKET_SEQ_STEPS];
 	for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++)
@@ -295,7 +319,7 @@ static int pick(struct mutation* m, const uint8_t* row, unsigned want)
 		case WANT_HIT: ok = row[i] != 0; break;
 		case WANT_REST: ok = row[i] == 0; break;
 		case WANT_ANY_OFF_BAR: ok = i != 0; break;
-		case WANT_REMOVABLE: ok = row[i] && (m->strength > 128u || row[i] < 100u || w < 205u); break;
+		case WANT_REMOVABLE: ok = row[i] && (m->strength > 128u || POCKET_CELL_VELOCITY(row[i]) < 100u || w < 205u); break;
 		case WANT_NEAR_HIT: ok = row[i] || row[(i + 1u) & (POCKET_SEQ_STEPS - 1u)]; break;
 		default: break;
 		}
@@ -304,7 +328,7 @@ static int pick(struct mutation* m, const uint8_t* row, unsigned want)
 		total += weights[i];
 	}
 	if (!total) return -1;
-	unsigned x = below(&m->rng, total);
+	unsigned x = pocket_gen_below(&m->rng, total);
 	for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++)
 	{
 		if (x < weights[i]) return (int)i;
@@ -313,7 +337,7 @@ static int pick(struct mutation* m, const uint8_t* row, unsigned want)
 	return -1;
 }
 
-static unsigned edit(struct mutation* m, uint8_t* row, unsigned op)
+static unsigned edit(struct mutation* m, uint16_t* row, unsigned op)
 {
 	enum { N = POCKET_SEQ_STEPS, BEAT = 4 };
 	int i, j;
@@ -321,7 +345,7 @@ static unsigned edit(struct mutation* m, uint8_t* row, unsigned op)
 	{
 	case OP_ADD:
 		if ((i = pick(m, row, WANT_REST)) < 0) return 0;
-		row[i] = (uint8_t)(45u + below(&m->rng, 45));
+		row[i] = (uint16_t)(45u + pocket_gen_below(&m->rng, 45));
 		return 1;
 	case OP_REMOVE:
 		if ((i = pick(m, row, WANT_REMOVABLE)) < 0) return 0;
@@ -329,7 +353,7 @@ static unsigned edit(struct mutation* m, uint8_t* row, unsigned op)
 		return 1;
 	case OP_SHIFT:
 		if ((i = pick(m, row, WANT_HIT)) < 0) return 0;
-		j = (i + (below(&m->rng, 2) ? 1 : N - 1)) & (N - 1);
+		j = (i + (pocket_gen_below(&m->rng, 2) ? 1 : N - 1)) & (N - 1);
 		if (row[j]) return 0;
 		row[j] = row[i];
 		row[i] = 0;
@@ -338,7 +362,7 @@ static unsigned edit(struct mutation* m, uint8_t* row, unsigned op)
 	{
 		if ((i = pick(m, row, WANT_NEAR_HIT)) < 0) return 0;
 		j = (i + 1) & (N - 1);
-		const uint8_t was = row[i];
+		const uint16_t was = row[i];
 		row[i] = row[j];
 		row[j] = was;
 		return 1;
@@ -346,29 +370,29 @@ static unsigned edit(struct mutation* m, uint8_t* row, unsigned op)
 	case OP_VELOCITY:
 	{
 		if ((i = pick(m, row, WANT_HIT)) < 0) return 0;
-		const int by = 12 + (int)below(&m->rng, 18), v = row[i] + (below(&m->rng, 2) ? by : -by);
-		row[i] = (uint8_t)(v < 1 ? 1 : v > 127 ? 127 : v);
+		const int by = 12 + (int)pocket_gen_below(&m->rng, 18), v = (int)POCKET_CELL_VELOCITY(row[i]) + (pocket_gen_below(&m->rng, 2) ? by : -by);
+		row[i] = POCKET_CELL(v < 1 ? 1 : v > 127 ? 127 : v, POCKET_CELL_NOTE(row[i]));
 		return 1;
 	}
 	case OP_ACCENT:
 		if ((i = pick(m, row, WANT_HIT)) < 0) return 0;
-		row[i] = row[i] >= 110u ? 80u : (uint8_t)(118u + below(&m->rng, 9));
+		row[i] = POCKET_CELL(POCKET_CELL_VELOCITY(row[i]) >= 110u ? 80u : 118u + pocket_gen_below(&m->rng, 9), POCKET_CELL_NOTE(row[i]));
 		return 1;
 	case OP_DENSITY:
 	{
-		const unsigned add = below(&m->rng, 2), wanted = add ? WANT_REST : WANT_HIT;
+		const unsigned add = pocket_gen_below(&m->rng, 2), wanted = add ? WANT_REST : WANT_HIT;
 		unsigned done = 0;
 		for (unsigned c = 0; c < 2u; c++)
 		{
 			if ((i = pick(m, row, wanted)) < 0) break;
-			row[i] = add ? (uint8_t)(40u + below(&m->rng, 30)) : 0;
+			row[i] = add ? (uint16_t)(40u + pocket_gen_below(&m->rng, 30)) : 0;
 			done = 1;
 		}
 		return done;
 	}
 	case OP_REST:
 	{
-		const unsigned length = 2u + below(&m->rng, 3);
+		const unsigned length = 2u + pocket_gen_below(&m->rng, 3);
 		unsigned any = 0;
 		if ((i = pick(m, row, WANT_ANY_OFF_BAR)) < 0) return 0;
 		for (unsigned c = 0; c < length && i + (int)c < N; c++)
@@ -380,24 +404,37 @@ static unsigned edit(struct mutation* m, uint8_t* row, unsigned op)
 	}
 	case OP_RECOMBINE:
 	{
-		const unsigned from = below(&m->rng, N / BEAT);
-		unsigned to = below(&m->rng, N / BEAT - 1);
+		const unsigned from = pocket_gen_below(&m->rng, N / BEAT);
+		unsigned to = pocket_gen_below(&m->rng, N / BEAT - 1);
 		if (to >= from) to++;
 		for (unsigned c = 0; c < BEAT; c++) row[to * BEAT + c] = row[from * BEAT + c];
 		return 1;
 	}
 	case OP_ROTATE:
-		rotate_row(row, below(&m->rng, 2) ? 1u : N - 1u);
+		rotate_row(row, pocket_gen_below(&m->rng, 2) ? 1u : N - 1u);
 		return 1;
 	case OP_REVERSE:
 	{
-		const unsigned at = below(&m->rng, N / BEAT) * BEAT;
+		const unsigned at = pocket_gen_below(&m->rng, N / BEAT) * BEAT;
 		for (unsigned c = 0; c < BEAT / 2; c++)
 		{
-			const uint8_t was = row[at + c];
+			const uint16_t was = row[at + c];
 			row[at + c] = row[at + BEAT - 1u - c];
 			row[at + BEAT - 1u - c] = was;
 		}
+		return 1;
+	}
+	case OP_PITCH:
+	{
+		/* only a track that already plays notes moves, unless the change is meant to be big:
+		   a rhythm of programmed pitches keeps its sound at LOW and MED */
+		static const int8_t intervals[8] = { -12, -7, -5, -2, 2, 5, 7, 12 };
+		unsigned pitched = 0;
+		for (unsigned c = 0; c < N; c++) pitched |= POCKET_CELL_NOTE(row[c]);
+		if ((!pitched && m->strength <= 128u) || (i = pick(m, row, WANT_HIT)) < 0) return 0;
+		const unsigned from = POCKET_CELL_NOTE(row[i]) ? POCKET_CELL_NOTE(row[i]) : POCKET_SEQ_NOTE_PROGRAMMED;
+		const int to = (int)from + intervals[pocket_gen_below(&m->rng, 8)];
+		row[i] = POCKET_CELL(POCKET_CELL_VELOCITY(row[i]), to < 12 || to > 115 ? from : (unsigned)to);
 		return 1;
 	}
 	}
@@ -407,14 +444,14 @@ static unsigned edit(struct mutation* m, uint8_t* row, unsigned op)
 unsigned pocket_gen_mutate(struct pocket_pattern* p, uint32_t seed, unsigned strength, unsigned locks)
 {
 	if (strength >= POCKET_MUTATE_STRENGTHS) strength = POCKET_MUTATE_LARGE;
-	struct mutation m = { mixin(seed, SALT_MUTATE), strengths[strength] };
+	struct mutation m = { pocket_gen_mix(seed, SALT_MUTATE), strengths[strength] };
 	uint8_t tracks[POCKET_SEQ_TRACKS];
 	unsigned count = 0, hits = 0;
 	for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
 	{
 		if (locks >> t & 1u) continue;
 		tracks[count++] = (uint8_t)t;
-		for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++) hits += p->vel[t][i] != 0;
+		for (unsigned i = 0; i < POCKET_SEQ_STEPS; i++) hits += p->cell[t][i] != 0;
 	}
 	if (!count) return 0;
 	unsigned edits = (editShare[strength] * (hits / 2u + 3u) + 128u) >> 8;
@@ -425,14 +462,14 @@ unsigned pocket_gen_mutate(struct pocket_pattern* p, uint32_t seed, unsigned str
 	/* an edit can find nothing to do (a shift into a hit): draw again, within a bound */
 	for (unsigned tries = 0; made < edits && tries < 4u * edits; tries++)
 	{
-		unsigned x = below(&m.rng, total), op = 0;
+		unsigned x = pocket_gen_below(&m.rng, total), op = 0;
 		for (unsigned o = 0; o < OPS; o++)
 		{
 			if (m.strength < opFrom[o]) continue;
 			if (x < opWeight[o]) { op = o; break; }
 			x -= opWeight[o];
 		}
-		made += edit(&m, p->vel[tracks[below(&m.rng, count)]], op);
+		made += edit(&m, p->cell[tracks[pocket_gen_below(&m.rng, count)]], op);
 	}
 	return made;
 }

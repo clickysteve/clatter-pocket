@@ -227,13 +227,13 @@ IN_ITCM_RAM static void apply(const struct event* e)
 	}
 }
 
-IN_ITCM_RAM void pocket_lxr_trigger_now(int trig, int velocity)
+IN_ITCM_RAM void pocket_lxr_trigger_now(int trig, int velocity, int note)
 {
 	struct event e = { 0 };
 	e.type = EV_TRIGGER;
 	e.a = (uint8_t)trig;
 	e.b = (uint8_t)velocity;
-	e.c = 60; /* the programmed pitch */
+	e.c = (uint8_t)note;
 	apply(&e);
 }
 
@@ -343,6 +343,11 @@ int pocket_lxr_load_init_kit(void)
 	for (int p = 1; p < END_OF_SOUND_PARAMETERS && p + 8 < INIT_KIT_SIZE; p++)
 		pocket_lxr_set_param(p, initKit[p + 8]);
 	return 0;
+}
+
+int pocket_lxr_init_kit_value(int p)
+{
+	return p >= 0 && p + 8 < INIT_KIT_SIZE ? initKit[p + 8] : 0;
 }
 
 void pocket_lxr_stats_read(struct pocket_lxr_stats* out)

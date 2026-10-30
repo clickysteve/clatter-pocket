@@ -46,6 +46,8 @@ def check(ok, what):
 image, heap = report["app_image_bytes"], report["runtime_heap_bytes"]
 sections = {s["name"]: s["bytes"] for s in report["sections"]}
 check(report["passed"], "the SDK's firmware checks passed")
+# without it the build succeeds, and the engine runs on software doubles: no FPU for them, no sound
+check("single_precision.h" in open(f"{root}/tree/build/dx7/compile_commands.json").read(), "built --single-precision")
 check(image + MARGIN <= LIMIT, f"image {image}, headroom {LIMIT - image} (keep {MARGIN})")
 check(heap >= HEAP_MIN, f"heap {heap}, SDK minimum {HEAP_MIN}")
 print(f"     .ram0_data {sections['.ram0_data']}, .ram0_bss {sections['.ram0_bss']}")
@@ -65,7 +67,7 @@ def within(symbol, area):
 
 for symbol in ("groove_screen_init", "groove_screen_control", "pocket_panel_draw_band", "pocket_panel_apply"):
     check(within(symbol, FLASH), f"{symbol} linked, in Flash")
-check(within("pocket_gen_generate", FLASH) and within("pocket_gen_mutate", FLASH), "the generator in Flash: only a button runs it")
+check(all(within(f"pocket_{s}", FLASH) for s in ("gen_generate", "gen_track", "gen_mutate", "kit_voice")), "the generators in Flash: only a button runs them")
 for symbol in ("clatter_pocket_render", "clatter_pocket_output_level", "pocket_lxr_render_q23", "sqrtf",
                "pocket_seq_block", "pocket_lxr_trigger_now"):
     check(within(symbol, SRAM), f"{symbol} in SRAM")

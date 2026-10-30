@@ -99,6 +99,8 @@ int pocket_lxr_set_bpm(int bpm);
 /* Reload the firmware's init kit. Queued as individual parameter events, so it is spread
  * over several blocks rather than stalling one. Returns -1 if the ring lacks room. */
 int pocket_lxr_load_init_kit(void);
+/* Parameter p of the firmware's init kit. */
+int pocket_lxr_init_kit_value(int p);
 /* Copy and reset the statistics (peak and backlog reset; counters keep counting). */
 void pocket_lxr_stats_read(struct pocket_lxr_stats* out);
 
@@ -109,10 +111,10 @@ typedef void (*pocket_lxr_hook)(void);
 void pocket_lxr_set_block_hook(pocket_lxr_hook hook);
 
 /* ---------------------------------------------------------------- audio context */
-/* Trigger at once, at the programmed pitch: for the block hook, which must not use the ring
- * (the control context is its only producer). The same path as pocket_lxr_trigger.
- * `trig` and `velocity` (1-127) are not checked. */
-void pocket_lxr_trigger_now(int trig, int velocity);
+/* Trigger at once: for the block hook, which must not use the ring (the control context is its
+ * only producer). The same path as pocket_lxr_trigger. `trig`, `velocity` (1-127) and `note`
+ * (0-127, 60 = the programmed pitch) are not checked. */
+void pocket_lxr_trigger_now(int trig, int velocity, int note);
 /* Render `frames` stereo frames (a multiple of POCKET_LXR_BLOCK) of the six voices, each
  * panned as the firmware pans it at trigger time, as signed Q23 interleaved L/R. With
  * `accumulate`, adds to `out` (saturating) instead of overwriting it. */

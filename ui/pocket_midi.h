@@ -16,10 +16,11 @@
  * 49/51/52/55/57/59 CYMBAL; 42/44 CLOSED HAT; 46 OPEN HAT. */
 int pocket_midi_drum_trigger(unsigned note);
 
-/* Parses one complete message. Returns 1 and sets *trigger and *velocity (1..127) for a
- * note-on (any channel, velocity > 0) of a mapped drum note; 0 for anything else, including
- * note-offs, note-on with velocity 0, other messages, SysEx, short or malformed input (a
- * status byte without bit 7, a data byte with bit 7). Never reads beyond `bytes`. */
-int pocket_midi_parse(const uint8_t* message, size_t bytes, int* trigger, int* velocity);
+/* Parses one complete message. Returns 1 and sets *channel (0..15), *note (0..127) and *velocity
+ * (1..127) for a note-on with velocity > 0; 0 for anything else, including note-offs, note-on with
+ * velocity 0, other messages, SysEx, short or malformed input (a status byte without bit 7, a data
+ * byte with bit 7). Never reads beyond `bytes`. What the note then plays is the panel's: it depends
+ * on the keyboard mode (pocket_panel_midi). */
+int pocket_midi_note_on(const uint8_t* message, size_t bytes, int* channel, int* note, int* velocity);
 
 #endif

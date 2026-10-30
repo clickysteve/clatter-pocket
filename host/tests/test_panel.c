@@ -12,6 +12,7 @@
 #include "pocket_panel.h"
 #include "pocket_seq.h"
 #include "pocket_gen.h"
+#include "pocket_kit.h"
 
 static int failures, checks;
 #define CHECK(cond, ...) do { checks++; if (!(cond)) { failures++; printf("FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while (0)
@@ -38,7 +39,25 @@ static void press(struct pocket_panel* p, uint32_t buttons)
 	poll(p, 0, 0, 0, 0, 0, 0, 0, NULL);
 }
 
-#define KEY_PROGRAMMED (1u << 12)
+#define KEY(note) (1u << ((note) - POCKET_KEY_LOWEST))
+#define KEY_PROGRAMMED KEY(60)
+/* The DRUM keys of the track each trigger's first key plays. */
+static const int firstKey[POCKET_LXR_TRIGGERS] = { 60, 65, 66, 61, 67, 63, 64 };
+
+static void tap_keys(struct pocket_panel* p, uint32_t keys)
+{
+	poll(p, keys, 0, 0, 0, 0, 0, 0, NULL);
+	poll(p, 0, 0, 0, 0, 0, 0, 0, NULL);
+}
+/* SAVE or another button held, a second pressed, both released. */
+static void press2(struct pocket_panel* p, uint32_t held, uint32_t button)
+{
+	poll(p, 0, held, 0, 0, 0, 0, 0, NULL);
+	poll(p, 0, held | button, 0, 0, 0, 0, 0, NULL);
+	poll(p, 0, held, 0, 0, 0, 0, 0, NULL);
+	poll(p, 0, 0, 0, 0, 0, 0, 0, NULL);
+}
+
 static void hit_key(struct pocket_panel* p)
 {
 	poll(p, KEY_PROGRAMMED, 0, 0, 0, 0, 0, 0, NULL);
@@ -126,17 +145,20 @@ static void test_sequencer(void)
 	/* a first pattern is there before anything is pressed, and it is silent until PLAY */
 	int hits = 0;
 	for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
-		for (int s = 0; s < POCKET_SEQ_STEPS; s++) hits += pocket_seq_pattern()->vel[t][s] != 0;
+		for (int s = 0; s < POCKET_SEQ_STEPS; s++) hits += pocket_seq_pattern()->cell[t][s] != 0;
 	CHECK(hits > 8, "a first pattern: %d hits", hits);
 	CHECK(render_peak(50) == 0, "silent until PLAY");
 
 	/* one kick on steps 1 and 9: the sound starts exactly where the clock says */
 	clear_pattern();
 	press(&panel, BUTTON(REC));
-	CHECK(pocket_seq_pattern()->vel[0][0] == POCKET_SEQ_VEL_DEFAULT, "REC sets the selected step");
-	turn(&panel, POCKET_ENC_ALGORITHM, 8);
-	CHECK(panel.step == 8, "ALGORITHM moves the step");
+	tap_keys(&panel, KEY(60));
+	CHECK(pocket_seq_pattern()->cell[0][0] == POCKET_CELL(127, 0), "REC and a key set the selected step: %x", pocket_seq_pattern()->cell[0][0]);
+	turn(&panel, POCKET_ENC_KNOB4, 8);
+	CHECK(panel.step == 8, "KNOB4 moves the step");
+	tap_keys(&panel, KEY(60));
 	press(&panel, BUTTON(REC));
+	render_peak(600); /* the keys' own hits ring out */
 	press(&panel, BUTTON(PLAY));
 	CHECK(pocket_seq_playing(), "PLAY starts the sequencer");
 	render_seconds(RENDER_FRAMES);
@@ -168,16 +190,16 @@ static void test_sequencer(void)
 	/* velocity reaches the sound */
 	clear_pattern();
 	panel.step = 0;
-	press(&panel, BUTTON(REC));
+	pocket_seq_set_step(0, 0, 99, 0);
 	turn(&panel, POCKET_ENC_KNOB1, 7);
-	CHECK(pocket_seq_pattern()->vel[0][0] == 127, "KNOB1 sets the velocity: %d", pocket_seq_pattern()->vel[0][0]);
+	CHECK(pocket_seq_pattern()->cell[0][0] == 127, "KNOB1 sets the velocity: %d", pocket_seq_pattern()->cell[0][0]);
 	for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
 	{
 		int32_t peak[2];
 		for (int soft = 0; soft < 2; soft++)
 		{
 			clear_pattern();
-			pocket_seq_set_step(t, 0, soft ? 30 : 127);
+			pocket_seq_set_step(t, 0, soft ? 30 : 127, 0);
 			pocket_seq_play(1);
 			render_seconds(44100 / 4);
 			pocket_seq_play(0);
@@ -189,7 +211,7 @@ static void test_sequencer(void)
 		CHECK(peak[0] > POCKET_Q23_MAX / 100, "track %d sounds at all: %d", t, peak[0]);
 	}
 	clear_pattern();
-	pocket_seq_set_step(0, 0, 100);
+	pocket_seq_set_step(0, 0, 100, 0);
 
 	/* the knobs, the layer, the limits */
 	turn(&panel, POCKET_ENC_KNOB2, 20);
@@ -199,20 +221,34 @@ static void test_sequencer(void)
 	turn(&panel, POCKET_ENC_KNOB2, 90);
 	turn(&panel, POCKET_ENC_KNOB3, 16);
 	CHECK(pocket_seq_swing() == 66, "KNOB3 sets the swing: %d", pocket_seq_swing());
-	turn(&panel, POCKET_ENC_KNOB4, -5);
-	CHECK(panel.mutate_strength == POCKET_MUTATE_SMALL, "KNOB4 sets the mutation");
-	press(&panel, BUTTON(SCL));
-	CHECK(panel.generator_knobs, "SCL changes the knobs");
-	turn(&panel, POCKET_ENC_KNOB1, 5);
-	turn(&panel, POCKET_ENC_KNOB2, 9);
-	turn(&panel, POCKET_ENC_KNOB3, 41);
-	turn(&panel, POCKET_ENC_KNOB4, 1);
-	CHECK(panel.density == 75 && panel.complexity == 75 && panel.seed == 42 && panel.style == 1, "the generator's knobs");
+	/* GLOBAL holds what the knobs of PATTERN used to: the generator's settings */
+	press(&panel, BUTTON(GLO));
+	CHECK(panel.page == POCKET_PAGE_GLOBAL, "GLO opens GLOBAL");
+	turn(&panel, POCKET_ENC_KNOB1, 12);
+	turn(&panel, POCKET_ENC_KNOB2, -5);
+	CHECK(panel.mutate_strength == POCKET_MUTATE_SMALL, "GLOBAL sets the mutation");
+	turn(&panel, POCKET_ENC_KNOB1, -3);
+	turn(&panel, POCKET_ENC_KNOB2, 25);
+	CHECK(panel.density == 75, "GLOBAL sets the density: %d", panel.density);
+	turn(&panel, POCKET_ENC_KNOB1, 1);
+	turn(&panel, POCKET_ENC_KNOB2, 45);
+	CHECK(panel.complexity == 75, "GLOBAL sets the complexity: %d", panel.complexity);
+	turn(&panel, POCKET_ENC_KNOB1, 1);
+	turn(&panel, POCKET_ENC_KNOB2, 41);
+	CHECK(panel.seed == 42, "GLOBAL sets the seed: %d", panel.seed);
 	CHECK(pocket_seq_tempo() == 120 && pocket_seq_swing() == 66, "not the tempo or swing");
-	turn(&panel, POCKET_ENC_KNOB4, -1);
-	turn(&panel, POCKET_ENC_KNOB3, -43);
+	turn(&panel, POCKET_ENC_KNOB2, -43);
 	CHECK(panel.seed == 9999, "the seed wraps: %d", panel.seed);
-	turn(&panel, POCKET_ENC_KNOB3, 43);
+	turn(&panel, POCKET_ENC_KNOB2, 43);
+	press(&panel, BUTTON(SEQ));
+
+	/* ALGORITHM is the style, and the next GENERATE is the same seed in it */
+	turn(&panel, POCKET_ENC_ALGORITHM, 1);
+	CHECK(panel.style == 1, "ALGORITHM chooses the style");
+	turn(&panel, POCKET_ENC_ALGORITHM, -1);
+	CHECK(panel.style == 0 && panel.step == 0, "not the step");
+	turn(&panel, POCKET_ENC_ALGORITHM, -POCKET_GEN_STYLES);
+	CHECK(panel.style == 0, "the style wraps");
 
 	/* GENERATE: a setting moved, that seed; pressed again, the next */
 	press(&panel, BUTTON(ARP));
@@ -225,9 +261,10 @@ static void test_sequencer(void)
 	press(&panel, BUTTON(ARP));
 	CHECK(panel.seed == 43, "pressed again, the next seed");
 	CHECK(memcmp(&first_pattern, pocket_seq_pattern(), sizeof expected), "another pattern");
-	press(&panel, BUTTON(ENV));
-	CHECK(!memcmp(&first_pattern, pocket_seq_pattern(), sizeof expected), "ENV undoes it");
-	press(&panel, BUTTON(ENV));
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+	CHECK(!memcmp(&first_pattern, pocket_seq_pattern(), sizeof expected), "SAVE+OCT- undoes it");
+	CHECK(panel.locks == 0, "a chord does not lock");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
 
 	/* MUTATE changes the pattern and each press differs; a locked track stays */
 	panel.trigger = 0;
@@ -242,27 +279,28 @@ static void test_sequencer(void)
 		changed += memcmp(&was, pocket_seq_pattern(), sizeof was) != 0;
 	}
 	CHECK(changed >= 19, "MUTATE changes the pattern: %d of 20", changed);
-	CHECK(!memcmp(base.vel[0], pocket_seq_pattern()->vel[0], POCKET_SEQ_STEPS), "MUTATE leaves a locked track");
+	CHECK(!memcmp(base.cell[0], pocket_seq_pattern()->cell[0], sizeof base.cell[0]), "MUTATE leaves a locked track");
 	press(&panel, BUTTON(ARP));
-	CHECK(!memcmp(base.vel[0], pocket_seq_pattern()->vel[0], POCKET_SEQ_STEPS), "GENERATE leaves a locked track");
+	CHECK(!memcmp(base.cell[0], pocket_seq_pattern()->cell[0], sizeof base.cell[0]), "GENERATE leaves a locked track");
 
 	/* MIDI and keys sound over the sequence */
 	press(&panel, BUTTON(PLAY));
+	const uint32_t hits_before = panel.hits;
 	hit_key(&panel);
 	render_seconds(44100);
 	press(&panel, BUTTON(PLAY));
-	CHECK(panel.hits == 1, "keys still play over the sequence: %u", panel.hits);
+	CHECK(panel.hits == hits_before + 1, "keys still play over the sequence: %u", panel.hits - hits_before);
 	struct pocket_lxr_stats stats;
 	pocket_lxr_stats_read(&stats);
 	CHECK(stats.events_dropped == 0, "nothing dropped");
 
-	/* the longest fields, locked, both knob layers, on every page: no crash under test */
+	/* the longest fields, locked, on every page: no crash under test */
 	static uint16_t band[POCKET_SCREEN_W * POCKET_BAND_ROWS];
 	for (unsigned page = 0; page < POCKET_PAGES; page++)
-		for (unsigned layer = 0; layer < 2; layer++)
+		for (unsigned row = 0; row < 17; row++)
 		{
 			panel.page = (uint8_t)page;
-			panel.generator_knobs = (uint8_t)layer;
+			panel.global_row = (uint8_t)row;
 			panel.locks = 0x7f;
 			pocket_seq_set_tempo(POCKET_SEQ_BPM_MAX);
 			panel.seed = 9999;
@@ -272,6 +310,541 @@ static void test_sequencer(void)
 			for (unsigned b = 0; b < POCKET_BANDS; b++) pocket_panel_draw_band(&panel, NULL, b, band);
 		}
 	checks++;
+}
+
+/* How often the output rises through zero: compares the pitch of two hits of one voice. */
+static long crossings(long from, long frames)
+{
+	long n = 0;
+	for (long f = from + 1; f < frames; f++) n += rendered[2 * (f - 1)] < 0 && rendered[2 * f] >= 0;
+	return n;
+}
+
+/* The keyboard: which voice, what pitch, what stays alone. */
+static void test_keyboard(void)
+{
+	struct pocket_panel panel;
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+
+	/* DRUM: each key its instrument, at the programmed pitch whatever the key's position */
+	for (int t = 0; t < POCKET_LXR_TRIGGERS; t++)
+	{
+		static int32_t a[2 * 128 * 40], b[2 * 128 * 40];
+		for (int run = 0; run < 2; run++)
+		{
+			start_engine(&panel);
+			poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+			tap_keys(&panel, KEY(firstKey[t] + 12 * run)); /* the same note an octave up: the same hit */
+			CHECK(panel.flash_ms[t] != 0, "key %d lit track %d", firstKey[t], t);
+			for (int f = 0; f < 40; f++) pocket_lxr_render_q23((run ? b : a) + 256 * f, 128, 0);
+		}
+		CHECK(!memcmp(a, b, sizeof a), "track %d: a DRUM key does not transpose", t);
+		CHECK(panel.trigger == t, "the selection follows the last key: %d", panel.trigger);
+	}
+	/* every key of the keyboard does something, and the map repeats each octave */
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	panel.follow = 0;
+	for (int k = 0; k < POCKET_KEYS; k++)
+	{
+		const uint32_t hits = panel.hits;
+		tap_keys(&panel, 1u << k);
+		render_peak(1);
+		CHECK(panel.hits == hits + 1, "key %d is dead", k);
+	}
+	CHECK(panel.trigger == POCKET_TRIG_DRUM1, "with FOLLOW off the selection stays");
+
+	/* SCL: the mode changes and nothing else */
+	press(&panel, BUTTON(SEQ));
+	pocket_seq_play(1);
+	render_peak(4);
+	const struct pocket_pattern before = *pocket_seq_pattern();
+	const int position = pocket_seq_position();
+	press(&panel, BUTTON(SCL));
+	CHECK(panel.key_mode == POCKET_KEYS_PITCH, "SCL: PITCH");
+	CHECK(!strcmp(panel.notice, "KEYS: PITCH") && panel.notice_ms, "SCL says so: %s", panel.notice);
+	CHECK(pocket_seq_playing() && pocket_seq_position() == position && !memcmp(&before, pocket_seq_pattern(), sizeof before), "SCL leaves the playback and the pattern");
+	CHECK(panel.page == POCKET_PAGE_PATTERN && panel.trigger == POCKET_TRIG_DRUM1, "and the page and the voice");
+	pocket_seq_play(0);
+	render_peak(4);
+
+	/* PITCH: the selected voice, chromatically, an octave a click */
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press(&panel, BUTTON(SCL));
+	poll(&panel, 0, 0, POCKET_TRIG_DRUM2, 0, 0, 0, 0, NULL);
+	const int coarse = pocket_lxr_get_param(POCKET_PAR_COARSE2);
+	long at[3];
+	const int notes[3] = { 60, 72, 67 };
+	for (int i = 0; i < 3; i++)
+	{
+		render_seconds(44100);
+		tap_keys(&panel, KEY(notes[i]));
+		render_seconds(44100 / 2);
+		at[i] = crossings(44100 / 8, 44100 / 2);
+	}
+	CHECK(panel.trigger == POCKET_TRIG_DRUM2, "PITCH keeps the selected voice");
+	CHECK(at[1] > at[0] * 17 / 10, "an octave up is about twice the frequency: %ld, %ld", at[0], at[1]);
+	CHECK(at[2] > at[0] * 12 / 10 && at[2] < at[1], "a fifth is between: %ld %ld %ld", at[0], at[2], at[1]);
+	CHECK(pocket_lxr_get_param(POCKET_PAR_COARSE2) == coarse, "playing a pitch writes nothing to the patch");
+
+	/* the note at which a voice is at home: no transposition can build up */
+	render_seconds(44100);
+	tap_keys(&panel, KEY(72));
+	render_seconds(44100);
+	tap_keys(&panel, KEY(72));
+	render_seconds(44100);
+	tap_keys(&panel, KEY(60));
+	render_seconds(44100 / 2);
+	const long home = crossings(44100 / 8, 44100 / 2);
+	CHECK(home == at[0], "back on C4 the pitch is exactly the first: %ld, %ld", home, at[0]);
+
+	/* OCT in PITCH: clamped, and it moves the notes */
+	for (int i = 0; i < 9; i++) press(&panel, BUTTON(OCT_UP));
+	CHECK(panel.octave == POCKET_OCTAVE_MAX, "the octave clamps: %d", panel.octave);
+	for (int i = 0; i < 9; i++) press(&panel, BUTTON(OCT_DOWN));
+	CHECK(panel.octave == POCKET_OCTAVE_MIN, "the octave clamps: %d", panel.octave);
+	for (int i = 0; i < 3; i++) press(&panel, BUTTON(OCT_UP));
+	press(&panel, BUTTON(OCT_UP));
+	render_seconds(44100);
+	tap_keys(&panel, KEY(60));
+	render_seconds(44100 / 2);
+	CHECK(crossings(44100 / 8, 44100 / 2) == at[1], "OCT+ is the same pitch as the key an octave up");
+
+	/* OCT in DRUM: how hard the keys hit, heard */
+	press(&panel, BUTTON(SCL));
+	const int octave = panel.octave;
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(panel.key_velocity == 100, "OCT- in DRUM: velocity 100: %d", panel.key_velocity);
+	CHECK(panel.octave == octave, "and not the octave");
+	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(panel.key_velocity == 40, "the velocity stops at 40: %d", panel.key_velocity);
+	render_peak(800);
+	tap_keys(&panel, KEY(61));
+	const int32_t soft = render_peak(30);
+	for (int i = 0; i < 3; i++) press(&panel, BUTTON(OCT_UP));
+	CHECK(panel.key_velocity == 127, "and at 127: %d", panel.key_velocity);
+	render_peak(800);
+	tap_keys(&panel, KEY(61));
+	const int32_t loud = render_peak(30);
+	CHECK(soft < loud * 3 / 4, "velocity is heard from the keys: %d, %d", soft, loud);
+}
+
+/* REC, stopped and playing. */
+static void test_recording(void)
+{
+	struct pocket_panel panel;
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press(&panel, BUTTON(SEQ));
+	clear_pattern();
+
+	/* off: the keys record nothing */
+	tap_keys(&panel, KEY(60));
+	CHECK(!pocket_seq_pattern()->cell[0][0], "REC off records nothing");
+	/* a toggle, shown, with a light */
+	press(&panel, BUTTON(REC));
+	CHECK(panel.recording && !strcmp(panel.notice, "REC ON"), "REC on: %s", panel.notice);
+	CHECK(pocket_panel_leds(&panel) & BUTTON(REC), "REC lights");
+	CHECK(!pocket_seq_pattern()->cell[0][0], "pressing REC writes no step");
+
+	/* stopped: the selected step, the pressed key's track */
+	panel.key_velocity = 88;
+	turn(&panel, POCKET_ENC_KNOB4, 4);
+	tap_keys(&panel, KEY(61));
+	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_SNARE][4] == POCKET_CELL(88, 0), "a snare on step 5, at the key velocity");
+	tap_keys(&panel, KEY(60));
+	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_DRUM1][4] == POCKET_CELL(88, 0), "another track on the same step");
+	tap_keys(&panel, KEY(61));
+	CHECK(!pocket_seq_pattern()->cell[POCKET_TRIG_SNARE][4], "the same key removes it");
+	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_DRUM1][4] != 0, "the other track stays");
+	/* PITCH: the selected track, the pressed note */
+	press(&panel, BUTTON(SCL));
+	panel.trigger = POCKET_TRIG_DRUM2;
+	tap_keys(&panel, KEY(62));
+	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_DRUM2][4] == POCKET_CELL(88, 62), "a note on the selected track");
+	CHECK(panel.dirty & (1u << 2), "the voice line, which shows the step's note, is redrawn");
+	tap_keys(&panel, KEY(67));
+	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_DRUM2][4] == POCKET_CELL(88, 67), "a different pitch replaces it");
+	tap_keys(&panel, KEY(67));
+	CHECK(!pocket_seq_pattern()->cell[POCKET_TRIG_DRUM2][4], "the same pitch removes it");
+	tap_keys(&panel, KEY(60));
+	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_DRUM2][4] == POCKET_CELL(88, 0), "C4 is the programmed pitch: no override");
+	press(&panel, BUTTON(OCT_UP));
+	tap_keys(&panel, KEY(60));
+	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_DRUM2][4] == POCKET_CELL(88, 72), "the octave is recorded");
+	press(&panel, BUTTON(OCT_DOWN));
+	/* changing mode reinterprets nothing */
+	const struct pocket_pattern kept = *pocket_seq_pattern();
+	press(&panel, BUTTON(SCL));
+	CHECK(!memcmp(&kept, pocket_seq_pattern(), sizeof kept), "switching modes keeps every note");
+	/* and a DRUM key on a pitched step is another pitch: it replaces, then removes */
+	tap_keys(&panel, KEY(65));
+	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_DRUM2][4] == POCKET_CELL(88, 0), "a DRUM key replaces a pitched step");
+	tap_keys(&panel, KEY(65));
+	CHECK(!pocket_seq_pattern()->cell[POCKET_TRIG_DRUM2][4], "and then removes it");
+
+	/* AUTO STEP moves on after an entry, not after a removal; off by default */
+	panel.step = 0;
+	panel.auto_step = 2;
+	tap_keys(&panel, KEY(60));
+	CHECK(panel.step == 2, "AUTO STEP: %d", panel.step);
+	poll(&panel, KEY(60) | KEY(61), 0, 0, 0, 0, 0, 0, NULL);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	CHECK(panel.step == 4, "a chord is one entry: %d", panel.step);
+	panel.step = 2;
+	tap_keys(&panel, KEY(60));
+	CHECK(panel.step == 2, "a removal stays: %d", panel.step);
+	panel.auto_step = 0;
+
+	/* playing: quantised, and it never removes */
+	clear_pattern();
+	pocket_seq_set_step(POCKET_TRIG_CYMBAL, 2, 77, 0);
+	press(&panel, BUTTON(PLAY));
+	render_peak(1);
+	for (int s = 0; s < POCKET_SEQ_STEPS + 2; s++)
+	{
+		/* a little after each even step, the second time round too */
+		while ((long)pocket_seq_position() != (s & 15)) pocket_lxr_render_q23(out, 64, 0);
+		if (!(s & 1)) tap_keys(&panel, KEY(63));
+	}
+	int on = 0, off = 0;
+	for (int s = 0; s < POCKET_SEQ_STEPS; s++)
+	{
+		const unsigned c = pocket_seq_pattern()->cell[POCKET_TRIG_CLOSED_HAT][s];
+		if (s & 1) off += c != 0;
+		else on += c != 0;
+	}
+	CHECK(on == 8 && !off, "hits land on their steps, and hitting a step again does not erase it: %d on, %d off", on, off);
+	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_CYMBAL][2] == POCKET_CELL(77, 0), "other tracks are preserved");
+	CHECK(pocket_seq_playing(), "recording does not interrupt playback");
+	press(&panel, BUTTON(PLAY));
+	render_peak(4);
+
+	/* a hit late in a step goes to the next, and that step does not play it a second time */
+	clear_pattern();
+	press(&panel, BUTTON(PLAY));
+	render_peak(1);
+	while (pocket_seq_position() != 3) pocket_lxr_render_q23(out, 64, 0);
+	for (int b = 0; b < 64; b++) pocket_lxr_render_q23(out, 64, 0); /* 3/4 of the step */
+	const uint32_t triggers = pocket_seq_triggers();
+	tap_keys(&panel, KEY(60));
+	CHECK(pocket_seq_pattern()->cell[0][4] != 0 && !pocket_seq_pattern()->cell[0][3], "a late hit rounds up");
+	while (pocket_seq_position() != 5) pocket_lxr_render_q23(out, 64, 0);
+	CHECK(pocket_seq_triggers() == triggers, "no double trigger: %u", pocket_seq_triggers() - triggers);
+	while (pocket_seq_position() != 3) pocket_lxr_render_q23(out, 64, 0);
+	while (pocket_seq_position() != 5) pocket_lxr_render_q23(out, 64, 0);
+	CHECK(pocket_seq_triggers() == triggers + 1, "the next time round it plays: %u", pocket_seq_triggers() - triggers);
+
+	/* BEHIND keeps every hit on the step that was sounding */
+	clear_pattern();
+	panel.quantise = POCKET_QUANTISE_BEHIND;
+	while (pocket_seq_position() != 7) pocket_lxr_render_q23(out, 64, 0);
+	for (int b = 0; b < 64; b++) pocket_lxr_render_q23(out, 64, 0);
+	tap_keys(&panel, KEY(60));
+	CHECK(pocket_seq_pattern()->cell[0][7] != 0, "BEHIND stays on the step");
+	press(&panel, BUTTON(PLAY));
+	render_peak(4);
+
+	/* pitched notes recorded live play at their pitch */
+	clear_pattern();
+	panel.quantise = POCKET_QUANTISE_NEAREST;
+	press(&panel, BUTTON(SCL));
+	panel.trigger = POCKET_TRIG_DRUM2;
+	press(&panel, BUTTON(PLAY));
+	render_peak(1);
+	while (pocket_seq_position() != 1) pocket_lxr_render_q23(out, 64, 0);
+	tap_keys(&panel, KEY(72));
+	CHECK(POCKET_CELL_NOTE(pocket_seq_pattern()->cell[POCKET_TRIG_DRUM2][1]) == 72, "a live note keeps its pitch");
+	press(&panel, BUTTON(PLAY));
+	press(&panel, BUTTON(SCL));
+	press(&panel, BUTTON(REC));
+	CHECK(!panel.recording && !strcmp(panel.notice, "REC OFF"), "REC off: %s", panel.notice);
+	render_seconds(44100);
+}
+
+static void settle(struct pocket_panel* p)
+{
+	for (int i = 0; i < 40; i++)
+	{
+		pocket_panel_tick(p, 1);
+		pocket_lxr_render_q23(out, 128, 0);
+	}
+}
+
+static void kit_now(uint8_t* kit)
+{
+	for (int p = 0; p < POCKET_SOUND_PARAMS; p++) kit[p] = (uint8_t)pocket_lxr_get_param(p);
+}
+
+/* PRESETS, ENV, SAVE+ENV, and the way back. The rhythm never moves. */
+static void test_kits(void)
+{
+	struct pocket_panel panel;
+	static uint8_t init[POCKET_SOUND_PARAMS], a[POCKET_SOUND_PARAMS], b[POCKET_SOUND_PARAMS], expected[POCKET_SOUND_PARAMS];
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press(&panel, BUTTON(EDIT));
+	render_peak(8);
+	kit_now(init);
+	const struct pocket_pattern rhythm = *pocket_seq_pattern();
+	press(&panel, BUTTON(PLAY));
+
+	/* PRESETS browses, applies a little at a time, and wraps */
+	struct pocket_panel_input in = { 0, 0, { 0 } };
+	in.encoders[POCKET_ENC_PRESETS] = 1;
+	pocket_panel_apply(&panel, &in);
+	CHECK(panel.kit == 1 && panel.kit_cursor, "PRESETS: the first kit: %d", panel.kit);
+	CHECK(!strncmp(panel.notice, "KIT CLASSIC", 11), "named: %s", panel.notice);
+	panel.dirty = 0;
+	pocket_panel_tick(&panel, 1);
+	struct pocket_lxr_stats stats;
+	pocket_lxr_stats_read(&stats);
+	settle(&panel);
+	CHECK(!panel.kit_cursor, "the kit is applied within a few polls");
+	CHECK(panel.dirty & (1u << 4), "SOUND redraws");
+	kit_now(a);
+	CHECK(memcmp(a, init, sizeof a), "the kit changed the sound");
+	memcpy(expected, init, sizeof expected);
+	pocket_kit_generate(expected, 0, 37, POCKET_KIT_WILD_DEFAULT);
+	CHECK(!memcmp(a, expected, sizeof a), "the kit is its seed's, and the velocity switches stay on");
+	turn(&panel, POCKET_ENC_PRESETS, POCKET_KITS - 1);
+	settle(&panel);
+	kit_now(a);
+	CHECK(panel.kit == 0 && !memcmp(a, init, sizeof a), "PRESETS back to INIT restores the init kit exactly");
+	CHECK(!memcmp(&rhythm, pocket_seq_pattern(), sizeof rhythm), "browsing leaves the rhythm");
+
+	/* ENV: a new kit, the rhythm untouched, from the character PRESETS chose */
+	turn(&panel, POCKET_ENC_PRESETS, 4); /* INDUSTRIAL */
+	settle(&panel);
+	const uint16_t seed = panel.kit_seed;
+	press(&panel, BUTTON(ENV));
+	CHECK(!strcmp(panel.notice, "GENERATING KIT"), "ENV says so: %s", panel.notice);
+	CHECK(panel.kit == 4 && panel.kit_seed == seed + 1 && panel.kit_generated, "the next seed of the same character");
+	settle(&panel);
+	kit_now(a);
+	memcpy(expected, init, sizeof expected);
+	pocket_kit_generate(expected, 3, panel.kit_seed, POCKET_KIT_WILD_DEFAULT);
+	CHECK(!memcmp(a, expected, sizeof a), "ENV's kit is deterministic");
+	pocket_panel_tick(&panel, POCKET_GENERATING_MS);
+	CHECK(!strncmp(panel.notice, "KIT INDUSTRIAL ", 15), "then the kit's name and seed: %s", panel.notice);
+	CHECK(!memcmp(&rhythm, pocket_seq_pattern(), sizeof rhythm), "ENV leaves the rhythm");
+
+	/* SAVE+ENV: one voice, and nothing else */
+	panel.trigger = POCKET_TRIG_SNARE;
+	press2(&panel, BUTTON(SAVE), BUTTON(ENV));
+	settle(&panel);
+	kit_now(b);
+	CHECK(panel.locks == 0, "a chord does not lock");
+	CHECK(b[POCKET_PAR_MIX1] != a[POCKET_PAR_MIX1] || b[POCKET_PAR_VELOD4] != a[POCKET_PAR_VELOD4] || b[POCKET_PAR_COARSE4] != a[POCKET_PAR_COARSE4], "the snare changed");
+	static const uint8_t others[] = { POCKET_PAR_COARSE1, POCKET_PAR_COARSE2, POCKET_PAR_COARSE3, POCKET_PAR_COARSE5, POCKET_PAR_COARSE6,
+		POCKET_PAR_VELOD1, POCKET_PAR_VELOD2, POCKET_PAR_VELOD3, POCKET_PAR_VELOD5, POCKET_PAR_VELOD6_CLOSED, POCKET_PAR_VELOD6_OPEN,
+		POCKET_PAR_VOL1, POCKET_PAR_VOL2, POCKET_PAR_VOL3, POCKET_PAR_VOL5, POCKET_PAR_VOL6, POCKET_PAR_FILTER_FREQ_1, POCKET_PAR_FILTER_FREQ_6 };
+	int moved = 0;
+	for (unsigned i = 0; i < sizeof others; i++) moved += a[others[i]] != b[others[i]];
+	CHECK(!moved, "the other voices stayed: %d moved", moved);
+	CHECK(!memcmp(&rhythm, pocket_seq_pattern(), sizeof rhythm), "SAVE+ENV leaves the rhythm");
+	/* the two hats are one voice: on either, the same parameters move */
+	panel.trigger = POCKET_TRIG_OPEN_HAT;
+	press2(&panel, BUTTON(SAVE), BUTTON(ENV));
+	settle(&panel);
+	kit_now(a);
+	CHECK(a[POCKET_PAR_MOD_OSC_GAIN1] != b[POCKET_PAR_MOD_OSC_GAIN1] || a[POCKET_PAR_COARSE6] != b[POCKET_PAR_COARSE6], "the hat voice changed");
+	CHECK(a[POCKET_PAR_COARSE4] == b[POCKET_PAR_COARSE4], "and not the snare");
+
+	/* SAVE+OCT+: back to the kit before, and forward again */
+	kit_now(a);
+	panel.trigger = POCKET_TRIG_DRUM1;
+	press(&panel, BUTTON(ENV));
+	settle(&panel);
+	kit_now(b);
+	CHECK(memcmp(a, b, sizeof a), "another kit");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_UP));
+	settle(&panel);
+	static uint8_t c[POCKET_SOUND_PARAMS];
+	kit_now(c);
+	CHECK(!memcmp(a, c, sizeof a), "SAVE+OCT+ restores the kit before, with its edits");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_UP));
+	settle(&panel);
+	kit_now(c);
+	CHECK(!memcmp(b, c, sizeof b), "and goes forward again");
+
+	/* an unsaved kit is not lost by browsing away from it */
+	press(&panel, BUTTON(ENV));
+	settle(&panel);
+	turn(&panel, POCKET_ENC_KNOB1, 3); /* a hand edit on SOUND */
+	settle(&panel);
+	CHECK(panel.kit_edited, "an edit marks the kit");
+	kit_now(a);
+	turn(&panel, POCKET_ENC_PRESETS, 1);
+	settle(&panel);
+	turn(&panel, POCKET_ENC_PRESETS, 1);
+	settle(&panel);
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_UP));
+	settle(&panel);
+	kit_now(c);
+	CHECK(!memcmp(a, c, sizeof a), "browsing away keeps the edited kit");
+
+	/* a whole kit loaded at full tilt while the pattern plays: nothing dropped, no clipping run away */
+	for (int i = 0; i < 40; i++)
+	{
+		press(&panel, BUTTON(ENV));
+		for (int p = 0; p < 6; p++)
+		{
+			pocket_panel_tick(&panel, 1);
+			pocket_lxr_render_q23(out, 128, 0);
+		}
+	}
+	settle(&panel);
+	pocket_lxr_stats_read(&stats);
+	CHECK(stats.events_dropped == 0, "kit changes dropped %u events", stats.events_dropped);
+	CHECK(!memcmp(&rhythm, pocket_seq_pattern(), sizeof rhythm), "forty kits and the same rhythm");
+	press(&panel, BUTTON(PLAY));
+	render_seconds(44100);
+}
+
+static void test_one_track(void)
+{
+	struct pocket_panel panel;
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press(&panel, BUTTON(SEQ));
+	panel.trigger = POCKET_TRIG_SNARE;
+	struct pocket_pattern before = *pocket_seq_pattern();
+	press2(&panel, BUTTON(SAVE), BUTTON(ARP));
+	CHECK(panel.locks == 0, "SAVE+ARP does not lock");
+	CHECK(panel.seed == 1, "nor take a seed");
+	CHECK(memcmp(before.cell[3], pocket_seq_pattern()->cell[3], sizeof before.cell[3]), "SAVE+ARP changed the snare");
+	for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
+		if (t != 3) CHECK(!memcmp(before.cell[t], pocket_seq_pattern()->cell[t], sizeof before.cell[t]), "SAVE+ARP changed track %d", t);
+	const struct pocket_pattern once = *pocket_seq_pattern();
+	press2(&panel, BUTTON(SAVE), BUTTON(ARP));
+	CHECK(memcmp(&once, pocket_seq_pattern(), sizeof once), "again: another rhythm");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+	CHECK(!memcmp(&once, pocket_seq_pattern(), sizeof once), "undone");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+
+	/* SAVE+LFO mutates the selected track only */
+	before = *pocket_seq_pattern();
+	int changed = 0;
+	for (int i = 0; i < 12; i++)
+	{
+		press2(&panel, BUTTON(SAVE), BUTTON(LFO));
+		changed += memcmp(before.cell[3], pocket_seq_pattern()->cell[3], sizeof before.cell[3]) != 0;
+		before.cell[3][0] = pocket_seq_pattern()->cell[3][0];
+	}
+	CHECK(changed > 0, "SAVE+LFO changes the track");
+	for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
+		if (t != 3) CHECK(!memcmp(before.cell[t], pocket_seq_pattern()->cell[t], sizeof before.cell[t]), "SAVE+LFO changed track %d", t);
+
+	/* a locked track refuses, and says why; SAVE alone is still the lock */
+	press(&panel, BUTTON(SAVE));
+	CHECK(panel.locks == 1u << 3, "SAVE alone locks");
+	CHECK(pocket_panel_leds(&panel) & BUTTON(SAVE), "and lights");
+	const struct pocket_pattern locked = *pocket_seq_pattern();
+	press2(&panel, BUTTON(SAVE), BUTTON(ARP));
+	press2(&panel, BUTTON(SAVE), BUTTON(LFO));
+	CHECK(!memcmp(&locked, pocket_seq_pattern(), sizeof locked), "a locked track stays");
+	CHECK(!strcmp(panel.notice, "LOCKED SNARE"), "the panel says so: %s", panel.notice);
+	press(&panel, BUTTON(SAVE));
+	CHECK(!panel.locks, "SAVE again unlocks");
+
+	/* these work on every page: performance does not need PATTERN */
+	press(&panel, BUTTON(HOME));
+	const struct pocket_pattern main_before = *pocket_seq_pattern();
+	press(&panel, BUTTON(ARP));
+	CHECK(memcmp(&main_before, pocket_seq_pattern(), sizeof main_before), "ARP from MAIN");
+	CHECK(panel.page == POCKET_PAGE_MAIN, "and stays there");
+}
+
+static void test_midi(void)
+{
+	struct pocket_panel panel;
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press(&panel, BUTTON(SEQ));
+	clear_pattern();
+
+	/* DRUM: the GM map, or the keys' map */
+	CHECK(pocket_panel_midi(&panel, 0, 36, 90) == 1 && panel.trigger == POCKET_TRIG_DRUM1, "note 36 is the kick");
+	CHECK(pocket_panel_midi(&panel, 0, 46, 90) == 1 && panel.trigger == POCKET_TRIG_OPEN_HAT, "note 46 the open hat");
+	CHECK(pocket_panel_midi(&panel, 0, 60, 90) == 0, "note 60 is no GM drum");
+	panel.midi_map = 1;
+	CHECK(pocket_panel_midi(&panel, 0, 72, 90) == 1 && panel.trigger == POCKET_TRIG_DRUM1, "as the keys: a C is the kick");
+	panel.midi_map = 0;
+	/* the channel */
+	panel.midi_channel = 10;
+	CHECK(pocket_panel_midi(&panel, 8, 36, 90) == 0, "another channel is ignored");
+	CHECK(pocket_panel_midi(&panel, 9, 36, 90) == 1, "channel 10 plays");
+	panel.midi_channel = 0;
+	/* recording, with the note's own velocity */
+	press(&panel, BUTTON(REC));
+	pocket_panel_midi(&panel, 0, 38, 55);
+	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_SNARE][0] == POCKET_CELL(55, 0), "MIDI is recorded with its velocity");
+	/* PITCH: the selected voice at the note */
+	press(&panel, BUTTON(SCL));
+	panel.trigger = POCKET_TRIG_DRUM2;
+	CHECK(pocket_panel_midi(&panel, 0, 70, 66) == 1, "PITCH plays any note");
+	CHECK(panel.trigger == POCKET_TRIG_DRUM2, "the selection stays");
+	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_DRUM2][0] == POCKET_CELL(66, 70), "and a pitched note is recorded");
+}
+
+static void test_global(void)
+{
+	struct pocket_panel panel;
+	static uint16_t band[POCKET_SCREEN_W * POCKET_BAND_ROWS];
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press(&panel, BUTTON(GLO));
+	/* every row moves something, and stops at its ends */
+	const struct { int row; const int8_t* value; int lo, hi; } rows[] = {
+		{ 0, &panel.key_mode, 0, 1 }, { 1, &panel.octave, POCKET_OCTAVE_MIN, POCKET_OCTAVE_MAX }, { 2, &panel.key_velocity, 1, 127 },
+		{ 3, &panel.follow, 0, 1 }, { 4, &panel.quantise, 0, 1 }, { 5, &panel.auto_step, 0, 4 }, { 8, &panel.style, 0, POCKET_GEN_STYLES - 1 },
+		{ 9, &panel.density, 0, 100 }, { 10, &panel.complexity, 0, 100 }, { 12, &panel.mutate_strength, 0, 2 },
+		{ 14, &panel.kit_wild, 0, 100 }, { 15, &panel.midi_channel, 0, 16 }, { 16, &panel.midi_map, 0, 1 },
+	};
+	for (unsigned i = 0; i < sizeof rows / sizeof *rows; i++)
+	{
+		turn(&panel, POCKET_ENC_KNOB1, rows[i].row - panel.global_row);
+		turn(&panel, POCKET_ENC_KNOB2, -500);
+		CHECK(*rows[i].value == rows[i].lo, "row %d floor: %d", rows[i].row, *rows[i].value);
+		for (unsigned b = 4; b < 12; b++) pocket_panel_draw_band(&panel, NULL, b, band);
+		turn(&panel, POCKET_ENC_KNOB2, 500);
+		CHECK(*rows[i].value == rows[i].hi, "row %d ceiling: %d", rows[i].row, *rows[i].value);
+		for (unsigned b = 4; b < 12; b++) pocket_panel_draw_band(&panel, NULL, b, band);
+	}
+	turn(&panel, POCKET_ENC_KNOB1, -100);
+	CHECK(panel.global_row == 0, "the rows stop at the top");
+	turn(&panel, POCKET_ENC_KNOB1, 100);
+	CHECK(panel.global_row == 16, "and at the bottom");
+	turn(&panel, POCKET_ENC_KNOB1, -100);
+	/* TEMPO and SWING are the sequencer's */
+	turn(&panel, POCKET_ENC_KNOB1, 6);
+	turn(&panel, POCKET_ENC_KNOB2, 10);
+	CHECK(pocket_seq_tempo() == 130, "GLOBAL's tempo: %d", pocket_seq_tempo());
+	turn(&panel, POCKET_ENC_KNOB1, 1);
+	turn(&panel, POCKET_ENC_KNOB2, 8);
+	CHECK(pocket_seq_swing() == 58, "GLOBAL's swing: %d", pocket_seq_swing());
+	/* the seed rows are what ARP and ENV use next */
+	turn(&panel, POCKET_ENC_KNOB1, 4);
+	turn(&panel, POCKET_ENC_KNOB2, 99);
+	press(&panel, BUTTON(ARP));
+	CHECK(panel.seed == 100, "the SEED row is the next pattern: %d", panel.seed);
+	turn(&panel, POCKET_ENC_KNOB1, 2);
+	turn(&panel, POCKET_ENC_KNOB2, 500);
+	press(&panel, BUTTON(ENV));
+	CHECK(panel.kit_seed == 500, "the KIT SEED row is the next kit: %d", panel.kit_seed);
+	/* the knobs do nothing to the sound here */
+	CHECK(!panel.kit_edited, "GLOBAL is not a sound edit");
+	/* GLO goes on to the diagnostics, and back */
+	press(&panel, BUTTON(GLO));
+	CHECK(panel.page == POCKET_PAGE_SYSTEM, "GLO again: SYSTEM");
+	press(&panel, BUTTON(GLO));
+	CHECK(panel.page == POCKET_PAGE_GLOBAL, "and back");
+	render_seconds(44100);
 }
 
 int main(int argc, char** argv)
@@ -284,6 +857,7 @@ int main(int argc, char** argv)
 	poll(&panel, 0, BUTTON(HOME) | BUTTON(ARP), 0, 0, 0, 0, 0, &exited);
 	CHECK(!exited, "entry gesture read as exit");
 	CHECK(panel.page == POCKET_PAGE_MAIN, "starts on MAIN");
+	CHECK(panel.key_mode == POCKET_KEYS_DRUM, "starts in DRUM");
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, &exited);
 	CHECK(render_peak(10) == 0, "panel made sound without a hit");
 
@@ -298,7 +872,8 @@ int main(int argc, char** argv)
 	/* navigation: direct buttons, OCT-/OCT+ wrapping, HOME back to MAIN */
 	static const struct { uint32_t button; int page; } direct[] = {
 		{ BUTTON(SEQ), POCKET_PAGE_PATTERN }, { BUTTON(EDIT), POCKET_PAGE_SOUND },
-		{ BUTTON(FX), POCKET_PAGE_MIXER }, { BUTTON(GLO), POCKET_PAGE_SYSTEM }, { BUTTON(HOME), POCKET_PAGE_MAIN }
+		{ BUTTON(FX), POCKET_PAGE_MIXER }, { BUTTON(GLO), POCKET_PAGE_GLOBAL }, { BUTTON(GLO), POCKET_PAGE_SYSTEM },
+		{ BUTTON(GLO), POCKET_PAGE_GLOBAL }, { BUTTON(HOME), POCKET_PAGE_MAIN }
 	};
 	for (unsigned i = 0; i < sizeof direct / sizeof direct[0]; i++)
 	{
@@ -307,29 +882,11 @@ int main(int argc, char** argv)
 		CHECK(panel.page == direct[i].page, "button %u opened page %d", i, panel.page);
 		CHECK(panel.dirty == (1u << POCKET_BANDS) - 1u, "a page change does not redraw the whole screen");
 	}
+	/* OCT no longer pages */
 	press(&panel, BUTTON(OCT_DOWN));
-	CHECK(panel.page == POCKET_PAGE_SYSTEM, "OCT- does not wrap from MAIN (%d)", panel.page);
 	press(&panel, BUTTON(OCT_UP));
-	CHECK(panel.page == POCKET_PAGE_MAIN, "OCT+ does not wrap from SYSTEM (%d)", panel.page);
-	press(&panel, BUTTON(OCT_UP));
-	CHECK(panel.page == POCKET_PAGE_PATTERN, "OCT+ does not step");
-	/* the pattern buttons act on PATTERN only: elsewhere they cannot lose a pattern */
-	{
-		press(&panel, BUTTON(EDIT));
-		struct pocket_panel before = panel;
-		const struct pocket_pattern pattern = *pocket_seq_pattern();
-		press(&panel, BUTTON(SAVE));
-		press(&panel, BUTTON(REC));
-		press(&panel, BUTTON(ARP));
-		press(&panel, BUTTON(SCL));
-		press(&panel, BUTTON(ENV));
-		press(&panel, BUTTON(LFO));
-		CHECK(panel.page == before.page && panel.locks == before.locks && panel.seed == before.seed
-			&& panel.generator_knobs == before.generator_knobs, "a pattern button acted off PATTERN");
-		CHECK(!memcmp(&pattern, pocket_seq_pattern(), sizeof pattern), "a pattern changed off PATTERN");
-		press(&panel, BUTTON(SEQ));
-	}
-
+	CHECK(panel.page == POCKET_PAGE_MAIN, "OCT changed the page (%d)", panel.page);
+	press(&panel, BUTTON(SEQ));
 	/* sound knobs act only on their page: on PATTERN and MAIN they move no sound parameter */
 	{
 		const int v = pocket_lxr_get_param(POCKET_PAR_COARSE1);
@@ -351,7 +908,7 @@ int main(int argc, char** argv)
 		CHECK(pocket_lxr_get_param(POCKET_PAR_DRIVE1) == 127, "KNOB4 does not clamp drive at 127");
 	}
 
-	/* SELECT picks the voice on every page and wraps; keys play it chromatically */
+	/* SELECT picks the voice on every page and wraps */
 	pocket_lxr_load_init_kit();
 	render_peak(600);
 	poll(&panel, 0, 0, 3, 0, 0, 0, 0, NULL);
@@ -361,6 +918,7 @@ int main(int argc, char** argv)
 	CHECK(panel.trigger == POCKET_TRIG_OPEN_HAT, "SELECT does not wrap (%d)", panel.trigger);
 	CHECK(pocket_panel_param(&panel, POCKET_CTL_DECAY) == POCKET_PAR_VELOD6_OPEN, "open hat decay parameter");
 	poll(&panel, 0, 0, 1, 0, 0, 0, 0, NULL);
+	panel.follow = 0;
 	{
 		const uint32_t hits = panel.hits;
 		poll(&panel, (1u << 0) | (1u << 12) | (1u << 26), 0, 0, 0, 0, 0, 0, NULL);
@@ -415,11 +973,12 @@ int main(int argc, char** argv)
 	/* activity: a MIDI hit names its voice for a moment; time ends it and redraws */
 	pocket_panel_init(&panel);
 	panel.dirty = 0;
-	pocket_panel_midi_hit(&panel, POCKET_TRIG_SNARE, 38);
+	CHECK(pocket_panel_midi(&panel, 9, 38, 100) == 1, "MIDI note 38 plays");
 	CHECK(panel.midi_trigger == POCKET_TRIG_SNARE && panel.flash_ms[POCKET_TRIG_SNARE], "MIDI hit not shown");
 	CHECK(panel.dirty & (1u << 3), "MIDI hit does not redraw the MIDI line");
-	pocket_panel_midi_hit(&panel, 99, 38);
-	CHECK(panel.midi_trigger == POCKET_TRIG_SNARE, "invalid voice accepted");
+	CHECK(pocket_panel_midi(&panel, 9, 99, 100) == 0 && panel.midi_trigger == POCKET_TRIG_SNARE, "an unmapped note played");
+	pocket_panel_tick(&panel, 1000);
+	pocket_panel_midi(&panel, 9, 38, 100);
 	panel.dirty = 0;
 	pocket_panel_tick(&panel, POCKET_FLASH_MS - 1);
 	CHECK(panel.flash_ms[POCKET_TRIG_SNARE] == 1 && !panel.dirty, "the activity cell ended early");
@@ -463,7 +1022,7 @@ int main(int argc, char** argv)
 		now.midi_messages = 1;
 		pocket_panel_draw_band(&panel, &now, 3, d);
 		CHECK(memcmp(c, d, sizeof c) != 0, "MIDI messages do not change the MIDI line");
-		pocket_panel_midi_hit(&panel, POCKET_TRIG_SNARE, 38);
+		pocket_panel_midi(&panel, 9, 38, 100);
 		pocket_panel_draw_band(&panel, &now, 3, c); /* at once, before the next status period */
 		CHECK(memcmp(c, d, sizeof c) != 0, "a MIDI hit does not change the MIDI line");
 	}
@@ -508,6 +1067,12 @@ int main(int argc, char** argv)
 	}
 
 	test_sequencer();
+	test_keyboard();
+	test_recording();
+	test_kits();
+	test_one_track();
+	test_midi();
+	test_global();
 
 	/* screenshots: each screen as the FM-1 would show it */
 	start_engine(&panel);

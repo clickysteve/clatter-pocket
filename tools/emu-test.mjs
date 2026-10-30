@@ -38,6 +38,12 @@ const stepX = (s) => 30 + 12 * s + 2 * (s >> 2);
 const rowY = (t) => 97 + 11 * t;
 const PAPER = 0xffff, ACCENT = 0xfbe0;
 const TRACKS = 7, STEPS = 16;
+// the DRUM keys: note of each track's first key, D1 D2 D3 SN CY CH OH; key 0 is F3 (53)
+const DRUM_NOTE = [60, 65, 66, 61, 67, 63, 64];
+const NOTE = (n) => KEY(n - 53);
+const VOICE = ["DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "CL HAT", "OP HAT"];
+// GLOBAL's rows
+const ROW = { KEYS: 0, OCTAVE: 1, KEY_VEL: 2, FOLLOW: 3, QUANTISE: 4, AUTO_STEP: 5, TEMPO: 6, SWING: 7, STYLE: 8, DENSITY: 9, COMPLEX: 10, SEED: 11, MUTATE: 12, KIT_SEED: 13, WILD: 14, MIDI_CH: 15, MIDI_MAP: 16 };
 
 // ui/pocket_panel.c's 3x5 font
 const FONT = new Map();
@@ -70,6 +76,7 @@ class Machine {
     this.peak = 0;
     this.sample = 0;
     this.onsets = null;
+    this.tape = null;
     return this;
   }
   // Emulated time passes in audio blocks; frames that are not audio yet still advance the machine.
@@ -83,6 +90,7 @@ class Machine {
         const a = Math.max(Math.abs(l[i]), Math.abs(r[i]));
         this.peak = Math.max(this.peak, a);
         this.sample++;
+        if (this.tape) this.tape.push(l[i]);
         // an onset: well above the decaying envelope of what was already sounding
         if (this.onsets) {
           if (a >= 0.02 && a > this.env * 2 && this.sample - this.last > 400) { this.onsets.push(this.sample); this.last = this.sample; }
@@ -94,6 +102,23 @@ class Machine {
     }
   }
   takePeak() { const p = this.peak; this.peak = 0; return p; }
+  // What a key sounds at, in Hz: the median period between rising zero crossings after the attack.
+  pitchOf(id, ms = 500) {
+    this.run(1200); // what was sounding is gone
+    this.tape = [];
+    this.tap(id);
+    const until = this.sample + (ms * RATE) / 1000;
+    while (this.sample < until) this.run(5);
+    const t = this.tape, rises = [];
+    this.tape = null;
+    const peak = t.reduce((a, v) => Math.max(a, Math.abs(v)), 0);
+    const start = t.findIndex((v) => Math.abs(v) > peak / 4) + Math.floor(RATE / 25);
+    for (let i = start; i < t.length && Math.abs(t[i]) + Math.abs(t[i - 1]) > peak / 500; i++) if (t[i - 1] < 0 && t[i] >= 0) rises.push(i);
+    const periods = rises.slice(1).map((v, i) => v - rises[i]).sort((a, b) => a - b);
+    return RATE / periods[periods.length >> 1];
+  }
+  // Which buttons are lit (the emulator's LED levels are since the last look).
+  leds() { return new Float32Array(this.x.memory.buffer, this.x.fm1_leds(), 41).slice(); }
   // Onset sample numbers over `ms` of audio (fm1_ms is the emulated CPU's clock, not the output's).
   listen(ms) {
     this.onsets = [];
@@ -117,6 +142,8 @@ class Machine {
     return -1;
   }
   tap(id, ms = 60) { this.x.fm1_key(id, 1); this.run(ms); this.x.fm1_key(id, 0); this.run(ms); }
+  // `held` down, `id` tapped, `held` up.
+  chord(held, id, ms = 60) { this.x.fm1_key(held, 1); this.run(ms); this.tap(id, ms); this.x.fm1_key(held, 0); this.run(ms); }
   // The emulator delivers detents over time: wait for them.
   turn(enc, clicks) { this.x.fm1_enc(enc, clicks); this.run(120 + 10 * Math.abs(clicks)); }
   midi(...bytes) { for (const b of bytes) this.x.fm1_midi(b); }
@@ -185,6 +212,308 @@ function moveTo(m, enc, from, to) {
   if (to !== from) m.turn(enc, to - from);
 }
 
+// The voice and the step the panel has selected, read from its screen, and moved by its controls.
+const voiceOn = (m) => VOICE.findIndex((v) => m.text().includes(`VOICE ${v}`));
+function selectVoice(m, t) {
+  const from = voiceOn(m);
+  if (from !== t) m.turn(ENC.SELECT, t - from);
+  m.run(150);
+}
+function moveStep(m, step) { // on PATTERN
+  const from = Number(/VEL\S* BPM\d+ SWG\d+ STEP(\d+)/.exec(m.text())?.[1]) - 1;
+  if (from !== step) m.turn(ENC.KNOB4, step - from);
+  m.run(150);
+}
+// A GLOBAL row moved by `by`, from any page, back on `home`.
+function setting(m, row, by, home) {
+  m.tap(BUTTON.HOME, 90);
+  m.tap(BUTTON.GLO, 90);
+  m.turn(ENC.KNOB1, -40);
+  m.turn(ENC.KNOB1, row);
+  m.turn(ENC.KNOB2, by);
+  m.tap(home, 90);
+  m.run(200);
+}
+function systemPage(m) {
+  m.tap(BUTTON.HOME, 90);
+  m.tap(BUTTON.GLO, 90);
+  m.tap(BUTTON.GLO, 90);
+}
+const POCKET_KITS = 17; // INIT and the 16 characters
+const hostKit = (character, seed, wild) =>
+  execFileSync("build/host/test_kit", ["--print", character, seed, wild].map(String)).toString().trim().split("\n").map(Number);
+const PAR = { COARSE1: 8, VELOD1: 50, FILTER1: 37, DRIVE1: 102 };
+// SOUND's four values for the selected voice, as shown.
+const soundValues = (m) => ["PITCH", "DECAY", "FILTER", "DRIVE"].map((n) => Number(new RegExp(`${n} +(\\d+)`).exec(m.text())?.[1]));
+
+// Your twelve: a playable, generative drum machine, by its own controls.
+async function performance(m) {
+  // ---- 12. PRESETS browses kits, and a rhythm plays through all of it
+  m.tap(BUTTON.SEQ, 90);
+  m.run(300);
+  const rhythm = m.grid().join();
+  m.tap(BUTTON.PLAY);
+  m.run(300);
+  for (const [clicks, name] of [[1, "KIT CLASSIC"], [1, "KIT ANALOG"], [1, "KIT DIGITAL"], [1, "KIT INDUSTRIAL"]]) {
+    m.turn(ENC.PRESETS, clicks);
+    shows(m, name, `PRESETS: ${name}`);
+  }
+  m.turn(ENC.PRESETS, -4);
+  shows(m, "KIT INIT", "PRESETS back to the init kit");
+  m.turn(ENC.PRESETS, -1);
+  shows(m, "KIT CHAOS", "PRESETS wraps");
+  m.turn(ENC.PRESETS, 1);
+  m.run(300);
+  check(m.grid().join() === rhythm, "browsing kits leaves the rhythm");
+
+  // ---- 1. a complete kit, and it is the host's
+  m.turn(ENC.PRESETS, 4); // INDUSTRIAL, factory seed 148
+  m.tap(BUTTON.ENV, 60);
+  shows(m, "GENERATING KIT", "ENV shows GENERATING KIT");
+  m.run(700);
+  shows(m, "KIT INDUSTRIAL 149", "then the new kit's name and seed");
+  m.png(`${out}/perf-1-kit.png`);
+  check(m.grid().join() === rhythm, "a new kit leaves the rhythm");
+  check(m.playhead() >= 0, "and the pattern plays on");
+  m.tap(BUTTON.EDIT, 90);
+  m.run(300);
+  selectVoice(m, 0);
+  const kit = hostKit(3, 149, 50);
+  const shown = soundValues(m), want = [kit[PAR.COARSE1], kit[PAR.VELOD1], kit[PAR.FILTER1], kit[PAR.DRIVE1]];
+  check(shown.join() === want.join(), `SOUND shows the host's kit for this seed (${shown})`, `${shown} host ${want}`);
+  m.png(`${out}/perf-2-sound.png`);
+
+  // ---- 9. one voice's sound, the others left alone
+  selectVoice(m, 3);
+  const snare = soundValues(m);
+  selectVoice(m, 0);
+  const kick = soundValues(m);
+  selectVoice(m, 3);
+  m.chord(BUTTON.SAVE, BUTTON.ENV);
+  shows(m, "NEW SOUND SNARE", "SAVE+ENV: a new sound for the selected voice");
+  m.run(300);
+  check(soundValues(m).join() !== snare.join(), "the snare changed", soundValues(m));
+  selectVoice(m, 0);
+  check(soundValues(m).join() === kick.join(), "the kick did not", soundValues(m));
+  m.tap(BUTTON.SEQ, 90);
+  m.run(300);
+  check(m.grid().join() === rhythm, "and neither did the rhythm");
+
+  // ---- 2, 3. a rhythm, from a style, heard
+  m.turn(ENC.ALGORITHM, 2);
+  shows(m, "STYLE BREAKS", "ALGORITHM chooses the style");
+  const before = m.grid();
+  m.tap(BUTTON.ARP, 60);
+  shows(m, "NEW PATTERN BREAKS", "ARP generates, and says so");
+  m.run(300);
+  const breaks = m.grid();
+  check(breaks.join() !== before.join(), "a new rhythm");
+  check(breaks.join() === hostPattern(1, 50, 30, 2).join(), "the same seed in the style, bit for bit, as the host", breaks.join("\n"));
+  check(m.listen(2000).length > 0, "and it is heard");
+  m.tap(BUTTON.ARP, 90);
+  m.run(300);
+  check(m.grid().join() === hostPattern(2, 50, 30, 2).join(), "ARP again: the next seed");
+
+  // ---- 10. one track's rhythm, the others left alone
+  const whole = m.grid();
+  selectVoice(m, 3);
+  m.chord(BUTTON.SAVE, BUTTON.ARP);
+  shows(m, "NEW PATTERN", "SAVE+ARP: a new pattern for one track");
+  m.run(300);
+  const one = m.grid();
+  const others = (a, b, t) => a.filter((_, i) => i !== t).join() === b.filter((_, i) => i !== t).join();
+  check(one[3] !== whole[3], "that track changed", `${whole[3]}\n${one[3]}`);
+  check(others(one, whole, 3), "the others did not", one.join("\n"));
+
+  // ---- 11. mutation: recognisable, and one track
+  const diffs = [];
+  for (let i = 0; i < 5; i++) {
+    const was = m.grid().join("");
+    m.tap(BUTTON.LFO, 90);
+    m.run(300);
+    const now = m.grid().join("");
+    diffs.push([...now].filter((c, k) => c !== was[k]).length);
+  }
+  check(diffs.some((d) => d > 0) && diffs.every((d) => d <= 30), `LFO mutates: ${diffs.join(" ")} steps changed`, diffs.join(" "));
+  const held = m.grid();
+  let moved = false;
+  for (let i = 0; i < 6 && !moved; i++) {
+    m.chord(BUTTON.SAVE, BUTTON.LFO);
+    m.run(300);
+    moved = m.grid()[3] !== held[3];
+  }
+  check(moved, "SAVE+LFO mutates the selected track");
+  check(others(m.grid(), held, 3), "and only that track", m.grid().join("\n"));
+  m.chord(BUTTON.SAVE, BUTTON.OCTDN);
+  m.run(300);
+  shows(m, "PATTERN UNDONE", "SAVE+OCT- undoes the last change to the pattern");
+  m.chord(BUTTON.SAVE, BUTTON.OCTDN);
+  m.run(300);
+
+  // ---- kits: the way back
+  m.tap(BUTTON.ENV, 90);
+  m.run(800);
+  m.chord(BUTTON.SAVE, BUTTON.OCTUP);
+  m.run(300);
+  shows(m, "KIT UNDONE", "SAVE+OCT+ brings the last kit back");
+
+  // ---- the machine under all of that: kits land on SYSTEM, whose figures cover the last 500 ms
+  systemPage(m);
+  shows(m, "BOOT+HOME SAFE", "SYSTEM says how to reach SAFE MODE");
+  let worst = 0;
+  for (let i = 0; i < 8; i++) {
+    m.tap(BUTTON.ENV, 60);
+    m.run(560);
+    worst = Math.max(worst, Number(/CPU PEAK +([\d.]+)%/.exec(m.text())?.[1]));
+  }
+  check(worst > 0 && worst < 60, `a kit loading while the pattern plays: CPU peak ${worst} %`, m.text());
+  let sys = m.text();
+  check(/OVERRUNS +0\b/.test(sys) && /DROPPED +0\b/.test(sys), "no overruns or dropped events through kits and patterns while playing", sys);
+  m.tap(BUTTON.SEQ, 90);
+  m.tap(BUTTON.PLAY);
+  m.run(1800);
+
+  // ---- what follows is measured on the init kit: plain tones, the same on every run
+  m.turn(ENC.PRESETS, POCKET_KITS - 4);
+  m.run(500);
+  shows(m, "CLATTER POCKET");
+  // ---- 5. DRUM: finger drumming; the selection follows
+  for (let t = 0; t < TRACKS; t++) {
+    m.takePeak();
+    m.tap(NOTE(DRUM_NOTE[t]), 60);
+    check(m.takePeak() > LOUD, `DRUM: key ${DRUM_NOTE[t]} sounds`);
+    shows(m, `VOICE ${VOICE[t]}`, `and is ${VOICE[t]}`);
+    m.run(400);
+  }
+  m.run(1500);
+
+  // ---- 4. SCL
+  selectVoice(m, 1); // the low tom
+  const pattern = m.grid().join();
+  m.tap(BUTTON.SCL, 60);
+  shows(m, "KEYS: PITCH", "SCL: KEYS: PITCH");
+  check(m.leds()[BUTTON.SCL] >= 0, "SCL's light is read");
+  m.run(1400);
+  shows(m, "KEYS: PITCH OCT 0", "the status line keeps the mode and octave");
+  check(m.grid().join() === pattern, "SCL leaves the pattern");
+  m.png(`${out}/perf-3-pitch.png`);
+
+  // ---- 6, 8. one instrument chromatically, across octaves, in the emulated audio
+  const voice = /VOICE (DRUM \d|SNARE|CYMBAL|CL HAT|OP HAT)/.exec(m.text())?.[1];
+  check(voice === "DRUM 2", `PITCH plays the selected voice (${voice})`, m.text());
+  const c4 = m.pitchOf(NOTE(60)), c5 = m.pitchOf(NOTE(72)), g4 = m.pitchOf(NOTE(67));
+  check(c5 / c4 > 1.8 && c5 / c4 < 2.2, `an octave up the keyboard: ${c4.toFixed(0)} to ${c5.toFixed(0)} Hz`, `${c4} ${c5}`);
+  check(g4 / c4 > 1.35 && g4 / c4 < 1.65, `a fifth: ratio ${(g4 / c4).toFixed(2)}`, `${c4} ${g4}`);
+  m.tap(BUTTON.OCTUP, 60);
+  m.run(1400);
+  shows(m, "OCT 1", "OCT+ raises the octave");
+  const c4up = m.pitchOf(NOTE(60));
+  check(Math.abs(c4up / c5 - 1) < 0.05, `OCT+ gives the key an octave up: ${c4up.toFixed(0)}, ${c5.toFixed(0)}`, `${c5} ${c4up}`);
+  m.tap(BUTTON.OCTDN, 60);
+  for (let i = 0; i < 6; i++) m.tap(BUTTON.OCTUP, 40);
+  m.run(1400);
+  shows(m, "OCT 3", "the octave stops at +3");
+  for (let i = 0; i < 3; i++) m.tap(BUTTON.OCTDN, 40);
+  m.run(300);
+  const c4again = m.pitchOf(NOTE(60));
+  check(Math.abs(c4again / c4 - 1) < 0.02, `back at OCT 0 the pitch is the same: ${c4.toFixed(0)}, ${c4again.toFixed(0)}`, `${c4} ${c4again}`);
+
+  // ---- 7. REC, stopped: the insertion point
+  m.tap(BUTTON.SCL, 90); // DRUM
+  m.run(1400);
+  m.tap(BUTTON.REC, 60);
+  shows(m, "REC ON", "REC ON");
+  check(m.leds()[BUTTON.REC] > 0, "REC lights");
+  m.run(1400);
+  shows(m, "REC ON", "and stays on the status line");
+  const entered = m.grid();
+  { // the row empty, step by step, by the keys
+    const row = entered[5];
+    for (let s = 0; s < STEPS; s++) if (row[s] === "1") { moveStep(m, s); m.tap(NOTE(DRUM_NOTE[5]), 30); }
+    m.run(200);
+  }
+  check(m.grid()[5] === "0".repeat(STEPS), "the same key removes each step", m.grid()[5]);
+  check(others(m.grid(), entered, 5), "other tracks stay", m.grid().join("\n"));
+  moveStep(m, 4);
+  m.tap(NOTE(DRUM_NOTE[5]), 60);
+  m.run(200);
+  check(m.grid()[5][4] === "1", "a key writes the selected step");
+  m.png(`${out}/perf-4-entry.png`);
+  // pitch: a different note replaces, the same note removes (the selection followed the hat)
+  m.tap(BUTTON.SCL, 90);
+  m.tap(NOTE(67), 60);
+  m.run(200);
+  shows(m, "S5 N67", "PITCH writes the note");
+  m.tap(NOTE(70), 60);
+  m.run(200);
+  shows(m, "S5 N70", "a different pitch replaces it");
+  m.tap(NOTE(70), 60);
+  m.run(200);
+  shows(m, "STEP 5", "the same pitch removes it");
+  m.tap(BUTTON.SCL, 90);
+
+  // ---- 7. REC, playing: the hits land on the grid without stopping anything
+  m.tap(BUTTON.ARP, 90);
+  m.run(300);
+  const open = m.grid();
+  const silentStep = [...open[5]].findIndex((c) => c === "0");
+  m.tap(BUTTON.PLAY);
+  m.run(200);
+  for (let i = 0; i < 400 && m.playhead() !== ((silentStep + STEPS - 1) % STEPS); i++) m.run(5);
+  // a sixteenth at 120 BPM is 125 ms: press as the step before it plays out
+  m.run(95);
+  m.tap(NOTE(DRUM_NOTE[5]), 20);
+  m.run(300);
+  const live = m.grid();
+  check(live[5][silentStep] === "1" || live[5][(silentStep + 1) % STEPS] === "1", "a live hit is quantised onto the track", `${open[5]}\n${live[5]}`);
+  check(others(live, open, 5), "other tracks are untouched", live.join("\n"));
+  shows(m, "PLAY", "recording does not stop the pattern");
+  m.tap(BUTTON.REC, 90);
+  m.run(1400);
+  check(!m.text().includes("REC ON"), "REC off", m.text());
+  systemPage(m);
+  m.run(800);
+  sys = m.text();
+  check(/OVERRUNS +0\b/.test(sys) && /DROPPED +0\b/.test(sys), "no overruns or dropped events through recording", sys);
+  m.tap(BUTTON.SEQ, 90);
+  m.tap(BUTTON.PLAY);
+  m.run(1800);
+
+  // ---- MIDI follows the keyboard: DRUM's GM map, PITCH's notes, and it records
+  m.tap(BUTTON.SCL, 90);
+  m.tap(BUTTON.REC, 90);
+  m.midi(0x90, 72, 70);
+  m.run(200);
+  shows(m, "MIDI NOTE 72", "MIDI plays the selected voice in PITCH");
+  m.tap(BUTTON.REC, 90);
+  m.tap(BUTTON.SCL, 90);
+  m.run(1400);
+
+  // ---- GLOBAL: settings, then the diagnostics
+  m.tap(BUTTON.HOME, 90);
+  m.tap(BUTTON.GLO, 90);
+  m.turn(ENC.KNOB1, -40);
+  m.run(300);
+  shows(m, "GLOBAL", "GLO opens GLOBAL");
+  shows(m, "KEYS DRUM", "GLOBAL shows the keyboard mode");
+  shows(m, "QUANTISE NEAREST", "and the recording quantisation");
+  m.png(`${out}/page-global.png`);
+  m.turn(ENC.KNOB1, 15);
+  m.run(200);
+  shows(m, "MIDI CH ALL", "the rows scroll");
+  m.png(`${out}/page-global-2.png`);
+  m.turn(ENC.KNOB1, -15);
+  m.tap(BUTTON.GLO, 90);
+  m.run(300);
+  shows(m, "SYSTEM", "GLO again opens SYSTEM");
+  shows(m, "CPU MEAN", "the diagnostics are still there");
+  m.tap(BUTTON.HOME, 90);
+  m.turn(ENC.PRESETS, 4);
+  m.run(1600);
+  shows(m, "KIT INDUSTRIAL", "MAIN names the kit");
+  m.png(`${out}/page-main-performance.png`);
+}
+
 async function sequencer(m) {
   m.tap(BUTTON.SEQ, 90);
   m.run(300);
@@ -225,32 +554,35 @@ async function sequencer(m) {
   m.run(500);
   check(m.takePeak() < SILENT, "silent after the voices ring out");
 
-  // ---- step edits, with the controls alone: clear the grid, write a pulse
-  let track = 0, step = 0;
-  const go = (t, s) => { moveTo(m, ENC.SELECT, track, t); moveTo(m, ENC.ALGORITHM, step, s); track = t; step = s; };
-  const setRow = (t, row) => {
+  // ---- step entry, with the controls alone: clear the grid, write a pulse
+  const setRow = (t, row) => { // stopped: REC on, the cursor on KNOB4, the track's key
     const was = m.grid()[t];
-    for (let s = 0; s < STEPS; s++) if (was[s] !== row[s]) { go(t, s); m.tap(BUTTON.REC, 30); }
+    for (let s = 0; s < STEPS; s++) if (was[s] !== row[s]) { moveStep(m, s); m.tap(NOTE(DRUM_NOTE[t]), 30); }
     m.run(300);
   };
   const OFF = "0".repeat(STEPS);
+  m.tap(BUTTON.REC, 60);
   for (let t = 0; t < TRACKS; t++) setRow(t, OFF);
-  check(m.gridHits() === 0, "REC clears every step, by the controls alone", m.grid().join("\n"));
+  check(m.gridHits() === 0, "REC and the keys clear every step, by the controls alone", m.grid().join("\n"));
   // timing is measured on the closed hat: short, so each onset stands clear of the last
   setRow(5, "1000100010001000");
-  check(m.grid()[5] === "1000100010001000", "REC writes steps", m.grid().join("\n"));
+  check(m.grid()[5] === "1000100010001000", "REC and a key write steps", m.grid().join("\n"));
   m.png(`${out}/seq-3-edited.png`);
+  m.run(1500);
   m.tap(BUTTON.PLAY);
   const quarter = gaps(m.listen(3000));
   check(quarter.length >= 4, `four hits a bar are heard (${quarter.length + 1} in 3 s)`, quarter.join());
   check(near(mean(quarter), (RATE * 60) / 120, 64), `120 BPM measured: a beat is ${mean(quarter).toFixed(1)} samples (${(RATE * 60) / 120} exact)`, quarter.join());
   check(quarter.every((g) => near(g, (RATE * 60) / 120, 130)), `no beat is off by more than the 128-frame output block (${Math.min(...quarter)} to ${Math.max(...quarter)})`, quarter.join());
 
-  // a live edit, heard while it runs
+  // an edit between takes, heard
+  m.tap(BUTTON.PLAY);
+  m.run(1800);
   setRow(5, "1010101010101010");
+  m.tap(BUTTON.PLAY);
   m.run(600);
   const eighths = gaps(m.listen(2500));
-  check(near(mean(eighths), (RATE * 30) / 120, 64), `steps edited while playing are heard: eighths, ${mean(eighths).toFixed(1)} samples`, eighths.join());
+  check(near(mean(eighths), (RATE * 30) / 120, 64), `steps entered are heard: eighths, ${mean(eighths).toFixed(1)} samples`, eighths.join());
 
   // ---- tempo: KNOB2, heard
   m.turn(ENC.KNOB2, 60);
@@ -261,7 +593,10 @@ async function sequencer(m) {
   m.turn(ENC.KNOB2, -60);
 
   // ---- swing: KNOB3, heard between each beat and the sixteenth after it
+  m.tap(BUTTON.PLAY);
+  m.run(1800);
   setRow(5, "1100110011001100");
+  m.tap(BUTTON.PLAY);
   m.run(600);
   const pair = (RATE * 15 * 2) / 120;
   const even = gaps(m.listen(2500)).filter((g) => g < pair);
@@ -274,27 +609,30 @@ async function sequencer(m) {
   m.turn(ENC.KNOB3, -16);
 
   // ---- GENERATE, MUTATE, undo: while it plays
+  m.tap(BUTTON.REC, 60);
   const hand = m.grid();
   m.tap(BUTTON.ARP, 90);
   m.run(400);
   const generated = m.grid();
   check(generated.join() !== hand.join(), "ARP generates a new pattern");
   check(generated.join() === hostPattern(2, 50, 30, 0).join(), "ARP is the next seed's pattern, bit for bit", generated.join("\n"));
-  m.tap(BUTTON.SCL, 90);
+  m.tap(BUTTON.GLO, 90);
+  m.turn(ENC.KNOB1, ROW.SEED);
   m.run(300);
-  shows(m, "SEED2", "SCL shows the generator's knobs");
+  shows(m, "SEED 2", "GLOBAL shows the generator's settings");
   m.png(`${out}/seq-4-generator.png`);
-  m.turn(ENC.KNOB1, 8);
-  m.turn(ENC.KNOB2, 14);
-  m.turn(ENC.KNOB3, 40);
-  m.turn(ENC.KNOB4, 8);
-  shows(m, "GLITCH", "KNOB4 chooses the style");
+  m.tap(BUTTON.SEQ, 90);
+  setting(m, ROW.DENSITY, 40, BUTTON.SEQ);
+  setting(m, ROW.COMPLEX, 70, BUTTON.SEQ);
+  setting(m, ROW.SEED, 40, BUTTON.SEQ);
+  m.turn(ENC.ALGORITHM, 8);
+  shows(m, "STYLE GLITCH", "ALGORITHM chooses the style");
   m.tap(BUTTON.ARP, 90);
   m.run(400);
   check(m.grid().join() === hostPattern(42, 90, 100, 8).join(), "DENSITY, COMPLEXITY, SEED and style all reach the generator", m.grid().join("\n"));
-  m.tap(BUTTON.ENV, 90);
+  m.chord(BUTTON.SAVE, BUTTON.OCTDN);
   m.run(300);
-  check(m.grid().join() === generated.join(), "ENV undoes it");
+  check(m.grid().join() === generated.join(), "SAVE+OCT- undoes it");
   const mutated = [];
   let unrelated = 0;
   for (let i = 0; i < 5; i++) {
@@ -309,8 +647,6 @@ async function sequencer(m) {
   }
   check(mutated.some((d) => d > 0), `LFO mutates the pattern (${mutated.join(" ")} steps changed)`);
   check(unrelated === 0, "and leaves it recognisable", mutated.join(" "));
-  m.tap(BUTTON.SCL, 90);
-  m.run(300);
   m.png(`${out}/seq-5-mutated.png`);
   shows(m, "PLAY", "still playing through all of it");
   check(m.listen(2000).length > 0, "and it is heard");
@@ -343,7 +679,7 @@ async function sequencer(m) {
   m.midi(0x99, 38, 120);
   m.run(90);
   shows(m, "MIDI NOTE 38 SNARE", "MIDI still triggers over the sequence");
-  m.tap(BUTTON.GLO, 90);
+  systemPage(m);
   m.run(800);
   const sys = m.text();
   check(/OVERRUNS +0\b/.test(sys) && /DROPPED +0\b/.test(sys), "SYSTEM: no overruns or dropped events with the sequence", sys);
@@ -351,6 +687,14 @@ async function sequencer(m) {
   m.run(1800);
   m.tap(BUTTON.HOME, 90);
   m.run(300);
+  // what the generator's settings were, for what follows
+  m.turn(ENC.ALGORITHM, -8);
+  setting(m, ROW.DENSITY, -40, BUTTON.HOME);
+  setting(m, ROW.COMPLEX, -70, BUTTON.HOME);
+  setting(m, ROW.SEED, 1 - 42, BUTTON.HOME); // ARP's next is seed 2
+  m.tap(BUTTON.SEQ, 90);
+  m.tap(BUTTON.ARP, 90);
+  m.tap(BUTTON.HOME, 90);
 }
 
 async function main() {
@@ -368,14 +712,14 @@ async function main() {
   m.png(`${out}/1-start.png`);
   m.run(1800);
   shows(m, "CLATTER POCKET", "CLATTER POCKET after start-up");
-  shows(m, "LXR ENGINE READY", "the engine started");
+  shows(m, "KEYS: DRUM VEL 127", "the engine started: the status line shows the keyboard");
   shows(m, "MIDI WAITING");
   check(!/UNTITLED|PRESET|TRACK/.test(m.text()), "no stock instrument text", m.text());
   check(m.takePeak() < SILENT, "silent until something plays");
   m.png(`${out}/2-main.png`);
 
   // ---- pages
-  for (const [button, page, sees] of [["SEQ", "PATTERN", "120 BPM"], ["EDIT", "SOUND", "PITCH"], ["FX", "MIXER", "LEVEL"], ["GLO", "SYSTEM", "CPU MEAN"], ["HOME", "MAIN", "TEMPO 120 BPM"]]) {
+  for (const [button, page, sees] of [["SEQ", "PATTERN", "120 BPM"], ["EDIT", "SOUND", "PITCH"], ["FX", "MIXER", "LEVEL"], ["GLO", "GLOBAL", "OCTAVE"], ["GLO", "SYSTEM", "CPU MEAN"], ["HOME", "MAIN", "TEMPO 120 BPM"]]) {
     m.tap(BUTTON[button], 90);
     m.run(150);
     shows(m, page, `${button} opens ${page}`);
@@ -383,12 +727,12 @@ async function main() {
     m.png(`${out}/page-${page.toLowerCase()}.png`);
   }
   m.tap(BUTTON.OCTUP, 90); m.run(150);
-  shows(m, "PATTERN", "OCT+ steps to PATTERN");
+  shows(m, "TEMPO 120 BPM", "OCT+ no longer changes the page");
   m.tap(BUTTON.OCTDN, 90); m.run(150);
-  shows(m, "TEMPO 120 BPM", "OCT- steps back");
-  m.tap(BUTTON.OCTDN, 90); m.run(150);
-  shows(m, "SYSTEM", "OCT- wraps to SYSTEM");
-  m.tap(BUTTON.HOME, 90); m.run(150);
+  shows(m, "TEMPO 120 BPM", "nor does OCT-");
+  m.run(1400);
+  m.tap(BUTTON.OCTDN, 90); m.run(150); // what they did do: back to 127, the first check's
+  m.tap(BUTTON.OCTUP, 90); m.tap(BUTTON.OCTUP, 90); m.run(150);
 
   // ---- voice selection and triggering
   for (const name of ["DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "CL HAT", "OP HAT", "DRUM 1"]) {
@@ -399,12 +743,12 @@ async function main() {
   m.tap(KEY(12));
   m.run(100);
   const played = m.takePeak();
-  check(played > LOUD, `the programmed-pitch key sounds (peak ${played.toFixed(3)})`);
+  check(played > LOUD, `a key sounds (peak ${played.toFixed(3)})`);
   m.run(1500);
   m.takePeak();
   m.tap(KEY(13));
   m.run(100);
-  check(m.takePeak() > LOUD, "a note key sounds");
+  check(m.takePeak() > LOUD, "another key sounds");
   m.run(600);
   shows(m, "HITS 2", "the hit counter follows");
   m.run(1500);
@@ -434,10 +778,10 @@ async function main() {
   shows(m, "MIDI NOTE 36 DRUM 1", "another MIDI voice");
 
   // ---- diagnostics
-  m.tap(BUTTON.GLO, 90);
+  systemPage(m);
   m.run(800);
   const first = m.text();
-  shows(m, "0.3.0 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
+  shows(m, "0.4.0 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
   const heap = /HEAP +(\d+) LINKED/.exec(first);
   check(heap && Number(heap[1]) >= 49152, `SYSTEM shows the heap (${heap?.[1]})`, first);
   const cpu = /CPU MEAN +([\d.]+)%/.exec(first), peak = /CPU PEAK +([\d.]+)%/.exec(first);
@@ -448,6 +792,7 @@ async function main() {
   m.png(`${out}/page-system-live.png`);
 
   await sequencer(m);
+  await performance(m);
 
   // ---- a long run: the pattern playing, hits through it, no reset (the start screen would come back)
   let resets = 0;
@@ -460,7 +805,7 @@ async function main() {
   }
   check(resets === 0, "20 s of the sequence and hits without a reset");
   shows(m, "CLATTER POCKET", "still running after 20 s");
-  m.tap(BUTTON.GLO, 90);
+  systemPage(m);
   m.run(700);
   const longRun = m.text();
   check(/OVERRUNS +0\b/.test(longRun) && /DROPPED +0\b/.test(longRun), "no overruns or dropped events in the long run", longRun);
@@ -482,6 +827,8 @@ async function main() {
   m.takePeak();
   m.tap(BUTTON.PLAY);
   m.midi(0x90, 36, 100);
+  for (const b of [BUTTON.ENV, BUTTON.ARP, BUTTON.LFO, BUTTON.SCL, BUTTON.REC, KEY(7)]) m.tap(b);
+  m.turn(ENC.PRESETS, 3);
   m.run(300);
   check(m.takePeak() < SILENT, "SAFE MODE stays silent: the engine is off");
   shows(m, "SAFE MODE - ENGINE OFF", "controls do not leave SAFE MODE");

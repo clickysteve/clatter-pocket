@@ -16,9 +16,9 @@ below. `python3 tools/make-installer-page.py` makes an installer page for it.
 | | |
 |---|---|
 | Package | `clatter-pocket-fm1-replace-UNVERIFIED.fwsc`, 492,084 bytes |
-| Package SHA-256 | `ab1869da3db532dfc5117c2bb15adb6cf029e5d433e3a7fad6f9298d2c35ea70` |
-| ELF SHA-256 | `be6f27e6023559c4efd1aae98acd5d53696fbad9f60031c49c1b6323a6cd9c62` |
-| Built from | fm1_open 4c7496d, JieLi 2.5.3, `--replace --single-precision` |
+| Package SHA-256 | `51afea18e752b71161e0e743358868481791c76912bf892a338019947a902b4b` |
+| ELF SHA-256 | `ba086e868bc5ee06104643b23110ef866210f3cdcb3a8591bc922bccd002ba3b` |
+| Built from | fm1_open 4c7496d, JieLi 2.5.3, `--replace --single-precision`. The flag is required: without it the build succeeds and the engine runs on software doubles, silent at 183 % CPU in the emulator; `tools/check-firmware.py` now refuses that |
 | Reproducible | two builds from an empty `build/` gave identical bytes |
 | Checks | `python3 tools/check-firmware.py`; `make emu-test` runs it in the emulator |
 
@@ -44,7 +44,8 @@ The first report gave 479,232: that figure left out the boot area, BTIF and the 
 | Beside stock, tables packed | 507,592 | 53,671 over |
 | Replacing the stock application, tables packed, `-Oz` control code (first interface) | 421,212 | 32,709 free |
 | The same with the page interface (docs/POCKET-UI.md) | 423,100 | 30,821 free |
-| **The same with the sequencer (docs/POCKET-SEQUENCER.md)** | **430,908** | **23,013 free** |
+| The same with the sequencer (docs/POCKET-SEQUENCER.md) | 430,908 | 23,013 free |
+| **The same with keyboards, recording and kits (docs/POCKET-CONTROLS.md)** | **436,860** | **17,061 free** |
 
 The SDK's binary library (`libfm1_engine.a`) is a single pre-linked object. `--gc-sections`
 removes what nothing references any more, but the library still references its own

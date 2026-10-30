@@ -30,8 +30,8 @@ checked as far as possible without the toolchain or device), **open**.
 - **done** numerical equivalence with CLATTER's WebAssembly engine (within 3 LSB)
 - **done** host CPU, memory and soft-float assessment
 - **done (emulator; not on hardware)** the first hardware interface: start screen, MAIN,
-  PATTERN, SOUND, MIXER and SYSTEM pages, trigger, MIDI and overrun feedback, 93 checks in the
-  FM-1 emulator on the real package (docs/POCKET-UI.md)
+  PATTERN, SOUND, MIXER, GLOBAL and SYSTEM pages, trigger, MIDI and overrun feedback, 175 checks
+  in the FM-1 emulator on the real package (docs/POCKET-UI.md)
 - **prepared** FM-1 integration: audio hook, control hook, Pocket panel (kick and the other
   six triggers: pitch, decay, level, keys and PLAY), on-device timing display
 - **done: flash budget.** CLATTER Pocket replaces the stock instrument application, the
@@ -68,7 +68,9 @@ checked as far as possible without the toolchain or device), **open**.
 - **done** tracks: one per LXR trigger, CLATTER's ten roles folded as its default project routes them
 - **open** save/load in the user Flash partition with CRC'd, versioned, two-sector records (the
   first code here to touch user Flash, so it needs its own audit)
-- **open** more than one pattern, chaining, track lengths
+- **done (emulator; not on hardware)** DRUM and PITCH keyboards, step and live recording with a note
+  per step, GLOBAL settings (docs/POCKET-CONTROLS.md)
+- **open** more than one pattern, chaining, track lengths (deferred: 677 bytes over the margin)
 - **open** MIDI clock in and out, and note output
 
 ## D - Generative CLATTER
@@ -76,7 +78,10 @@ checked as far as possible without the toolchain or device), **open**.
 - **done (emulator; not on hardware)** seeded, deterministic generation on the device: CLATTER's
   11 styles, DENSITY, COMPLEXITY, SEED, instrument roles, fills, Euclidean lanes, track locks; and
   MUTATE at three strengths
-- **open** VARIATION and multi-bar phrases; per-step probability, conditional trigs, every-N
+- **done (emulator; not on hardware)** 16 kits and kit generation from LXR parameters: archetypes,
+  characters, families, WILD; one-voice sounds, one-track patterns, pitch in mutation
+- **open** A/B/C/D variations (deferred for flash) and multi-bar phrases; per-step probability
+  (deferred for flash), conditional trigs, every-N
 - **open** parameter locks per step (the engine has them)
 - **open** kit generation and mutation within instrument-aware ranges, wildness/character
 - **open** human-readable seeds (CLATTER's documented hash) and seed compatibility with CLATTER:

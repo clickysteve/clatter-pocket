@@ -21,15 +21,14 @@ int pocket_midi_drum_trigger(unsigned note)
 	}
 }
 
-int pocket_midi_parse(const uint8_t* m, size_t n, int* trigger, int* velocity)
+int pocket_midi_note_on(const uint8_t* m, size_t n, int* channel, int* note, int* velocity)
 {
 	if (!m || n != 3) return 0;
-	if ((m[0] & 0xf0) != 0x90) return 0;          /* note-on, any channel */
+	if ((m[0] & 0xf0) != 0x90) return 0;          /* note-on */
 	if ((m[1] | m[2]) & 0x80) return 0;           /* data bytes are 7-bit */
 	if (!m[2]) return 0;                          /* velocity 0 is a note-off */
-	const int t = pocket_midi_drum_trigger(m[1]);
-	if (t < 0) return 0;
-	*trigger = t;
+	*channel = m[0] & 15;
+	*note = m[1];
 	*velocity = m[2];
 	return 1;
 }

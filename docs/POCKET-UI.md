@@ -6,8 +6,8 @@ mock-up: the screens below were read from the LCD of the emulated FM-1 running t
 
 ![Screens read from the emulated LCD](pocket-ui-emulator.png)
 
-Top row: start screen, MAIN, PATTERN. Middle: SOUND, MIXER, SYSTEM. Bottom: a MIDI hit, SAFE
-MODE, and the stock fm1_open package for comparison.
+Top row: start screen, MAIN, PATTERN. Middle: SOUND, MIXER, GLOBAL. Bottom: SYSTEM, a MIDI hit,
+SAFE MODE. The control map and how to play it are in [POCKET-CONTROLS.md](POCKET-CONTROLS.md).
 
 ## Why the first report showed the stock interface
 
@@ -70,7 +70,7 @@ copy of M-VAVE's firmware it had kept: select another entry first.
 | Bands | Content |
 |---|---|
 | 0 | CLATTER POCKET, page name |
-| 1 | engine state; AUDIO OVERRUN n, inverted, for 3 s after an overrun |
+| 1 | the keyboard and REC; inverted, what a control just did, or AUDIO OVERRUN n for 3 s after an overrun |
 | 2 | selected voice |
 | 3 | MIDI: WAITING, MESSAGES n, or NOTE n and the voice, inverted for 200 ms after a hit |
 | 4 to 11 | the page |
@@ -86,35 +86,19 @@ start screen: CLATTER POCKET, LXR DRUM MACHINE, the state, the version and the b
 Encoder positions come from the emulator's panel (Felucca's `controls.jpg`) and fm1_open's use
 of them. They are not checked on a device.
 
-| Control | Action |
-|---|---|
-| SELECT | selected voice, on every page: DRUM 1-3, SNARE, CYMBAL, CL HAT, OP HAT |
-| note keys | play the selected voice chromatically (the 13th key is its programmed pitch) |
-| PLAY | start or stop the sequencer, on every page |
-| OCT− / OCT+ | previous / next page, wrapping |
-| HOME | MAIN |
-| SEQ | PATTERN |
-| EDIT | SOUND |
-| FX | MIXER |
-| GLO | SYSTEM |
-| KNOB 1-4 | SOUND: PITCH, DECAY, FILTER, DRIVE. MIXER: LEVEL, PAN. PATTERN: POCKET-SEQUENCER.md. Elsewhere nothing |
-| MASTER | output level (the pot, as stock) |
-| HOME held 1.5 s after power-on | SAFE MODE |
-
-PATTERN adds its own controls: ALGORITHM, REC, ARP, LFO, ENV, SAVE, SCL and the knobs, in
-[POCKET-SEQUENCER.md](POCKET-SEQUENCER.md). They act only on PATTERN. PRESETS does nothing. **No
-control writes Flash or updates anything**; the one thing a control can lose is the pattern, and ENV
-undoes that. The earlier "ENC 1/2/3" and "ENC 7" labels were matrix indices: they were
-physically SELECT, ALGORITHM, KNOB 1 and PRESETS.
+The whole control map is in [POCKET-CONTROLS.md](POCKET-CONTROLS.md). The earlier "ENC 1/2/3" and
+"ENC 7" labels were matrix indices: they were physically SELECT, ALGORITHM, KNOB 1 and PRESETS. **No
+control writes Flash or updates anything.** A control can replace a pattern or a kit, and
+SAVE+OCT− and SAVE+OCT+ bring them back.
 
 SAFE MODE is unchanged: HOME is read once, at the 1.5 s point, and a button held then does not
 act afterwards. So HOME's page function cannot reach SAFE MODE, or the reverse.
 
 ## Pages
 
-- **MAIN**: transport, tempo, swing, style, hits from the sequence and from the keys, and a row
-  showing how many tracks play each step, with the playhead.
-- **PATTERN**: the step editor. Line 1 is the transport, tempo and swing (or the style); then a
+- **MAIN**: transport, tempo, swing, style, hits from the sequence and from the keys, a row
+  showing how many tracks play each step, with the playhead, and the kit.
+- **PATTERN**: the step editor. Line 1 is the transport, tempo and swing; then a
   ruler of the same activity row with the playhead and the selected step; then seven rows of 16
   cells, bars as tall as their velocity; then the four knobs' fields. All 16 steps fit, 12 pixels
   each, with the beats set apart, so there is no paging. The playhead has a band to itself, so a
@@ -124,8 +108,9 @@ act afterwards. So HOME's page function cannot reach SAFE MODE, or the reverse.
   and drive; each has its own decay.
 - **MIXER**: LEVEL and PAN of the selected voice, MASTER (shown; set by the pot), a level bar
   per voice. The LXR's pan is taken at each trigger, so a move is heard on the next hit.
-- **SYSTEM**: version, build, CPU mean and peak, overruns, clipped samples, dropped events,
-  heap.
+- **GLOBAL**: the settings, 17 rows of which 8 show (POCKET-CONTROLS.md). GLO opens it.
+- **SYSTEM**: GLO from GLOBAL. Version, build, CPU mean and peak, overruns, clipped samples, dropped events,
+  heap, and how to reach SAFE MODE.
 
 SYSTEM's heap is **the size given to the heap at link time** (`_HEAP_END − _HEAP_BEGIN`),
 labelled LINKED. The SDK has no call for what is free.
@@ -136,8 +121,8 @@ labelled LINKED. The SDK has no call for what is free.
 the start of each block (POCKET-SEQUENCER.md).
 - Trigger feedback comes from the control task, which sends the key triggers and reads which tracks
   the sequencer played. The screen follows the audio; it never drives it.
-- MIDI: the routing task queues trigger, velocity and note; the control task starts the voice
-  and updates the screen at once.
+- MIDI: the routing task queues channel, note and velocity; the control task plays it as the
+  keys do and updates the screen at once.
 - The level meter, CPU, overruns, clipped and dropped are the existing diagnostics, read twice
   a second with interrupts held.
 
@@ -147,22 +132,18 @@ So there is no per-voice level measurement: the cells show triggers, the meter t
 
 | Command | Covers |
 |---|---|
-| `make test` | `test_seq` and `test_panel`, on the real engine: the sequencer (POCKET-SEQUENCER.md), navigation, wrapping, unassigned buttons, knob scope, selection, clamping, **every control of every voice changes the rendered audio**, pan direction, MIDI and audio activity, the overrun warning, redraw masks, every band of every page in every state stays in its buffer |
+| `make test` | `test_seq`, `test_kit` and `test_panel`, on the real engine: the sequencer (POCKET-SEQUENCER.md), navigation, wrapping, unassigned buttons, knob scope, selection, clamping, **every control of every voice changes the rendered audio**, pan direction, MIDI and audio activity, the overrun warning, redraw masks, every band of every page in every state stays in its buffer |
 | `make emu-test EMU_WASM=…` | `tools/emu-test.mjs`: the package in the emulator (below) |
 | `python3 tools/check-firmware.py` | size and headroom, heap, stock layout, SRAM and Flash placement, no user-flash code, from the ELF |
 
 ### Emulator results
 
-93 checks pass, on the package in FM1-REPLACEMENT.md, in the emulator's WebAssembly core (master `93cb7ee`) at
-240 MHz: start screen, no stock text, silence until played, every page by its button and by
-OCT−/OCT+, the seven voices, key audio, parameter editing, DIN MIDI to the voice and
-the screen, SYSTEM figures, the sequencer with measured timing (POCKET-SEQUENCER.md), 20 s of the
-sequence with hits through it, without a reset, SAFE MODE silent with the engine off, and the stock
-package failing the identity check.
+175 checks pass, on the package in FM1-REPLACEMENT.md, in the emulator's WebAssembly core at 240 MHz.
+[POCKET-CONTROLS.md](POCKET-CONTROLS.md) has what they cover.
 
 Limits of what this shows:
 - **Not run:** USB MIDI (the emulator's controller raises no interrupt yet) and BLE.
-- **The CPU figure, 28.2 % playing, is not a device measurement.** The emulator counts about one
+- **The CPU figure, 28.6 % playing, is not a device measurement.** The emulator counts about one
   instruction per cycle and models no cache or Flash wait states.
 - The firmware update path was not exercised.
 - Timing, the real screen, knob directions and sound are for the hardware test.
@@ -173,8 +154,8 @@ Limits of what this shows:
   for this interface; the safety properties are rechecked by `tools/check-firmware.py` and the
   emulator run, and the bootloader, update identity, flash layout, engine and audio path are
   unchanged.
-- Parameters and patterns are not saved; a restart returns to the init kit and seed 1.
+- Parameters, kits and patterns are not saved; a restart returns to the init kit and seed 1.
 - One parameter set per page: the other LXR parameters are reachable only from CLATTER's
   engine API.
-- Velocity is fixed at 127 from the keys (the scanner reports on and off). Steps and MIDI have
-  velocity.
+- The keys have one velocity, which you set (the scanner reports on and off). Steps and MIDI have
+  their own.

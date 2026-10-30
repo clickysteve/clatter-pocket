@@ -17,32 +17,35 @@ pocket synthesizer, through M-VAVE's open firmware SDK
 | | |
 |---|---|
 | LXR engine (all six voices, seven triggers, the firmware's parameter handler, modulation, locks) | runs natively; 177 host checks pass; matches CLATTER's engine to within 3 LSB; the FM-1's packed tables unpack byte-identical |
-| FM-1 firmware, CLATTER Pocket **replacing** the stock instrument application | **builds and packages** reproducibly with the FM-1 toolchain: 430,908-byte image (23,013 bytes under the 453,921 limit), stock flash layout, all SDK firmware checks pass, user partition untouched, installer page ([FM1-REPLACEMENT.md](FM1-REPLACEMENT.md)) |
+| FM-1 firmware, CLATTER Pocket **replacing** the stock instrument application | **builds and packages** reproducibly with the FM-1 toolchain: 436,860-byte image (17,061 bytes under the 453,921 limit), stock flash layout, all SDK firmware checks pass, user partition untouched, installer page ([FM1-REPLACEMENT.md](FM1-REPLACEMENT.md)) |
 | Pre-flash audit | done ([PRE-FLASH-AUDIT.md](PRE-FLASH-AUDIT.md)); first-test procedure: [FIRST-HARDWARE-TEST.md](FIRST-HARDWARE-TEST.md) |
 | FM-1 firmware, CLATTER Pocket **beside** the stock instrument (HOME + ARP) | compiles, links, passes the checks, but is 53,671 bytes too large for the flash layout |
 | On the device | **nothing has run on hardware** |
-| Sequencer and generator | 16 steps, seven tracks, CLATTER's styles, GENERATE and MUTATE on the FM-1's controls; **tested in the FM-1 emulator** ([docs/POCKET-SEQUENCER.md](docs/POCKET-SEQUENCER.md)) |
+| Sequencer and generator | 16 steps, seven tracks with notes, CLATTER's styles, whole-pattern and one-track generation, mutation; **tested in the FM-1 emulator** ([docs/POCKET-SEQUENCER.md](docs/POCKET-SEQUENCER.md)) |
+| Playing it | DRUM and PITCH keyboards, live and step recording, 16 kits and on-device kit generation from LXR parameters, GLOBAL settings; **tested in the FM-1 emulator** ([docs/POCKET-CONTROLS.md](docs/POCKET-CONTROLS.md)) |
 | Storage | not started: patterns and sounds are lost at restart (ROADMAP.md) |
 
 ## What it does on the FM-1 (once installed)
 
 In the replacement firmware CLATTER Pocket is the instrument: the panel below about 1.5 s
-after power-on (hold HOME then for SAFE MODE, engine off), MIDI drum notes (General MIDI
-numbers, any channel) trigger the voices, and USB/Bluetooth audio is mixed in as before. (The overlay build would open it with **HOME + ARP** beside
+after power-on (hold HOME then for SAFE MODE, engine off), MIDI notes play as the keys do, and USB/Bluetooth audio is mixed in as before. (The overlay build would open it with **HOME + ARP** beside
 the stock instrument; it does not fit the flash.)
 
 | Control | Action |
 |---|---|
-| note keys | play the selected LXR voice chromatically (13th key = programmed pitch) |
-| PLAY | start or stop the sequencer |
+| note keys | DRUM: each key an instrument. PITCH: the selected voice, chromatically (SCL switches) |
+| OCT− / OCT+ | PITCH: octave. DRUM: how hard the keys hit |
+| PLAY, REC | start or stop; recording on or off |
+| ENV, ARP, LFO | a new kit, a new pattern, mutate. Held SAVE: the selected voice only |
+| PRESETS, ALGORITHM | the kit, the pattern style |
 | SELECT | select DRUM 1-3, SNARE, CYMBAL, CL HAT, OP HAT |
-| OCT− / OCT+, HOME, SEQ, EDIT, FX, GLO | pages: MAIN, PATTERN, SOUND, MIXER, SYSTEM |
-| KNOB 1-4 | SOUND: pitch, decay, filter, drive. MIXER: level, pan |
+| HOME, SEQ, EDIT, FX, GLO | pages: MAIN, PATTERN, SOUND, MIXER, GLOBAL then SYSTEM |
+| KNOB 1-4 | PATTERN: velocity, tempo, swing, step. SOUND: pitch, decay, filter, drive. MIXER: level, pan. GLOBAL: row, value |
 | MASTER | master volume (stock) |
 | HOME + ARP | (overlay build only) back to the stock instrument |
 
-docs/POCKET-UI.md has the interface, how to load it in the FM-1 emulator, and its results.
-PATTERN has its own controls ([docs/POCKET-SEQUENCER.md](docs/POCKET-SEQUENCER.md)). The encoder positions come from the emulator, not a device.
+**[docs/POCKET-CONTROLS.md](docs/POCKET-CONTROLS.md) is the guide to playing it**, with a quick start.
+docs/POCKET-UI.md has the interface, how to load it in the FM-1 emulator, and its results. The encoder positions come from the emulator, not a device.
 
 ![The Pocket panel, rendered by the host tests](docs/panel.png)
 

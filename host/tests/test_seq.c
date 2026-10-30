@@ -20,23 +20,24 @@ static int failures, checks;
 #define RATE 44118u
 #define BLOCK 64u
 #define MAX_EVENTS 200000
-/* FNV-1a of the pattern of seed 12345, density 50, complexity 30, MACHINE */
+/* FNV-1a of the velocities of seed 12345, density 50, complexity 30, MACHINE */
 #ifndef GOLDEN
 #define GOLDEN 0xa118fffau
 #endif
 
 /* the voices: what was triggered, when */
-static struct { uint64_t at; int track, velocity; } events[MAX_EVENTS];
+static struct { uint64_t at; int track, velocity, note; } events[MAX_EVENTS];
 static int event_count;
 static uint64_t now;
 
-static void record(int track, int velocity)
+static void record(int track, int velocity, int note)
 {
 	if (event_count < MAX_EVENTS)
 	{
 		events[event_count].at = now;
 		events[event_count].track = track;
 		events[event_count].velocity = velocity;
+		events[event_count].note = note;
 		event_count++;
 	}
 }
@@ -86,8 +87,8 @@ static void test_step_timing(void)
 				reset(rate);
 				pocket_seq_set_tempo((int)bpm);
 				pocket_seq_set_swing((int)swing);
-				pocket_seq_set_step(0, 0, 100);
-				for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100);
+				pocket_seq_set_step(0, 0, 100, 0);
+				for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100, 0);
 				pocket_seq_play(1);
 				const int want = bpm >= 120 ? 8000 : 2000;
 				run_until_event(want);
@@ -127,7 +128,7 @@ static void test_swing(void)
 	reset(RATE);
 	pocket_seq_set_tempo(120);
 	pocket_seq_set_swing(66);
-	for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100);
+	for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100, 0);
 	pocket_seq_play(1);
 	run_until_event(1001);
 	const double straight = RATE * 15.0 / 120;
@@ -145,7 +146,7 @@ static void test_swing(void)
 
 	/* a swing change mid-pair waits for the next pair: every pair still adds up */
 	reset(RATE);
-	for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100);
+	for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100, 0);
 	pocket_seq_set_swing(75);
 	pocket_seq_play(1);
 	run_until_event(2);
@@ -160,7 +161,7 @@ static void test_tempo_change(void)
 {
 	/* a change moves no position: the next step arrives by the time already covered */
 	reset(RATE);
-	for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100);
+	for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100, 0);
 	pocket_seq_set_tempo(60);
 	pocket_seq_play(1);
 	run_until_event(5);
@@ -176,7 +177,7 @@ static void test_tempo_change(void)
 	for (int bpm = POCKET_SEQ_BPM_MIN; bpm <= POCKET_SEQ_BPM_MAX; bpm += 13)
 	{
 		reset(RATE);
-		for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100);
+		for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100, 0);
 		pocket_seq_set_tempo(bpm);
 		pocket_seq_set_swing(POCKET_SEQ_SWING_MAX);
 		pocket_seq_play(1);
@@ -191,8 +192,8 @@ static void test_tempo_change(void)
 static void test_loop_and_positions(void)
 {
 	reset(RATE);
-	pocket_seq_set_step(3, 0, 90);
-	pocket_seq_set_step(3, 15, 40);
+	pocket_seq_set_step(3, 0, 90, 0);
+	pocket_seq_set_step(3, 15, 40, 0);
 	pocket_seq_play(1);
 	CHECK(pocket_seq_position() == POCKET_SEQ_NOT_PLAYING, "nothing moves before a block");
 	run_until_event(6);
@@ -211,8 +212,8 @@ static void test_loop_and_positions(void)
 static void test_transport(void)
 {
 	reset(RATE);
-	pocket_seq_set_step(0, 0, 100);
-	pocket_seq_set_step(0, 8, 100);
+	pocket_seq_set_step(0, 0, 100, 0);
+	pocket_seq_set_step(0, 8, 100, 0);
 	run_blocks(1000);
 	CHECK(event_count == 0, "stopped: silence");
 	pocket_seq_play(1);
@@ -234,7 +235,7 @@ static void test_transport(void)
 static void test_simultaneous(void)
 {
 	reset(RATE);
-	for (int t = 0; t < POCKET_SEQ_TRACKS; t++) pocket_seq_set_step(t, 0, 100 + t);
+	for (int t = 0; t < POCKET_SEQ_TRACKS; t++) pocket_seq_set_step(t, 0, 100 + t, 0);
 	pocket_seq_play(1);
 	run_blocks(1);
 	/* six triggers: the two hats are one voice, and the open hat takes it */
@@ -248,7 +249,7 @@ static void test_simultaneous(void)
 	}
 	CHECK(tracks == 0x5f, "all but the closed hat: %x", tracks);
 	reset(RATE);
-	pocket_seq_set_step(5, 0, 100);
+	pocket_seq_set_step(5, 0, 100, 0);
 	pocket_seq_play(1);
 	run_blocks(1);
 	CHECK(event_count == 1 && events[0].track == 5, "a closed hat alone plays");
@@ -257,19 +258,19 @@ static void test_simultaneous(void)
 static void test_live_editing(void)
 {
 	reset(RATE);
-	pocket_seq_set_step(0, 0, 100);
+	pocket_seq_set_step(0, 0, 100, 0);
 	pocket_seq_play(1);
 	run_blocks(1);
 	/* an edit ahead of the playhead is heard this time round */
-	pocket_seq_set_step(1, 4, 77);
+	pocket_seq_set_step(1, 4, 77, 0);
 	run_until_event(2);
 	CHECK(events[1].track == 1 && events[1].velocity == 77, "an edit ahead of the playhead sounds");
 	/* one behind it waits for the next loop */
-	pocket_seq_set_step(2, 0, 55);
+	pocket_seq_set_step(2, 0, 55, 0);
 	run_until_event(4);
 	CHECK(events[2].track == 0 && events[3].track == 2 && events[3].at == events[2].at, "an edit behind it sounds next loop");
 	/* clearing a step ahead silences it */
-	pocket_seq_set_step(1, 4, 0);
+	pocket_seq_set_step(1, 4, 0, 0);
 	const int before = event_count;
 	run_blocks(4000 / 2);
 	for (int i = before; i < event_count; i++) CHECK(events[i].track != 1, "a cleared step stays quiet");
@@ -277,14 +278,14 @@ static void test_live_editing(void)
 	/* a whole pattern changes between steps, keeps the position, and is never seen half made */
 	reset(RATE);
 	for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
-		for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(t, i, 10);
+		for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(t, i, 10, 0);
 	pocket_seq_play(1);
 	run_blocks(500);
 	const int position = pocket_seq_position();
 	struct pocket_pattern* next = pocket_seq_edit_begin();
 	for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
 	{
-		for (int i = 0; i < POCKET_SEQ_STEPS; i++) next->vel[t][i] = 20;
+		for (int i = 0; i < POCKET_SEQ_STEPS; i++) next->cell[t][i] = 20;
 		run_blocks(50); /* audio runs through the edit */
 	}
 	for (int i = event_count - 1; i >= 0; i--) CHECK(events[i].velocity == 10, "nothing from an uncommitted pattern");
@@ -296,11 +297,11 @@ static void test_live_editing(void)
 	for (int i = edge; i < event_count; i++) CHECK(events[i].velocity == 20, "the whole new pattern");
 
 	/* undo returns the replaced pattern, and undo again returns */
-	CHECK(pocket_seq_pattern()->vel[0][0] == 20, "the new pattern shows");
+	CHECK(POCKET_CELL_VELOCITY(pocket_seq_pattern()->cell[0][0]) == 20, "the new pattern shows");
 	pocket_seq_undo();
-	CHECK(pocket_seq_pattern()->vel[0][0] == 10, "undo");
+	CHECK(POCKET_CELL_VELOCITY(pocket_seq_pattern()->cell[0][0]) == 10, "undo");
 	pocket_seq_undo();
-	CHECK(pocket_seq_pattern()->vel[0][0] == 20, "redo");
+	CHECK(POCKET_CELL_VELOCITY(pocket_seq_pattern()->cell[0][0]) == 20, "redo");
 }
 
 static void test_boundaries(void)
@@ -315,15 +316,15 @@ static void test_boundaries(void)
 	pocket_seq_set_swing(99);
 	CHECK(pocket_seq_swing() == POCKET_SEQ_SWING_MAX, "swing ceiling");
 	struct pocket_pattern before = *pocket_seq_pattern();
-	pocket_seq_set_step(-1, 0, 100);
-	pocket_seq_set_step(POCKET_SEQ_TRACKS, 0, 100);
-	pocket_seq_set_step(0, -1, 100);
-	pocket_seq_set_step(0, POCKET_SEQ_STEPS, 100);
+	pocket_seq_set_step(-1, 0, 100, 0);
+	pocket_seq_set_step(POCKET_SEQ_TRACKS, 0, 100, 0);
+	pocket_seq_set_step(0, -1, 100, 0);
+	pocket_seq_set_step(0, POCKET_SEQ_STEPS, 100, 0);
 	CHECK(!memcmp(&before, pocket_seq_pattern(), sizeof before), "out-of-range edits ignored");
-	pocket_seq_set_step(0, 0, 500);
-	CHECK(pocket_seq_pattern()->vel[0][0] == 127, "velocity ceiling");
-	pocket_seq_set_step(0, 0, -5);
-	CHECK(pocket_seq_pattern()->vel[0][0] == 0, "velocity floor");
+	pocket_seq_set_step(0, 0, 500, 0);
+	CHECK(POCKET_CELL_VELOCITY(pocket_seq_pattern()->cell[0][0]) == 127, "velocity ceiling");
+	pocket_seq_set_step(0, 0, -5, 0);
+	CHECK(POCKET_CELL_VELOCITY(pocket_seq_pattern()->cell[0][0]) == 0, "velocity floor");
 	/* the fastest possible steps are far longer than a block */
 	const uint32_t fastest = 6u * 44100u * (100u - POCKET_SEQ_SWING_MAX), perBlock = 20u * BLOCK * POCKET_SEQ_BPM_MAX;
 	CHECK(fastest > perBlock, "a step can never fall inside one block");
@@ -335,7 +336,7 @@ static void test_boundaries(void)
 static int hits_of(const struct pocket_pattern* p, int t)
 {
 	int n = 0;
-	for (int i = 0; i < POCKET_SEQ_STEPS; i++) n += p->vel[t][i] != 0;
+	for (int i = 0; i < POCKET_SEQ_STEPS; i++) n += POCKET_CELL_VELOCITY(p->cell[t][i]) != 0;
 	return n;
 }
 
@@ -350,7 +351,7 @@ static int differences(const struct pocket_pattern* a, const struct pocket_patte
 {
 	int n = 0;
 	for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
-		for (int i = 0; i < POCKET_SEQ_STEPS; i++) n += !a->vel[t][i] != !b->vel[t][i];
+		for (int i = 0; i < POCKET_SEQ_STEPS; i++) n += !POCKET_CELL_VELOCITY(a->cell[t][i]) != !POCKET_CELL_VELOCITY(b->cell[t][i]);
 	return n;
 }
 
@@ -381,7 +382,8 @@ static void test_deterministic_seeds(void)
 	/* fixed across platforms and builds: the firmware must generate exactly this */
 	struct pocket_pattern p = generated(12345, 50, 30, 0, 0);
 	uint32_t h = 2166136261u;
-	for (unsigned i = 0; i < sizeof p; i++) h = (h ^ ((const uint8_t*)&p)[i]) * 16777619u;
+	for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
+		for (int i = 0; i < POCKET_SEQ_STEPS; i++) h = (h ^ POCKET_CELL_VELOCITY(p.cell[t][i])) * 16777619u;
 	CHECK(h == GOLDEN, "the pattern of seed 12345 changed: %08x", h);
 }
 
@@ -396,8 +398,8 @@ static void test_generation_every_setting(void)
 					struct pocket_pattern p = generated(seed, density, complexity, style, 0);
 					int bad = 0, choked = 0;
 					for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
-						for (int i = 0; i < POCKET_SEQ_STEPS; i++) bad += p.vel[t][i] > 127;
-					for (int i = 0; i < POCKET_SEQ_STEPS; i++) choked += p.vel[5][i] && p.vel[6][i];
+						for (int i = 0; i < POCKET_SEQ_STEPS; i++) bad += POCKET_CELL_VELOCITY(p.cell[t][i]) > 127;
+					for (int i = 0; i < POCKET_SEQ_STEPS; i++) choked += POCKET_CELL_VELOCITY(p.cell[5][i]) && POCKET_CELL_VELOCITY(p.cell[6][i]);
 					checks++;
 					if (bad || choked || !total_hits(&p))
 					{
@@ -417,9 +419,9 @@ static void test_roles(void)
 	for (uint32_t seed = 1; seed <= 200; seed++)
 	{
 		struct pocket_pattern p = generated(seed, 50, 30, 0, 0);
-		kick_downbeat += p.vel[0][0] != 0;
-		backbeat += p.vel[3][4] && p.vel[3][12];
-		four_floor += p.vel[0][0] && p.vel[0][4] && p.vel[0][8] && p.vel[0][12];
+		kick_downbeat += POCKET_CELL_VELOCITY(p.cell[0][0]) != 0;
+		backbeat += POCKET_CELL_VELOCITY(p.cell[3][4]) && POCKET_CELL_VELOCITY(p.cell[3][12]);
+		four_floor += POCKET_CELL_VELOCITY(p.cell[0][0]) && POCKET_CELL_VELOCITY(p.cell[0][4]) && POCKET_CELL_VELOCITY(p.cell[0][8]) && POCKET_CELL_VELOCITY(p.cell[0][12]);
 		hats += hits_of(&p, 5) >= 4;
 		count++;
 		struct pocket_pattern low = generated(seed, 50, 10, 5, 0), high = generated(seed, 50, 90, 5, 0);
@@ -427,14 +429,14 @@ static void test_roles(void)
 		for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
 			for (int i = 0; i < POCKET_SEQ_STEPS; i++)
 			{
-				if (low.vel[t][i]) { if (i & 1) off++; else on++; }
+				if (POCKET_CELL_VELOCITY(low.cell[t][i])) { if (i & 1) off++; else on++; }
 			}
 		offbeats_low += (double)off / (on + off);
 		on = off = 0;
 		for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
 			for (int i = 0; i < POCKET_SEQ_STEPS; i++)
 			{
-				if (high.vel[t][i]) { if (i & 1) off++; else on++; }
+				if (POCKET_CELL_VELOCITY(high.cell[t][i])) { if (i & 1) off++; else on++; }
 			}
 		offbeats_high += (double)off / (on + off);
 	}
@@ -450,9 +452,9 @@ static void test_roles(void)
 		struct pocket_pattern p = generated(seed, 60, 30, 1, 0);
 		for (int i = 0; i < POCKET_SEQ_STEPS; i++)
 		{
-			if (!p.vel[5][i]) continue;
-			if (i % 4 == 0) { strong += p.vel[5][i]; nstrong++; }
-			if (i & 1) { weak += p.vel[5][i]; nweak++; }
+			if (!POCKET_CELL_VELOCITY(p.cell[5][i])) continue;
+			if (i % 4 == 0) { strong += POCKET_CELL_VELOCITY(p.cell[5][i]); nstrong++; }
+			if (i & 1) { weak += POCKET_CELL_VELOCITY(p.cell[5][i]); nweak++; }
 		}
 	}
 	CHECK(nstrong && nweak && strong * nweak > weak * nstrong, "beats are louder than off-beats");
@@ -480,8 +482,8 @@ static void test_density(void)
 		for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
 			for (int i = 0; i < POCKET_SEQ_STEPS; i++)
 			{
-				was += a.vel[t][i] != 0;
-				kept += a.vel[t][i] && b.vel[t][i];
+				was += POCKET_CELL_VELOCITY(a.cell[t][i]) != 0;
+				kept += POCKET_CELL_VELOCITY(a.cell[t][i]) && POCKET_CELL_VELOCITY(b.cell[t][i]);
 			}
 	}
 	CHECK(kept * 100 > was * 90, "a denser pattern keeps its hits: %d of %d", kept, was);
@@ -494,7 +496,7 @@ static void test_experimental(void)
 	for (uint32_t seed = 1; seed <= 200; seed++)
 	{
 		struct pocket_pattern calm = generated(seed, 50, 20, 0, 0), wild = generated(seed, 50, 100, 0, 0);
-		unanchored += !wild.vel[0][0];
+		unanchored += !POCKET_CELL_VELOCITY(wild.cell[0][0]);
 		patterns_differ += differences(&calm, &wild) >= 8;
 	}
 	CHECK(unanchored > 0 || patterns_differ >= 180, "high complexity lets go: %d %d", unanchored, patterns_differ);
@@ -506,13 +508,13 @@ static void test_locks(void)
 	struct pocket_pattern p = generated(7, 50, 50, 0, 0), before = p;
 	struct pocket_gen_settings s = { 8, 90, 90, 1, (1u << 0) | (1u << 3) };
 	pocket_gen_generate(&p, &s);
-	CHECK(!memcmp(p.vel[0], before.vel[0], POCKET_SEQ_STEPS), "a locked kick survives GENERATE");
-	CHECK(!memcmp(p.vel[3], before.vel[3], POCKET_SEQ_STEPS), "a locked snare survives GENERATE");
+	CHECK(!memcmp(p.cell[0], before.cell[0], sizeof p.cell[0]), "a locked kick survives GENERATE");
+	CHECK(!memcmp(p.cell[3], before.cell[3], sizeof p.cell[3]), "a locked snare survives GENERATE");
 	CHECK(differences(&p, &before) > 0, "the rest changed");
 	before = p;
 	for (uint32_t seed = 0; seed < 100; seed++) pocket_gen_mutate(&p, seed, POCKET_MUTATE_LARGE, (1u << 0) | (1u << 3));
-	CHECK(!memcmp(p.vel[0], before.vel[0], POCKET_SEQ_STEPS), "a locked kick survives MUTATE");
-	CHECK(!memcmp(p.vel[3], before.vel[3], POCKET_SEQ_STEPS), "a locked snare survives MUTATE");
+	CHECK(!memcmp(p.cell[0], before.cell[0], sizeof p.cell[0]), "a locked kick survives MUTATE");
+	CHECK(!memcmp(p.cell[3], before.cell[3], sizeof p.cell[3]), "a locked snare survives MUTATE");
 	CHECK(pocket_gen_mutate(&p, 1, POCKET_MUTATE_LARGE, 0x7f) == 0, "all locked: nothing to do");
 }
 
@@ -534,12 +536,12 @@ static void test_mutation(void)
 			{
 				count++;
 				unchanged += !memcmp(&base, &p, sizeof p) && made == 0;
-				anchors_kept += p.vel[0][0] && p.vel[3][4] && p.vel[3][12];
+				anchors_kept += POCKET_CELL_VELOCITY(p.cell[0][0]) && POCKET_CELL_VELOCITY(p.cell[3][4]) && POCKET_CELL_VELOCITY(p.cell[3][12]);
 				CHECK(differences(&base, &p) <= 6, "small stays small: %d", differences(&base, &p));
 			}
 			int bad = 0;
 			for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
-				for (int i = 0; i < POCKET_SEQ_STEPS; i++) bad += p.vel[t][i] > 127;
+				for (int i = 0; i < POCKET_SEQ_STEPS; i++) bad += POCKET_CELL_VELOCITY(p.cell[t][i]) > 127;
 			CHECK(!bad, "velocities in range");
 		}
 	}
@@ -569,13 +571,170 @@ static void test_mutation(void)
 	checks++;
 }
 
+/* Steps carry notes: played, kept apart from the programmed pitch, moved with their hits. */
+static void test_notes(void)
+{
+	reset(RATE);
+	pocket_seq_set_step(1, 0, 90, 67);
+	pocket_seq_set_step(2, 0, 80, 0);
+	pocket_seq_play(1);
+	run_blocks(1);
+	CHECK(event_count == 2 && events[0].note == 67 && events[0].velocity == 90, "a step plays its note: %d", events[0].note);
+	CHECK(events[1].note == POCKET_SEQ_NOTE_PROGRAMMED, "no note: the programmed pitch: %d", events[1].note);
+	CHECK(POCKET_CELL_NOTE(pocket_seq_pattern()->cell[1][0]) == 67, "the note is stored");
+	pocket_seq_set_step(1, 0, 0, 67);
+	CHECK(pocket_seq_pattern()->cell[1][0] == 0, "a step that is off keeps no note");
+	pocket_seq_set_step(1, 0, 90, 300);
+	CHECK(POCKET_CELL_NOTE(pocket_seq_pattern()->cell[1][0]) == 0, "a note out of range is no note");
+
+	/* every kind of mutation carries a note with its hit: no hit changes note unless OP_PITCH did,
+	   and no note is ever left on a step that is off */
+	long stray = 0, pitch_at_low = 0, moved = 0, kept = 0;
+	for (uint32_t seed = 1; seed <= 400; seed++)
+	{
+		struct pocket_pattern p = generated(seed, 60, 40, 0, 0);
+		const int pitched = (seed & 3u) == 0;
+		for (int i = 0; pitched && i < POCKET_SEQ_STEPS; i++)
+			if (p.cell[1][i]) p.cell[1][i] = POCKET_CELL(POCKET_CELL_VELOCITY(p.cell[1][i]), 72);
+		for (int s = 0; s < POCKET_MUTATE_STRENGTHS; s++)
+		{
+			struct pocket_pattern q = p;
+			pocket_gen_mutate(&q, seed * 13u, (unsigned)s, 0);
+			for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
+				for (int i = 0; i < POCKET_SEQ_STEPS; i++)
+				{
+					const unsigned n = POCKET_CELL_NOTE(q.cell[t][i]);
+					stray += n && !POCKET_CELL_VELOCITY(q.cell[t][i]);
+					if (s < POCKET_MUTATE_LARGE && !pitched) pitch_at_low += n != 0;
+					if (pitched && t == 1 && n) { kept += n == 72; moved += n != 72; }
+				}
+		}
+	}
+	CHECK(!stray, "a note left on an empty step: %ld", stray);
+	CHECK(!pitch_at_low, "LOW and MED gave programmed-pitch tracks notes: %ld", pitch_at_low);
+	CHECK(moved > 0 && kept > moved * 4, "notes move now and then, and mostly stay: %ld moved, %ld kept", moved, kept);
+	struct pocket_pattern big = generated(3, 70, 40, 0, 0);
+	int notes = 0;
+	for (uint32_t seed = 0; seed < 60; seed++) pocket_gen_mutate(&big, seed, POCKET_MUTATE_LARGE, 0);
+	for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
+		for (int i = 0; i < POCKET_SEQ_STEPS; i++) notes += POCKET_CELL_NOTE(big.cell[t][i]) != 0;
+	CHECK(notes > 0, "BIG may give a rhythm notes");
+}
+
+/* Where a live hit lands, and that it is not heard twice. */
+static void test_quantise(void)
+{
+	const uint32_t step_blocks = RATE * 15u / 120u / BLOCK; /* a step at 120 BPM, in blocks */
+	reset(RATE);
+	int ahead = -1;
+	CHECK(pocket_seq_quantise(1, &ahead) == 0 && ahead, "before the first step: step 0, ahead");
+	pocket_seq_play(1);
+	run_blocks(1);
+	/* just after step 0, and just before step 1 */
+	run_blocks(step_blocks / 2u - 2u);
+	CHECK(pocket_seq_quantise(1, &ahead) == 0 && !ahead, "the first half of a step belongs to it");
+	run_blocks(4);
+	CHECK(pocket_seq_quantise(1, &ahead) == 1 && ahead, "the second half to the next");
+	CHECK(pocket_seq_quantise(0, &ahead) == 0 && !ahead, "BEHIND stays on the step sounding");
+	/* every position of a whole loop, with swing, against what the clock does next */
+	reset(RATE);
+	pocket_seq_set_swing(66);
+	pocket_seq_play(1);
+	run_blocks(1);
+	int wrong = 0, late = 0;
+	for (uint32_t b = 0; b < 2500u; b++)
+	{
+		const int at = pocket_seq_position(), to = pocket_seq_quantise(1, &ahead);
+		if (ahead ? to != ((at + 1) & 15) : to != at) wrong++;
+		late += ahead;
+		run_blocks(1);
+	}
+	CHECK(!wrong, "quantised steps are the playhead or the next: %d wrong", wrong);
+	CHECK(late > 800 && late < 1700, "about half of all times round up: %d of 2500", late);
+	/* a wrap: the last step's later half goes to step 0 */
+	reset(RATE);
+	pocket_seq_play(1);
+	run_blocks(1);
+	while (pocket_seq_position() != 15) run_blocks(1);
+	run_blocks(step_blocks * 3u / 4u);
+	CHECK(pocket_seq_quantise(1, &ahead) == 0 && ahead, "the end of the bar rounds to step 0");
+
+	/* the skip: once, on that step, and it cannot wait for a later one */
+	reset(RATE);
+	for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100, 0);
+	pocket_seq_set_step(1, 2, 100, 0);
+	pocket_seq_skip(0, 2);
+	pocket_seq_skip(1, 2);
+	pocket_seq_play(1);
+	run_blocks(step_blocks * 6u);
+	int on2 = 0, seen = 0;
+	for (int i = 0; i < event_count; i++)
+	{
+		on2 += events[i].track == 1;
+		seen += events[i].track == 0;
+	}
+	CHECK(on2 == 1, "a skip is forgotten when another step plays: %d", on2);
+	CHECK(seen >= 5, "the track keeps playing around it: %d", seen);
+	reset(RATE);
+	for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100, 0);
+	pocket_seq_play(1);
+	run_blocks(1);
+	pocket_seq_skip(0, 1);
+	const int before = event_count;
+	run_blocks(step_blocks + 2u);
+	CHECK(event_count == before, "the skipped step is silent: %d", event_count - before);
+	run_blocks(step_blocks + 2u);
+	CHECK(event_count == before + 1, "and only that one: %d", event_count - before);
+}
+
+/* One track of a pattern, and only that one. */
+static void test_one_track(void)
+{
+	int empty = 0, same = 0, unchanged = 0, others = 0;
+	for (uint32_t seed = 1; seed <= 200; seed++)
+		for (unsigned style = 0; style < POCKET_GEN_STYLES; style++)
+			for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
+			{
+				struct pocket_pattern p = generated(seed, 50, 30, (int)style, 0), a = p, b = p;
+				const struct pocket_gen_settings s = { seed, 50, 30, (uint8_t)style, 0 };
+				a.cell[t][3] = POCKET_CELL(100, 70); /* a recorded note goes with the old rhythm */
+				const struct pocket_pattern c = a;
+				pocket_gen_track(&a, &s, t, 0);
+				pocket_gen_track(&b, &s, t, 1);
+				int hits = 0;
+				for (int i = 0; i < POCKET_SEQ_STEPS; i++)
+				{
+					hits += a.cell[t][i] != 0;
+					others += POCKET_CELL_NOTE(a.cell[t][i]) != 0;
+				}
+				empty += !hits;
+				same += !memcmp(a.cell[t], b.cell[t], sizeof a.cell[t]);
+				int rhythm = 0;
+				for (int i = 0; i < POCKET_SEQ_STEPS; i++) rhythm += !a.cell[t][i] != !c.cell[t][i];
+				unchanged += !rhythm;
+				for (unsigned o = 0; o < POCKET_SEQ_TRACKS; o++)
+					if (o != t) others += memcmp(a.cell[o], p.cell[o], sizeof a.cell[o]) != 0;
+			}
+	CHECK(!empty, "a one-track pattern came back empty: %d", empty);
+	CHECK(!others, "a one-track pattern touched another track: %d", others);
+	CHECK(!unchanged, "a new rhythm was the old one: %d of 15400", unchanged);
+	CHECK(same < 3000, "another take is usually another rhythm: %d of 15400 the same", same);
+	struct pocket_pattern x, y;
+	memset(&x, 0, sizeof x);
+	memset(&y, 0, sizeof y);
+	const struct pocket_gen_settings s = { 9, 50, 30, 2, 0 };
+	pocket_gen_track(&x, &s, 3, 4);
+	pocket_gen_track(&y, &s, 3, 4);
+	CHECK(!memcmp(&x, &y, sizeof x), "a one-track pattern is deterministic");
+}
+
 static void print_pattern(int argc, char** argv)
 {
 	if (argc < 6) exit(2);
 	struct pocket_pattern p = generated((uint32_t)atoi(argv[2]), atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), 0);
 	for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
 	{
-		for (int i = 0; i < POCKET_SEQ_STEPS; i++) putchar(p.vel[t][i] ? '1' : '0');
+		for (int i = 0; i < POCKET_SEQ_STEPS; i++) putchar(POCKET_CELL_VELOCITY(p.cell[t][i]) ? '1' : '0');
 		putchar('\n');
 	}
 }
@@ -603,6 +762,9 @@ int main(int argc, char** argv)
 	test_experimental();
 	test_locks();
 	test_mutation();
+	test_notes();
+	test_quantise();
+	test_one_track();
 	printf("sequencer: %d checks, %d failed\n", checks, failures);
 	return failures ? 1 : 0;
 }

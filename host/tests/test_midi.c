@@ -33,7 +33,7 @@ int main(void)
 	for (int n = 0; n < 256; n++) bad += pocket_midi_drum_trigger((unsigned)n) != (n < 128 ? expected[n] : -1);
 	CHECK(!bad, "drum map differs from the documented map at %d notes", bad);
 
-	/* every 3-byte message: accepted exactly when it is a mapped note-on with velocity > 0 */
+	/* every 3-byte message: accepted exactly when it is a note-on with velocity > 0 */
 	long accepted = 0, wrong = 0;
 	uint8_t* m = malloc(3); /* exact size: AddressSanitizer catches any read beyond it */
 	for (unsigned s = 0; s < 256; s++)
@@ -41,15 +41,16 @@ int main(void)
 			for (unsigned d2 = 0; d2 < 256; d2++)
 			{
 				m[0] = (uint8_t)s; m[1] = (uint8_t)d1; m[2] = (uint8_t)d2;
-				int t = -7, v = -7;
-				const int r = pocket_midi_parse(m, 3, &t, &v);
-				const int want = (s & 0xf0) == 0x90 && d1 < 128 && d2 > 0 && d2 < 128 && expected[d1] >= 0;
-				if (r != want || (r && (t != expected[d1] || v != (int)d2)) || (!r && (t != -7 || v != -7))) wrong++;
-				if (r) { accepted++; reached[t] = 1; }
+				int c = -7, t = -7, v = -7;
+				const int r = pocket_midi_note_on(m, 3, &c, &t, &v);
+				const int want = (s & 0xf0) == 0x90 && d1 < 128 && d2 > 0 && d2 < 128;
+				if (r != want || (r && (c != (int)(s & 15) || t != (int)d1 || v != (int)d2)) || (!r && (c != -7 || t != -7 || v != -7))) wrong++;
+				if (r) accepted++;
+				if (r && expected[t] >= 0) reached[expected[t]] = 1;
 			}
 	free(m);
 	CHECK(!wrong, "%ld of 16777216 three-byte messages parsed wrongly", wrong);
-	CHECK(accepted == 16L * 21 * 127, "accepted %ld note-ons, expected %ld", accepted, 16L * 21 * 127);
+	CHECK(accepted == 16L * 128 * 127, "accepted %ld note-ons, expected %ld", accepted, 16L * 128 * 127);
 	int all = 1;
 	for (int t = 0; t < POCKET_LXR_TRIGGERS; t++) all &= reached[t];
 	CHECK(all, "not every LXR trigger is reachable from MIDI");
@@ -66,18 +67,18 @@ int main(void)
 			if (n) b[0] = (uint8_t)(0x90 | (k & 15));
 			if (n > 1) b[1] = 36;
 			if (n > 2) b[2] = 100;
-			int t, v;
-			other += pocket_midi_parse(b, n, &t, &v);
+			int c, t, v;
+			other += pocket_midi_note_on(b, n, &c, &t, &v);
 			free(b);
 		}
 	}
 	CHECK(!other, "a message of the wrong length triggered %d times", other);
-	int t, v;
-	CHECK(!pocket_midi_parse(NULL, 3, &t, &v), "NULL message accepted");
+	int c, t, v;
+	CHECK(!pocket_midi_note_on(NULL, 3, &c, &t, &v), "NULL message accepted");
 	static const uint8_t sysex[] = { 0xf0, 0x7d, 0x01, 0xf7 }, off[] = { 0x89, 36, 64 }, zero[] = { 0x99, 36, 0 };
-	CHECK(!pocket_midi_parse(sysex, sizeof sysex, &t, &v), "SysEx accepted");
-	CHECK(!pocket_midi_parse(off, 3, &t, &v), "note-off accepted");
-	CHECK(!pocket_midi_parse(zero, 3, &t, &v), "note-on with velocity 0 accepted");
+	CHECK(!pocket_midi_note_on(sysex, sizeof sysex, &c, &t, &v), "SysEx accepted");
+	CHECK(!pocket_midi_note_on(off, 3, &c, &t, &v), "note-off accepted");
+	CHECK(!pocket_midi_note_on(zero, 3, &c, &t, &v), "note-on with velocity 0 accepted");
 
 	printf("midi: %d checks, %d failed\n", checks, failures);
 	return failures ? 1 : 0;

@@ -7,9 +7,9 @@ whether to start, and every step can be the point to stop.
 
 Candidate:
 - `clatter-pocket-fm1-replace-UNVERIFIED.fwsc`, SHA-256
-  `8dcccacf5d382de416034cd46a857422868c38c3b2a1f85ec478fa60d8e5c18a`;
+  `51afea18e752b71161e0e743358868481791c76912bf892a338019947a902b4b`;
 - installer `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-  `c72d0b9bb98d28bfb63975915305785379ff3cdbb37b162648efcf1171eea82e`.
+  `1c89c70b0bf8fd5051491ca8427ddb4a5facb27d0e323dff5a5d2be8c34ddf03`.
 
 Both are produced by:
 
@@ -91,11 +91,11 @@ The page runs M-VAVE's own update code (`sdk/WebUpdate.js`, unchanged, in a mini
 Expected on screen:
 1. a black start screen: "CLATTER POCKET", "LXR DRUM MACHINE", "HOLD HOME NOW FOR SAFE MODE",
    the version and 8 hex digits (the build);
-2. about 1.5 s later, the MAIN page: "CLATTER POCKET" over "LXR ENGINE READY";
+2. about 1.5 s later, the MAIN page: "CLATTER POCKET" over "KEYS: DRUM VEL 127";
 3. "MIDI WAITING";
 4. the seven activity cells and a level meter.
 
-Press **GLO** for SYSTEM: version, build, CPU, OVERRUNS, CLIPPED, DROPPED, HEAP. The emulator
+Press **GLO** twice for SYSTEM (GLOBAL, then SYSTEM): version, build, CPU, OVERRUNS, CLIPPED, DROPPED, HEAP. The emulator
 shows this same sequence (docs/POCKET-UI.md); the stock interface here means the wrong package
 is installed.
 
@@ -112,16 +112,17 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
 
 ## First audio test
 
-1. MASTER low. Press the **13th note key**: DRUM 1 sounds once at its programmed pitch.
+1. MASTER low. Press **C4**, the 8th note key: DRUM 1 sounds once at its programmed pitch.
 2. Raise MASTER: the level follows smoothly. Fully down is silent.
 3. The level meter moves with each hit and the DRUM 1 cell flashes; CLIPPED stays 0 at
    moderate MASTER. Listen for
    distortion, clicks and dropouts.
-4. Play several keys: DRUM 1 at different pitches. Turn **SELECT**: the VOICE line changes.
-   Play each of the seven voices.
+4. Play the keys C4 to E4: each is a different voice, and the VOICE line follows. Press **SCL**
+   for KEYS: PITCH, then several keys: the selected voice at different pitches. **OCT+** moves them
+   an octave. Press **SCL** again. Turn **SELECT**: the VOICE line changes.
 5. Press **EDIT**. Turn KNOB 1 to 4: pitch, decay, filter and drive change on the next hit.
-   Press **FX**. KNOB 1 and 2: level and pan. Press OCT− and OCT+, then SEQ, GLO and HOME: the
-   page name changes. Record any control that differs from docs/POCKET-UI.md: the encoder
+   Press **FX**. KNOB 1 and 2: level and pan. Press SEQ, GLO and HOME: the page name
+   changes. Turn **PRESETS**: the kit's name shows and the sound changes. Record any control that differs from docs/POCKET-UI.md: the encoder
    positions come from the emulator, not a device.
 6. Watch for 2 minutes: no stuck or endless sounds (a voice whose DECAY is at 127 sustains
    by design), OVERRUNS not rising, no interruptions.

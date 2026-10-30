@@ -1,7 +1,7 @@
 # CLATTER Pocket - host build (the portable engine, its tests and tools).
 #
 #   make            build the host tools and run the tests
-#   make test       unit tests of the engine (the real LXR DSP, natively compiled), panel, sequencer
+#   make test       unit tests of the engine (the real LXR DSP, natively compiled), panel, sequencer, kits
 #   make bench      host timing of the engine per FM-1 audio block
 #   make render     render demo WAVs into build/host/
 #   make compare    compare with CLATTER's WebAssembly engine (needs node and CLATTER_DIR)
@@ -50,7 +50,7 @@ PACKED_SRC := $(filter-out $(LXR_TABLES),$(LXR_NOFX)) $(BRIDGE) $(ENGINE) engine
 PACKED_OBJ := $(call obj,packed,$(PACKED_SRC))
 $(PACKED_OBJ): DSP_CFLAGS += -DPOCKET_PACKED_TABLES
 
-TOOLS := $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_seq $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/bench $(BUILD)/render $(BUILD)/dump
+TOOLS := $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_seq $(BUILD)/test_kit $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/bench $(BUILD)/render $(BUILD)/dump
 
 .PHONY: all test bench render compare compare-sp emu-test firmware packed-tables clean
 all: $(TOOLS) test
@@ -98,8 +98,12 @@ packed-tables: $(BUILD)/lxr_tables.bin
 	python3 tools/pack-lxr-tables.py $< engine/lxr_tables_packed.c
 SEQ := seq/pocket_seq.c seq/pocket_gen.c
 SEQ_DEPS := $(SEQ) seq/pocket_seq.h seq/pocket_gen.h seq/pocket_styles.h
-$(BUILD)/test_panel: host/tests/test_panel.c ui/pocket_panel.c ui/pocket_panel.h $(SEQ_DEPS) $(BUILD)/liblxr_nofx.a
-	$(CC) $(HOST_CFLAGS) $< ui/pocket_panel.c $(SEQ) $(BUILD)/liblxr_nofx.a -lm -o $@
+PANEL := ui/pocket_panel.c ui/pocket_midi.c seq/pocket_kit.c
+$(BUILD)/test_panel: host/tests/test_panel.c $(PANEL) ui/pocket_panel.h seq/pocket_kit.h $(SEQ_DEPS) $(BUILD)/liblxr_nofx.a
+	$(CC) $(HOST_CFLAGS) $< $(PANEL) $(SEQ) $(BUILD)/liblxr_nofx.a -lm -o $@
+# Every kit rendered through the real engine.
+$(BUILD)/test_kit: host/tests/test_kit.c seq/pocket_kit.c seq/pocket_kit.h seq/pocket_gen.c $(BUILD)/liblxr_nofx.a
+	$(CC) $(HOST_CFLAGS) $< seq/pocket_kit.c seq/pocket_gen.c $(BUILD)/liblxr_nofx.a -lm -o $@
 # The sequencer and generator alone, with AddressSanitizer and the undefined-behaviour checks.
 $(BUILD)/test_seq: host/tests/test_seq.c $(SEQ_DEPS)
 	$(CC) $(HOST_CFLAGS) -fsanitize=address,undefined -fno-omit-frame-pointer $< $(SEQ) -o $@
@@ -122,7 +126,7 @@ $(BUILD)/dump_packed: host/compare/dump.c $(BUILD)/liblxr_packed.a
 $(BUILD)/dump_sp: host/compare/dump.c $(BUILD)/liblxr_sp.a
 	$(CC) $(HOST_CFLAGS) $< $(BUILD)/liblxr_sp.a -lm -o $@
 
-test: $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_seq $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/lxr_tables.bin $(BUILD)/dump_tables_packed $(BUILD)/dump_nofx $(BUILD)/dump_packed
+test: $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_seq $(BUILD)/test_kit $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/lxr_tables.bin $(BUILD)/dump_tables_packed $(BUILD)/dump_nofx $(BUILD)/dump_packed
 	$(BUILD)/test_engine
 	$(BUILD)/test_engine_nofx
 	$(BUILD)/test_engine_packed
@@ -133,6 +137,7 @@ test: $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed
 	cmp $(BUILD)/voices_nofx.f32 $(BUILD)/voices_packed.f32 && echo "packed tables: comparison script renders bit-identical voices"
 	$(BUILD)/test_panel $(BUILD)/panel.ppm
 	$(BUILD)/test_seq
+	$(BUILD)/test_kit
 	$(BUILD)/test_midi
 	$(BUILD)/test_fm1_libm
 
@@ -150,7 +155,7 @@ compare-sp: $(BUILD)/dump_sp
 	$(BUILD)/dump_sp > $(BUILD)/pocket_dump_sp.bin
 	node host/compare/compare_clatter.mjs $(CLATTER_DIR)/src/audio/lxr/lxr.wasm $(BUILD)/pocket_dump_sp.bin
 
-emu-test: $(BUILD)/test_seq
+emu-test: $(BUILD)/test_seq $(BUILD)/test_kit
 	node tools/emu-test.mjs --wasm $(EMU_WASM) --stock build/fm1-stock/fm1_open-stock-4c7496d.fwsc
 	python3 tools/check-firmware.py
 
