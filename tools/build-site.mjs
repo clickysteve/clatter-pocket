@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 // Build the website into build/site. No dependencies; Node 20 or later.
 //
-//   node tools/build-site.mjs [--out dir] [--release file] [--releases dir]
+//   node tools/build-site.mjs [--out dir] [--release file] [--releases dir] [--open-cache dir]
 //
 // The site/ folder is copied, its pages' markers filled in, and the licences added.
 // Installation is decided here as well as in the browser (site/installer/gate.mjs): while the
 // gate is closed the output holds no firmware and no code that can talk to a device, and this
 // script refuses to finish if it does. installEnabled set on a release the gate refuses is an
 // error, not a quiet "off". With the gate open, the named package must match its hash and be
-// accepted by M-VAVE's own package checks before the site is built around it.
+// accepted by M-VAVE's own package checks before the site is built around it. So must the
+// pinned official Open firmware, which comes from M-VAVE's release, not from this repository.
 //
 // Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
 
@@ -18,6 +19,7 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NOT_AVAILABLE, STATUS, installAllowed, installLabel, refusals, statusLabel } from '../site/installer/gate.mjs';
 import { CONTROLS, controlTable, panelSvg, pixelText } from '../site/assets/controls.mjs';
+import { defaultCache, ensureOpenFirmware } from './fetch-open-firmware.mjs';
 import { loadFM1Web, metaFor } from './fm1-web.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -31,6 +33,7 @@ function option(name, fallback) {
 const out = option('out', join(root, 'build/site'));
 const releaseFile = option('release', join(root, 'site/release.json'));
 const releases = option('releases', join(root, 'releases'));
+const upstreamCache = option('open-cache', defaultCache);
 
 const walk = dir => readdirSync(dir).flatMap(name => {
   const path = join(dir, name);
@@ -68,6 +71,10 @@ const fill = {
   'package': release.firmware?.filename ?? 'None published',
   'package-sha': release.firmware?.sha256 ?? 'none',
   'package-commit': release.firmware?.checks?.commit ?? '',
+  'open-version': release.openFirmware?.version ?? '',
+  'open-sha': release.openFirmware?.sha256 ?? '',
+  'open-repository': release.openFirmware?.repository ?? '',
+  'open-source': `https://github.com/${release.openFirmware?.repository}/releases/tag/${release.openFirmware?.tag}`,
   'emu-commit': build.commit,
   'emu-version': build.version,
   'emu-sha': build.sha256,
@@ -120,6 +127,21 @@ if (open) {
     .catch(error => fail(`${fw.filename} failed M-VAVE's package checks: ${error.message}`));
   mkdirSync(join(out, 'installer/firmware'));
   cpSync(file, join(out, 'installer/firmware', fw.filename));
+
+  // Official Open: M-VAVE's release, pinned by hash, the bytes unchanged.
+  const upstream = release.openFirmware;
+  const openFile = await ensureOpenFirmware(upstream, { cache: upstreamCache })
+    .catch(error => fail(`official Open firmware: ${error.message}`));
+  await loadFM1Web().prepare(metaFor(upstream, upstream.version, readFileSync(openFile)))
+    .catch(error => fail(`${upstream.filename} failed M-VAVE's package checks: ${error.message}`));
+  cpSync(openFile, join(out, 'installer/firmware', upstream.filename));
+  writeFileSync(join(out, 'legal/fm1_open-SOURCE.txt'), [
+    `installer/firmware/${upstream.filename} is M-VAVE's official Open ${upstream.version}, unchanged.`,
+    `Its corresponding source is at https://github.com/${upstream.repository}/tree/${upstream.commit}`,
+    `(tag ${upstream.tag}). It was taken from https://github.com/${upstream.repository}/releases/tag/${upstream.tag}`,
+    `SHA-256 ${upstream.sha256}`, '',
+  ].join('\n'));
+
   cpSync(join(root, 'site/installer/driver.js'), join(out, 'installer/driver.js'));
   // M-VAVE's update code, unchanged, as tools/make-installer-page.py embeds it.
   cpSync(join(sdk, 'sdk/WebUpdate.js'), join(out, 'installer/WebUpdate.js'));

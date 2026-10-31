@@ -3,8 +3,11 @@
 //
 // It speaks the protocol as WebUpdate.js expects it: identity (17), capability (49), arm (50), the
 // start message, then block requests (48), through the running firmware's stage and the loader's,
-// with the re-enumeration between them. It was written from that client code, not from a device,
-// so it shows that the installer behaves, and not that a real FM-1 will. It runs no firmware.
+// with the re-enumeration between them. With `protocol: 'stock'` it plays V15 as that code's
+// comments describe it: the identity and the request-driven updater, with no capability or arm
+// command, so those go unanswered. Given `images`, it restarts as whatever it was sent.
+// It was written from that client code, not from a device, so it shows that the installer
+// behaves, and not that a real FM-1 will. It runs no firmware.
 //
 // Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
 
@@ -25,12 +28,13 @@ const message = data => Object.assign(new Event('midimessage'), { data });
 export class SimulatedFM1 {
   /**
    * options: identity, build, family, state (capability state), imageBytes, name, mode, newBuild,
+   * protocol ('open' or 'stock'), images ([{ image, identity, build }]: what it can restart as),
    * and fault: what goes wrong (see where `this.fault` is read).
    */
   constructor(FM1Web, access, options = {}) {
     Object.assign(this, {
       FM1Web, access, identity: 'FM-1_8000014', build: '11'.repeat(32), family: 7, state: 0, imageBytes: 0,
-      name: 'FM-1', fault: null, gap: 2, mode: 'app', ...options,
+      name: 'FM-1', fault: null, gap: 2, mode: 'app', protocol: 'open', images: [], ...options,
     });
     this.received = new Uint8Array(this.imageBytes);
     this.next = 0;
@@ -96,10 +100,11 @@ export class SimulatedFM1 {
       this.send(17, reply);
     } else if (packet.command === 49) {
       this.log.push('capability');
-      if (this.fault === 'no-capability') return;
+      if (this.fault === 'no-capability' || this.protocol === 'stock') return;
       this.send(49, this.fault === 'bad-capability' ? [1, 2, 3] : this.capability());
     } else if (packet.command === 50) {
       this.log.push('arm');
+      if (this.protocol === 'stock') return;
       this.send(50, [this.fault === 'refuse' ? 1 : 0]);
     } else if (packet.command === 48) {
       this.block(packet.data);
@@ -119,6 +124,7 @@ export class SimulatedFM1 {
     let address = this.next, bytes = Math.min(512, end - this.next);
     if (this.fault === 'stall' && this.stage === 2 && this.next > 2048) return;
     if (this.fault === 'unplug' && this.stage === 2 && this.next >= 4096) { this.unplug(); return; }
+    if (this.fault === 'unplug-first-stage' && this.stage === 1 && this.next >= 512) { this.unplug(); return; }
     if (this.fault === 'out-of-range' && this.stage === 2) { address = this.imageBytes + 512; bytes = 512; }
     else if (this.next >= end) {
       address = this.fault === 'wrong-stage' && this.stage === 2 ? STAGE_ONE : finish;
@@ -149,14 +155,29 @@ export class SimulatedFM1 {
   /** The loader has what it was sent: the device restarts, running that. */
   reboot() {
     this.written = this.received.slice();
+    this.installs = [...(this.installs ?? []), this.written];
+    const booted = this.images.find(({ image }) => image.length === this.written.length && image.every((byte, i) => byte === this.written[i]));
     this.unplug();
-    later(() => { this.mode = 'rebooted'; this.build = this.newBuild ?? this.build; this.state = 0; this.plug(); }, 15);
+    later(() => {
+      this.mode = 'rebooted';
+      this.build = booted?.build ?? this.newBuild ?? this.build;
+      if (booted) Object.assign(this, { identity: booted.identity, protocol: 'open' });
+      if (this.fault === 'boots-other') Object.assign(this, { identity: 'FM-1_8000014', build: 'ee'.repeat(32), protocol: 'open' });
+      this.state = 0;
+      this.plug();
+    }, 15);
   }
 
   /** The cable goes back in after a `fault: 'unplug'`: the loader is still running. */
   replug() {
     this.fault = null;
     this.mode = 'loader';
+    this.plug();
+  }
+
+  /** The cable goes back in after a loss before the loader started: nothing has changed. */
+  replugRunning() {
+    this.fault = null;
     this.plug();
   }
 }

@@ -7,6 +7,7 @@
 | CLATTER's rhythm generation | `seq/pocket_gen.c` ports `src/rhythm/generate.ts`, `mutate.ts`, `euclid.ts`, `rng.ts`; `seq/pocket_styles.h` is generated from `styles.ts` | GPL-3.0-only | pattern generation |
 | DOWNBEAT | mutation, Euclidean rhythms, the keyed random and metric weights, through CLATTER | MIT | the same |
 | M-VAVE fm1_open, commit `4c7496d` | `third_party/fm1_open` (git submodule, not copied); `firmware/fm1/fm1_open.patch` modifies two application files; `firmware/fm1/Build-ClatterPocket.ps1` is derived from `sdk/Build.ps1` | application: GPL-3.0-only WITH the FM1 SDK linking exception; binary SDK: M-VAVE terms (FM-1 devices only); boot/recovery resources: Apache-2.0; components per `THIRD_PARTY.md` | the FM-1 platform |
+| M-VAVE official Open V14, commit `4d26685`, firmware package | not in this repository. Published with the website, unchanged, by `tools/fetch-open-firmware.mjs` from M-VAVE's V14 release | as above | the installer's first stage, for an FM-1 on stock firmware. Source: <https://github.com/m-vave/fm1_open/tree/4d266850f8a46bd5154a0d495c1f60317156c9f7> |
 | JieLi toolchain 2.5.3 | not included; downloaded by `tools/setup-toolchain.sh` | JieLi's terms | compiler |
 
 `lxr/MANIFEST.sha256` lists the SHA-256 of every file taken from CLATTER at import.

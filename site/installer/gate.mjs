@@ -26,6 +26,33 @@ const FILENAME = /^clatter-pocket-[A-Za-z0-9.-]+\.fwsc$/;
 // The update identities WebUpdate.js treats as Open firmware (openIdentity), except the two
 // that name other projects' packages.
 const PRODUCT = /^FM-1_8\d{6}$/;
+const OPEN_FILENAME = /^FM1-Open-V\d+-[0-9a-f]{8}\.fwsc$/;
+
+/** The only place official Open firmware may come from (tools/fetch-open-firmware.mjs). */
+export const OPEN_REPOSITORY = 'm-vave/fm1_open';
+
+/**
+ * Every reason the pinned official Open firmware may not be used with this firmware. CLATTER
+ * Pocket is built on it: the update identity, family and loader must be the same.
+ */
+export function openRefusals(open, fw) {
+  if (!open || typeof open !== 'object') return ['no official Open firmware is pinned'];
+  const no = [];
+  if (open.repository !== OPEN_REPOSITORY) no.push(`official Open firmware does not come from ${OPEN_REPOSITORY}`);
+  if (!/^V\d+$/.test(open.version ?? '') || open.tag !== open.version) no.push('official Open firmware names no release');
+  if (!/^[0-9a-f]{40}$/.test(open.commit ?? '')) no.push('official Open firmware names no commit');
+  if (!OPEN_FILENAME.test(open.filename ?? '')) no.push('official Open firmware has no FM1-Open-V*-*.fwsc name');
+  else if (!open.filename.includes(`-${open.sha256?.slice(0, 8)}.`)) no.push('official Open firmware\'s name does not carry its hash');
+  if (!/^FM1-Open-V\d+-Workbench\.html$/.test(open.asset ?? '') || !/^SHA256SUMS-V\d+$/.test(open.sums ?? '')) no.push('official Open firmware names no release files');
+  for (const field of ['assetSha256', 'sumsSha256', 'sha256', 'buildId', 'loaderSha256'])
+    if (!SHA256.test(open[field] ?? '')) no.push(`official Open firmware has no ${field}`);
+  if (!Number.isInteger(open.bytes) || open.bytes < 1024 || open.bytes > 2097152) no.push('official Open firmware has no plausible size');
+  if (!PRODUCT.test(open.product ?? '')) no.push('official Open firmware has no fm1_open update identity');
+  if (open.family !== 7) no.push('official Open firmware\'s update family is not 7');
+  if (fw && (open.product !== fw.product || open.family !== fw.family || open.loaderSha256 !== fw.loaderSha256))
+    no.push('this firmware is not built on the pinned official Open firmware');
+  return no;
+}
 
 /** Every reason this release may not be installed. Empty means it may. */
 export function refusals(release) {
@@ -79,6 +106,8 @@ export function refusals(release) {
       if (proof.recoveryTested !== true) no.push('return to official firmware was not tested');
     }
   }
+
+  no.push(...openRefusals(release.openFirmware, fw));
 
   const need = release.compatibility;
   if (!need || !Array.isArray(need.requires) || !need.requires.length) no.push('no compatibility requirements');

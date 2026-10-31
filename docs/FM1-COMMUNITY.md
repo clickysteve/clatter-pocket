@@ -40,7 +40,28 @@ source for its own installer.
 
 `force: false` keeps M-VAVE's safety checks: it installs only over firmware reporting an fm1_open
 identity and update family 7, or resumes an interrupted install of the same package. The consequence
-for users: **from V15 they first need official Open**, as FIRST-HARDWARE-TEST.md says.
+for users: **from V15 they first need official Open**, as FIRST-HARDWARE-TEST.md says. Since
+2026-10-31 the installer does that step itself ([how](WEBSITE.md#from-stock-two-stages)).
+
+## Official Open: what M-VAVE publishes
+
+Checked 2026-10-31 against [m-vave/fm1_open](https://github.com/m-vave/fm1_open) and its V14 release.
+
+| Question | Finding |
+|---|---|
+| Where is it published? | GitHub Releases, tags `V12` and `V14`. Each has a workbench page, a development kit and a `SHA256SUMS-Vn` |
+| Is the binary a release file? | **No.** Open's `.fwsc` exists only as base64 inside `FM1-Open-V14-Workbench.html` (`FM1_PACKAGE`). The development kit and the source tree hold stock V15, `FM-1_015.fwsc`, not Open |
+| Which is compatible? | V14: build `de48badc…`, identity `FM-1_8000014`, family 7, vendor loader `ef1f2db8…`. CLATTER Pocket shares that identity, family, loader and flash layout, and is built from `fm1_open` just after V14 |
+| Can a browser fetch it? | No. Release downloads send no `Access-Control-Allow-Origin`. The API does, at 60 requests an hour per address, but its asset URLs lead to the same downloads |
+| How is the updater related? | The `WebUpdate.js` in the V14 workbench is byte-identical to the one pinned here |
+| Is the route documented? | Yes, in the manual inside the workbench, chapter 9: from another firmware such as `FM-1_015`, enable forced install, reconnect, confirm. It warns of lost data and of failed boots needing special tools |
+| Does stock need a native program? | No, by M-VAVE's client code and manual: USB-MIDI SysEx through Web MIDI, both stages. No workbench is needed for it. **Not yet seen on a device from here** |
+| What does the package say of itself? | `hardware_validated: false`. `sdk/Build.ps1` writes that for every package it builds, so it says nothing either way about V14 |
+
+M-VAVE's terms allow all this. The engine may be redistributed "as part of firmware" for FM-1 devices,
+and the boot files and V15 image under Apache-2.0, with their notices. `LICENSE.md` and
+`THIRD_PARTY.md` travel with the site, and `legal/fm1_open-SOURCE.txt` points to the corresponding
+source of the Open build it serves.
 
 ## Recovery in the community
 

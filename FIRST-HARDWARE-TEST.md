@@ -39,8 +39,10 @@ Then go to Recovery.
 
    fm1_open does not document hardware revisions; record what is visible. CLATTER Pocket
    installs only over fm1_open firmware (identity `FM-1_8…`, update family 7). If the unit
-   runs M-VAVE's original V15, first install official Open with the official workbench (its
-   supported route) and confirm it works.
+   runs M-VAVE's original V15, the installer's Stage 1 installs official Open first, or use
+   the official workbench, and confirm Open works before going on. Stock V15 has no project
+   library, so the workbench cannot back up its projects, and M-VAVE warns that moving between
+   firmwares can erase projects and samples.
 2. **Back up**, with the official workbench and official Open installed:
    - every project slot;
    - the sample bank;
@@ -68,11 +70,18 @@ Then go to Recovery.
 
 The page runs M-VAVE's own update code (`sdk/WebUpdate.js`, unchanged).
 
-1. Open the installer in Chrome. It must say "Package verified".
-2. Connect the FM-1, running official Open, by USB and press **Connect FM-1**. Allow MIDI with
-   SysEx when asked. Expected: "Ready to install over FM-1_8000014". Connect writes nothing. If the
-   page says the FM-1 does not run fm1_open firmware, stop and follow step 1 of "Before installation".
-3. Read the warning, tick the confirmation and press **Install experimental firmware**. The
+1. Open the installer in Chrome. It must say "Both packages verified".
+2. Connect the FM-1 by USB and press **Connect FM-1**. Allow MIDI with SysEx when asked. Connect
+   writes nothing. Expected on official Open: "Official Open V14 detected. Ready to install over
+   FM-1_8000014": go to step 4. Expected on stock V15: "Stock firmware detected": do step 3. If the
+   page says it cannot identify the firmware, stop and follow step 1 of "Before installation".
+3. **Stage 1, from stock V15 only.** This route is **UNVERIFIED** here: record whether it works.
+   Read the warning, tick the confirmation and press **Install Open firmware**. The updater then
+   sends the loader-preparation request, waits for the loader (`ota-FM-1_015`), writes official
+   Open, waits for the restart and checks Open's exact build. Stage 2 stays locked until the page
+   says "Official Open V14 detected". Now back up, as in step 2 of "Before installation", if
+   there is anything to keep: close the workbench afterwards and press Connect FM-1 again.
+4. Read the warning, tick the confirmation and press **Install CLATTER Pocket**. The
    updater then:
    1. arms the update in the running firmware;
    2. sends the loader-preparation request;
@@ -82,8 +91,10 @@ The page runs M-VAVE's own update code (`sdk/WebUpdate.js`, unchanged).
    6. checks that it reports this build.
 
    Do not unplug, close the page or sleep the computer until it says it has finished.
-4. If the install stops part-way, keep the page open, reconnect the same FM-1, press
-   Connect, then Install. The updater resumes from the loader. If that fails, go to
+5. If either stage stops part-way, keep the page open, reconnect the same FM-1 and press
+   Connect. Nothing is retried for you: Connect finds out what the FM-1 is first. In the
+   loader, the page resumes what it remembers writing, and official Open if it has no record,
+   because the vendor loader cannot say which package it was receiving. If that fails, go to
    Recovery.
 
 ## First boot

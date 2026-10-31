@@ -34,6 +34,7 @@
     <div><dt>Hardware</dt><dd>{{hardware}}</dd></div>
     <div><dt>Package</dt><dd id="fact-package">{{package}}</dd></div>
     <div><dt>SHA-256</dt><dd><code>{{package-sha}}</code></dd></div>
+    <!-- @if open --><div><dt>Prerequisite</dt><dd id="fact-open">Official Open {{open-version}}, from <a href="{{open-source}}">{{open-repository}}</a>. Installed here only if the FM-1 needs it.</dd></div><!-- @end -->
     <div><dt>Check</dt><dd id="package-state"><!-- @if open -->Checking the package…<!-- @else -->None to check.<!-- @end --></dd></div>
     <div><dt>This browser</dt><dd id="fact-browser">Not checked: this page needs JavaScript.</dd></div>
   </dl>
@@ -50,8 +51,32 @@
       <p><button type="button" class="button" id="connect" disabled>CONNECT FM-1</button></p>
       <p id="device-state" role="status" class="device-state">No device connected.</p>
     </li>
+    <!-- @if open --><li class="stage" id="stage-open" hidden>
+      <h2>Stage 1: Prepare FM-1</h2>
+      <p class="detected"><b id="open-detected">Stock firmware detected</b><br><b>Official Open firmware required</b></p>
+      <p>CLATTER Pocket installs over M-VAVE’s Open firmware. This is the official M-VAVE prerequisite, and there is nothing else to get: this page holds the exact firmware M-VAVE published.</p>
+      <dl class="facts">
+        <div><dt>Firmware</dt><dd>Official Open {{open-version}}</dd></div>
+        <div><dt>Source</dt><dd><a href="{{open-source}}">{{open-repository}}, release {{open-version}}</a></dd></div>
+        <div><dt>SHA-256</dt><dd><code>{{open-sha}}</code></dd></div>
+      </dl>
+      <div class="warning" id="warning-open">
+        <p class="notice-head">THIS REPLACES THE STOCK FIRMWARE</p>
+        <p>From stock, M-VAVE’s updater needs its forced mode. This is the route M-VAVE’s manual gives, and the same manual warns that it can erase projects and samples, stop the device starting, and need special tools to recover.</p>
+        <p>Stock V15 has no project library, so M-VAVE’s workbench cannot back up its projects. Keep anything you need another way first.</p>
+        <p>M-VAVE’s workbench can return the FM-1 to V15. That overwrites the voice banks with the 128 factory voices.</p>
+        <p>This page has not yet been used on a physical FM-1.</p>
+      </div>
+      <p><label class="check"><input type="checkbox" id="confirm-open" disabled> I understand this, and I accept that projects and samples on this FM-1 may be erased.</label></p>
+      <p><button type="button" class="button primary" id="install-open" disabled>INSTALL OPEN FIRMWARE</button></p>
+      <div class="progress" id="progress-open" hidden><div class="bar"><span id="bar-open"></span></div><p id="phase-open" role="status"></p></div>
+      <p>Do not unplug, close this page or let the computer sleep. It finishes only when the FM-1 has restarted and reports official Open’s exact build.</p>
+      <div id="after-open" class="after" hidden>
+        <p><b>Official Open is running, and verified by its build.</b> Nothing else will be written until you confirm Stage 2. You can stop here: Open is a complete instrument, and M-VAVE’s workbench can set up its sample library.</p>
+      </div>
+    </li><!-- @end -->
     <li class="stage">
-      <h2>Confirm</h2>
+      <h2><!-- @if open -->Stage 2: Install CLATTER Pocket<!-- @else -->Install<!-- @end --></h2>
       <!-- @if experimental --><div class="warning" id="warning">
         <p class="notice-head">EXPERIMENTAL FIRMWARE</p>
         <p>CLATTER Pocket has passed emulator testing but has not yet been verified on physical hardware.</p>
@@ -59,14 +84,11 @@
         <p>There is a risk of installation failure, loss of settings or requiring firmware recovery.</p>
       </div><!-- @end -->
       <p><label class="check"><input type="checkbox" id="confirm" disabled> I understand this and accept the risk, and I have backed up my FM-1.</label></p>
-    </li>
-    <li class="stage">
-      <h2>Install</h2>
-      <p><button type="button" class="button primary" id="install" disabled>{{install-label}}</button></p>
+      <p><button type="button" class="button primary" id="install" disabled>INSTALL CLATTER POCKET</button></p>
       <div class="progress" id="progress" hidden><div class="bar"><span id="bar"></span></div><p id="phase" role="status"></p></div>
       <p>Do not unplug, close this page or let the computer sleep until it says it has finished. It finishes only when the FM-1 has restarted and reports this exact build.</p>
       <div id="after-failure" class="after" hidden>
-        <p><b>Keep this page open.</b> Reconnect the same FM-1, then press Connect and Install again: the updater resumes from its loader. If that does not work, follow the recovery notes below.</p>
+        <p><b>Keep this page open.</b> <span id="after-failure-text">Reconnect the same FM-1 and press Connect FM-1. If that does not work, follow the recovery notes below.</span></p>
       </div>
       <div id="after-done" class="after" hidden>
         <p><b>Now run the first hardware test.</b> Follow <a href="https://github.com/clickysteve/clatter-pocket/blob/main/FIRST-HARDWARE-TEST.md#first-boot">FIRST-HARDWARE-TEST.md</a> from First boot, and stop if any of its stop conditions happen.</p>

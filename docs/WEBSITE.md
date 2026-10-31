@@ -24,6 +24,7 @@ make site-serve  # http://127.0.0.1:8770/clatter-pocket/, a base path, to catch 
 | `site/installer/index.html`, `installer.js` | the installer's interface |
 | `site/installer/driver.js` | the update driver: **left out of the site while the gate is closed** |
 | `tools/promote-release.mjs` | name a package as the installable release, after checking it |
+| `tools/fetch-open-firmware.mjs` | get official Open from M-VAVE's release at deployment, by hash. Never committed |
 | `tools/fm1-update-sim.mjs` | a simulated FM-1 at the Web MIDI level, for the installer's tests |
 | `site/demo/` | the demo page; `emu/` is the vendored emulator; `emulator-build.json` pins what it runs |
 | `tools/build-site.mjs`, `test-site.mjs`, `serve-site.mjs` | build, tests, a server with the base path |
@@ -71,9 +72,61 @@ determined visitor could rename, and the name is there to stop an accident rathe
 ## The installer
 
 It is real: it transfers firmware to a device. It drives M-VAVE's unchanged `sdk/WebUpdate.js`, over
-USB-MIDI SysEx through Web MIDI, with `force: false`, as `tools/make-installer-page.py` does.
+USB-MIDI SysEx through Web MIDI. CLATTER Pocket always goes with `force: false`, as
+`tools/make-installer-page.py` does. The one forced route is official Open over stock V15, below.
 
-`site/release.json` drives it. `status` is `emulator-only`, `experimental` or `hardware-verified`:
+### From stock: two stages
+
+Connect classifies the FM-1 from what the protocol reports, and writes nothing:
+
+| Reports | Means | Offered |
+|---|---|---|
+| Identity `FM-1_015` | stock V15, which has no build to read | Stage 1 |
+| Family 7, build = the pinned Open's | official Open | Stage 2, with Stage 1 skipped |
+| Family 7, build = this release's | CLATTER Pocket | nothing: already installed |
+| Family 7, any other build | fm1_open firmware: another Open, or an older CLATTER Pocket | Stage 2, as before this page had stages. It says what it is not |
+| `ota-FM-1_015` | the vendor's loader: an install was interrupted | resume |
+| Anything else, or no capability reply | unknown | nothing |
+
+CLATTER Pocket reports Open's identity on purpose, so only the hash tells them apart.
+
+**Stage 1 is M-VAVE's own route.** Its manual says that when a normal connect recognises another
+firmware, such as `FM-1_015`, you turn on forced install, reconnect, and confirm: stock has no
+capability command, so `WebUpdate.js` keeps a `legacy` route for it, behind `force`. The driver
+reaches it in exactly one function, only after a normal connect found stock and a person confirmed.
+It then asks again, and only the exact stock report goes on. Force also drops the updater's port
+filter, so the driver hides other MIDI devices from it. `tools/test-site.mjs` pins all of this.
+
+After Stage 1 the updater has checked Open's family and exact build. The page then connects again,
+unforced, and offers Stage 2 only on the pinned Open build. Stage 2 has its own confirmation.
+
+**Interrupted installs.** Both packages use the vendor's loader, which reports one fixed identity, so
+the device cannot say what it was receiving. The page records which package it is writing in
+`localStorage`, and clears the record once a verified install ends or a device turns up that is not
+mid-update. In the loader, with that record for this release's CLATTER Pocket, Stage 2 resumes.
+Otherwise official Open is resumed, unforced and confirmed, and then verified: a browser with no
+record must not put CLATTER Pocket on a device that may have come from stock. Nothing is retried
+automatically: each failure ends at Connect, which finds out what the device is.
+
+### Official Open is not in this repository
+
+`site/release.json`'s `openFirmware` pins one release of [m-vave/fm1_open](https://github.com/m-vave/fm1_open).
+
+- A browser cannot fetch it: GitHub's release downloads send no CORS header, the API allows 60 requests
+  an hour per address, and the firmware is not in the source tree.
+- It is published only inside the release's workbench page. The development kit holds V15, not Open.
+- So `tools/fetch-open-firmware.mjs` runs at deployment. It checks `SHA256SUMS-V14` against the pin,
+  the workbench against both, takes out the workbench's package, and checks every field of it and the
+  firmware's hash. `FM1Web.prepare` checks it again at build and in the browser.
+- The result lives in `build/upstream/`, and in the workflow's cache, and goes out with the site.
+  A cached copy is checked before use. Any difference stops the build, so the deployed site stays
+  as it was. There is no live dependency on GitHub when someone installs.
+
+**Updating it** is a decision, not an automatic step: read the new release's notes, take the new
+hashes and fields from its workbench, update `openFirmware`, and check that CLATTER Pocket's identity,
+family, loader and flash layout still match it. The gate refuses a pin they do not match.
+
+`site/release.json` drives the rest. `status` is `emulator-only`, `experimental` or `hardware-verified`:
 
 | Status | Shown as | Can be installed | Needs |
 |---|---|---|---|
@@ -88,20 +141,23 @@ package is named, so a new build never becomes installable by itself.
 The gate (`site/installer/gate.mjs`) needs, for either kind: a release date and notes; a firmware
 with a `clatter-pocket-*.fwsc` name, SHA-256, build identity, loader hash, size, fm1_open identity and
 family 7; a record that the build was `--single-precision` and passed `check-firmware.py`,
-`check-audio-path.py` and the emulator suite; and compatibility requirements.
+`check-audio-path.py` and the emulator suite; a pinned official Open from `m-vave/fm1_open` with the
+same identity, family and loader; and compatibility requirements.
 
 What still stops an install, whatever the status:
 
 | When | Check |
 |---|---|
-| Building the site | the gate; the file's size and SHA-256; `FM1Web.prepare` on the real file |
-| Opening the page | the same gate; `FM1Web.prepare`: SHA-256, package format, CRCs, identity, loader hash |
-| Connect | the device must report an fm1_open identity and family 7, or be in this package's loader. M-VAVE's stock firmware and other firmware stop here, with nothing written |
+| Fetching official Open | the checksum file and workbench against the pin; every field of the package; the firmware's SHA-256 |
+| Building the site | the gate; each file's size and SHA-256; `FM1Web.prepare` on both real files |
+| Opening the page | the same gate; `FM1Web.prepare` on both: SHA-256, package format, CRCs, identity, loader hash |
+| Connect | the table above. Unknown firmware stops here, with nothing written |
+| Stage 1 | the explicit confirmation; the exact stock identity reported again on the forced connect; only official Open |
 | Install | the explicit confirmation; identity and capability read again; the device's own acceptance of the package |
 | While writing | every read must be inside the package; the stages must match; a stall or lost connection stops it |
-| After restart | the device must report this exact build |
+| After restart | the device must report the exact build written. Stage 2 then needs the pinned Open on a fresh, unforced connect |
 
-While the gate is closed, the build leaves out `driver.js`, M-VAVE's update code and any firmware, and
+While the gate is closed, the build leaves out `driver.js`, M-VAVE's update code, official Open and any firmware, and
 **stops with an error** if the output contains a firmware file or anything that could request MIDI
 access outside the vendored emulator. If `installEnabled` is true and the gate refuses the release,
 the build fails rather than quietly staying off. To turn installing off, set `installEnabled` to
@@ -120,6 +176,10 @@ restarts on another build.
 **The simulator was written from the client's code, not from a device.** It shows that the installer
 behaves. It cannot show that a real FM-1 will accept the transfer, or that the firmware starts.
 Emulators cannot either: fm1-emu raises no USB interrupt, so the update path has never been run.
+
+That goes double for Stage 1. The simulator's stock V15 is what `WebUpdate.js`'s comments say stock
+is: an identity and a request-driven updater, with no capability or arm command. Its restart adopts
+the identity of whichever package it was sent. Nobody here has seen a real V15 do any of it.
 
 ## Making a release
 

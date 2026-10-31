@@ -21,13 +21,30 @@
     }
   },
   "verification": null,
+  "openFirmware": {
+    "version": "V14",
+    "repository": "m-vave/fm1_open",
+    "tag": "V14",
+    "commit": "4d266850f8a46bd5154a0d495c1f60317156c9f7",
+    "asset": "FM1-Open-V14-Workbench.html",
+    "assetSha256": "4b3197fdb23d9922a122b72fd11cdf9100215cc9c812de381b0888662d59e6c8",
+    "sums": "SHA256SUMS-V14",
+    "sumsSha256": "53276e3a67112689e22ad451f60822602ace38992092d795f0a9bb5651e71c07",
+    "filename": "FM1-Open-V14-7e7b6d26.fwsc",
+    "sha256": "7e7b6d260163cdf9d716f7fab44f19be600edeffcd390de74370b83c917fd0c6",
+    "bytes": 492084,
+    "buildId": "de48badc331457a9fc978e595e4ac3c79869c280aefcf8d024fb80a1e0a0a283",
+    "loaderSha256": "ef1f2db89b011fa53e71df363f0122de0ea896618c53fb53e8da676322004541",
+    "product": "FM-1_8000014",
+    "family": 7
+  },
   "compatibility": {
     "device": "M-VAVE FM-1",
     "requires": [
-      "An M-VAVE FM-1 running official fm1_open firmware (identity FM-1_8…, update family 7)",
+      "An M-VAVE FM-1 running stock V15 or official fm1_open firmware. If it runs stock V15, this page installs official Open first",
       "Chrome or Edge on a computer, with MIDI and SysEx allowed",
       "A USB data cable",
-      "Projects, samples and voices backed up with M-VAVE's official workbench"
+      "Anything you want to keep backed up. On official Open, M-VAVE's workbench backs up projects, samples and voices. Stock V15 has no project library for it to read"
     ]
   },
   "notes": [
