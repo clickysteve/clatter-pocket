@@ -1,12 +1,17 @@
 # The website
 
-A static site for GitHub Pages, at <https://clickysteve.github.io/clatter-pocket/>. No framework,
-no dependencies beyond Node 20, no backend, no tracking.
+A static site for GitHub Pages, at <https://clatter-pocket.allmyfriendsaresynths.com/>, the custom
+domain set in the repository's Pages settings; `clickysteve.github.io/clatter-pocket/` redirects to
+it. No framework, no dependencies beyond Node 20, no backend, no tracking.
+
+**The site must be used over HTTPS.** On plain HTTP a browser removes Web MIDI, `crypto.subtle` and
+`AudioWorklet`, so neither the installer nor the demo can work. Each page moves itself to HTTPS.
+All paths are relative, so the site works at a domain's root and under `/clatter-pocket/`.
 
 ```
 make site        # build into build/site
 make site-test   # the site's tests
-make site-serve  # http://127.0.0.1:8770/clatter-pocket/, the base path Pages will use
+make site-serve  # http://127.0.0.1:8770/clatter-pocket/, a base path, to catch paths from the root
 ```
 
 | Path | |

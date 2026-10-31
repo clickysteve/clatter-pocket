@@ -8,7 +8,7 @@ whether to start, and every step can be the point to stop.
 Candidate: firmware 0.5.0, commit `f97fbf3`, SHA-256
 `bcfef5946b9c45b9c6402c7c7d177df8b43d8ce1f8686d7a31fbc3029d3550e8`.
 
-**Install it from <https://clickysteve.github.io/clatter-pocket/installer/>**, which runs the steps
+**Install it from <https://clatter-pocket.allmyfriendsaresynths.com/installer/>**, which runs the steps
 below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
 `20b22912dc9a12c63aecaf7e0ef0926f1ecd6c8c7fb297741ae9fa9d43086865`.
 

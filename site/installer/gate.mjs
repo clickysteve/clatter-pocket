@@ -103,9 +103,9 @@ export function browserSupport(env) {
   const secure = env.isSecureContext === true;
   const webMidi = env.hasWebMidi === true;
   const mobile = /Android|iPhone|iPad|Mobile/i.test(env.userAgent ?? '');
-  const message = !webMidi ? 'This browser has no Web MIDI. The FM-1 updater needs Chrome or Edge on a computer.'
+  const message = !secure ? 'Web MIDI needs a secure page: open this page over HTTPS.'
+    : !webMidi ? 'This browser has no Web MIDI. The FM-1 updater needs Chrome or Edge on a computer.'
     : mobile ? 'The FM-1 updater needs Chrome or Edge on a computer, not a phone or tablet.'
-    : !secure ? 'Web MIDI needs a secure page (HTTPS or localhost).'
     : 'This browser has Web MIDI. M-VAVE and the community installers name Chrome and Edge.';
   return { secure, webMidi, mobile, ok: secure && webMidi && !mobile, message };
 }

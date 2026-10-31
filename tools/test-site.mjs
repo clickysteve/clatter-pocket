@@ -123,6 +123,8 @@ test('browser messages follow what the browser offers', () => {
   assert.equal(browserSupport({ ...chrome, hasWebMidi: false }).ok, false);
   assert.match(browserSupport({ ...chrome, userAgent: 'Mozilla/5.0 (Linux; Android 14) Mobile Chrome/130' }).message, /computer/);
   assert.match(browserSupport({ ...chrome, isSecureContext: false }).message, /secure/);
+  // an insecure page has no navigator.requestMIDIAccess either: the cause is the page, not the browser
+  assert.match(browserSupport({ ...chrome, isSecureContext: false, hasWebMidi: false }).message, /secure/);
 });
 
 // ---------------------------------------------------------------- the build
@@ -490,6 +492,15 @@ test('every page keeps the UNVERIFIED designation', () => {
   for (const name of pages) assert.match(page(name), /UNVERIFIED: EXPERIMENTAL/, name);
   assert.equal(NOT_AVAILABLE, 'Hardware installation is not yet available. CLATTER Pocket is currently verified in the FM-1 emulator only.');
   assert.doesNotMatch(page('index.html'), /HARDWARE VERIFIED/);
+});
+
+test('every page moves itself to HTTPS: Web MIDI, crypto and the audio worklet need it', () => {
+  for (const name of pages) {
+    const html = page(name);
+    assert.match(html, /location\.protocol === 'http:' && !isSecureContext/, name);
+    assert.ok(html.indexOf('location.replace') < html.indexOf('<script type="module"') || !html.includes('<script type="module"'), name);
+    assert.ok(html.indexOf('location.replace') < html.indexOf('<title>'), name);
+  }
 });
 
 test('no marker is left unfilled', () => {
