@@ -12,6 +12,7 @@
  * (engine/lxr_tables_unpack.c): the firmware's wavetable.c and transientTables.c are not
  * compiled. Byte-identical tables; see BUILDING.md. */
 #define POCKET_PACKED_TABLES 1
+#define POCKET_FM1 1
 
 /* CLATTER's shim defines sqrtf and sqrt as static inline wrappers of __builtin_sqrtf and
  * __builtin_sqrt. The PI32v2 FPU has no square root, so the builtin becomes a call to the

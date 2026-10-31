@@ -47,7 +47,8 @@ FULL_OBJ := $(call obj,full,$(LXR_SRC) $(BRIDGE) $(ENGINE) engine/fx_on.c)
 NOFX_OBJ := $(call obj,nofx,$(LXR_NOFX) $(BRIDGE) $(ENGINE) engine/fx_off.c)
 # The FM-1 configuration's tables: packed in Flash, unpacked into RAM at start-up.
 LXR_TABLES := lxr/upstream/Core/Src/Soundengine/DSPAudio/wavetable.c lxr/upstream/Core/Src/Soundengine/DSPAudio/transientTables.c
-PACKED_SRC := $(filter-out $(LXR_TABLES),$(LXR_NOFX)) $(BRIDGE) $(ENGINE) engine/fx_off.c engine/lxr_tables_packed.c engine/lxr_tables_unpack.c
+PARAM_ARRAY := lxr/upstream/Core/Src/Soundengine/MIDI/ParameterArray.c
+PACKED_SRC := $(filter-out $(LXR_TABLES) $(PARAM_ARRAY),$(LXR_NOFX)) $(BRIDGE) $(ENGINE) engine/fx_off.c engine/lxr_tables_packed.c engine/lxr_tables_unpack.c engine/pocket_param_table.c
 PACKED_OBJ := $(call obj,packed,$(PACKED_SRC))
 $(PACKED_OBJ): DSP_CFLAGS += -DPOCKET_PACKED_TABLES
 
@@ -87,7 +88,7 @@ $(BUILD)/test_engine: host/tests/test_engine.c host/wav.h $(BUILD)/liblxr_full.a
 $(BUILD)/test_engine_nofx: host/tests/test_engine.c host/wav.h $(BUILD)/liblxr_nofx.a
 	$(CC) $(HOST_CFLAGS) -DPOCKET_NOFX $< $(BUILD)/liblxr_nofx.a -lm -o $@
 $(BUILD)/test_engine_packed: host/tests/test_engine.c host/wav.h $(BUILD)/liblxr_packed.a
-	$(CC) $(HOST_CFLAGS) -DPOCKET_NOFX $< $(BUILD)/liblxr_packed.a -lm -o $@
+	$(CC) $(HOST_CFLAGS) -DPOCKET_NOFX -DPOCKET_PARAM_TABLE $< $(BUILD)/liblxr_packed.a -lm -o $@
 # The firmware's tables as compiled, and the same tables after packing and unpacking.
 $(BUILD)/dump_tables: host/dump_tables.c $(call obj,nofx,$(LXR_TABLES))
 	$(CC) $(HOST_CFLAGS) $^ -o $@

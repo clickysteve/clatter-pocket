@@ -220,8 +220,9 @@ IN_ITCM_RAM static void apply(const struct event* e)
 	}
 	case EV_TRIGGER:
 	{
-		const int p1 = e->p1lo | (e->p1hi << 8), p2 = e->p2lo | (e->p2hi << 8);
 		AutomationNode* nodes = lockVoice(e->a, e->variation);
+#ifndef POCKET_FM1 /* the comparison with CLATTER's engine: the firmware plays variations only */
+		const int p1 = e->p1lo | (e->p1hi << 8), p2 = e->p2lo | (e->p2hi << 8);
 		if (p1)
 		{
 			autoNode_setDestination(&nodes[0], autoDest(p1));
@@ -232,6 +233,9 @@ IN_ITCM_RAM static void apply(const struct event* e)
 			autoNode_setDestination(&nodes[1], autoDest(p2));
 			autoNode_updateValue(&nodes[1], e->v2);
 		}
+#else
+		(void)nodes;
+#endif
 		triggerVoice(e->a, e->b, e->c);
 		break;
 	}

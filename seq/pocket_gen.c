@@ -30,8 +30,11 @@ enum { SALT_GEN = 1, SALT_VEL = 2, SALT_FILL = 4, SALT_SHAPE = 28, SALT_MUTATE =
 struct pocket_lane {
 	uint64_t digits;                      /* a hex digit per step, first step high: 0-9 */
 	uint8_t ghost;                        /* percent */
-	uint8_t hits_lo, hits_hi, len_lo, len_hi; /* Euclidean lane if hits_hi */
 } __attribute__((packed));
+/* A Euclidean lane says so in `ghost`, and its digits are hits low, high, then length low, high. */
+#define POCKET_LANE_EUCLID 255u
+#define EUCLIDEAN(lane) ((lane)->ghost == POCKET_LANE_EUCLID)
+#define EUCLID_FIELD(lane, n) ((unsigned)((lane)->digits >> (8u * (n)) & 255u))
 
 struct pocket_style {
 	const char* name;
@@ -132,10 +135,11 @@ static void lane_row(uint32_t* row, const struct pocket_lane* lane, const struct
 {
 	const unsigned c = s->complexity;
 	unsigned len = 1, hits = 0, rotation = 0, total = 0;
-	if (lane->hits_hi)
+	if (EUCLIDEAN(lane))
 	{
-		len = lane->len_lo + (chance(s->seed, SALT_GEN, t, 777) * (lane->len_hi - lane->len_lo + 1u) >> 16);
-		const unsigned drawn = lane->hits_lo + (chance(s->seed, SALT_GEN, t, 778) * (lane->hits_hi - lane->hits_lo + 1u) >> 16);
+		const unsigned hitsLow = EUCLID_FIELD(lane, 0), hitsHigh = EUCLID_FIELD(lane, 1), lenLow = EUCLID_FIELD(lane, 2), lenHigh = EUCLID_FIELD(lane, 3);
+		len = lenLow + (chance(s->seed, SALT_GEN, t, 777) * (lenHigh - lenLow + 1u) >> 16);
+		const unsigned drawn = hitsLow + (chance(s->seed, SALT_GEN, t, 778) * (hitsHigh - hitsLow + 1u) >> 16);
 		hits = drawn * (60u + s->density * 80u / 100u) / 100u;
 		if (!hits) hits = 1;
 		rotation = chance(s->seed, SALT_GEN, t, 779) * len >> 16;
@@ -148,7 +152,7 @@ static void lane_row(uint32_t* row, const struct pocket_lane* lane, const struct
 	{
 		/* a Euclidean lane runs on across the pages: that is its cross-rhythm. Any other answers
 		   the page it follows, A A' A A'', and redraws a few steps on its own key */
-		if (i >= POCKET_SEQ_STEPS && !lane->hits_hi && chance(s->seed, SALT_PHRASE, t, i) >= change)
+		if (i >= POCKET_SEQ_STEPS && !EUCLIDEAN(lane) && chance(s->seed, SALT_PHRASE, t, i) >= change)
 		{
 			row[i] = row[i - (i >= 2u * POCKET_SEQ_STEPS ? 2u * POCKET_SEQ_STEPS : POCKET_SEQ_STEPS)];
 			continue;
@@ -156,7 +160,7 @@ static void lane_row(uint32_t* row, const struct pocket_lane* lane, const struct
 		const unsigned w = weight(i);
 		uint32_t p;
 		unsigned strength;
-		if (lane->hits_hi)
+		if (EUCLIDEAN(lane))
 		{
 			const unsigned on = euclid(i, len, hits, rotation);
 			p = on ? 63570u : 0;
@@ -261,7 +265,7 @@ static void arrange(struct pocket_pattern* p, const struct pocket_gen_settings* 
 		if (!(locks >> CLOSED_HAT & 1u) && p->cell[OPEN_HAT][i]) p->cell[CLOSED_HAT][i] = 0;
 		if (!(locks >> KICK & 1u) && style->separate && (i & 7u) == 4u && POCKET_CELL_VELOCITY(p->cell[SNARE][i]) > 90u) kick[i] = 0;
 	}
-	if (!(locks >> KICK & 1u) && anchored && !style->lanes[KICK].hits_hi && !kick[0])
+	if (!(locks >> KICK & 1u) && anchored && !EUCLIDEAN(&style->lanes[KICK]) && !kick[0])
 		kick[0] = velocity_for(256u, chance(s->seed, SALT_VEL, KICK, 0));
 	for (unsigned t = LOW_TOM; t <= HIGH_TOM; t++)
 		for (unsigned i = 0; i < steps; i++)

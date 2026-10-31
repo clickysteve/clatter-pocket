@@ -97,6 +97,9 @@ cp "$repo/seq/pocket_gen.c" "$repo/seq/pocket_gen.h" "$repo/seq/pocket_styles.h"
 cp "$here/pocket_fm1_config.h" "$here/pocket_fm1_libm.c" "$pocket/fm1/"
 # init-only code and data: stays in Flash with every placement
 mkdir -p "$pocket/flash"
+# compiled through engine/pocket_param_table.c, which holds what its long init did as a table
+mv "$tree/pocket/lxr/upstream/Core/Src/Soundengine/MIDI/ParameterArray.c" "$pocket/flash/ParameterArray_upstream.inc"
+cp "$repo/engine/pocket_param_table.c" "$pocket/flash/"
 cp "$repo/engine/lxr_tables_packed.c" "$repo/engine/lxr_tables_unpack.c" "$pocket/flash/"
 cp "$repo/engine/lxr_tables_packed.h" "$pocket/engine/"
 echo "   $(find "$pocket" -name '*.c' | wc -l | tr -d ' ') CLATTER Pocket sources, fm1_open $actual + $([[ $replace == 1 ]] && echo "replace/fm1_open-replace.patch, stock instrument application removed" || echo fm1_open.patch)"
