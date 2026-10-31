@@ -287,12 +287,20 @@ static void test_decimator_hold(void)
 	CHECK(blocked > plain * 95 / 100 && blocked < plain * 105 / 100, "DC blocker changes the kick");
 }
 
+#ifdef POCKET_PARAM_TABLE
+int pocket_param_table_differences(void);
+#endif
+
 int main(void)
 {
 #ifdef POCKET_NOFX
 	printf("engine tests (FX bus off, as the FM-1 build)\n");
 #else
 	printf("engine tests (full LXR engine, as CLATTER)\n");
+#endif
+#ifdef POCKET_PARAM_TABLE
+	pocket_lxr_init(1);
+	CHECK(pocket_param_table_differences() == 0, "the parameter table is what upstream's init fills in");
 #endif
 	test_silence();
 	test_kick_sounds();

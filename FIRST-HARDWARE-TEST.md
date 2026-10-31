@@ -131,11 +131,16 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
 4. Play the keys C4 to E4: each is a different voice, and the VOICE line follows. Press **SCL**
    for KEYS: PITCH, then several keys: the selected voice at different pitches. **OCT+** moves them
    an octave. Press **SCL** again. Turn **SELECT**: the VOICE line changes.
-5. Press **EDIT**. Turn KNOB 1 to 4: pitch, decay, filter and drive change on the next hit.
+5. Press **SEQ**. The keys' lamps show the selected voice's steps. Tap each white key from F3 to G5
+   in order: step 1 to 16 toggles, its own lamp changes as the key goes down, and nothing sounds. Tap G#3:
+   the screen says PAST THE END. Press **PLAY**: a lamp runs along the white keys. Hold a white key and turn KNOB 1:
+   the step's velocity changes on screen and the step stays on. This has only run in the emulator, whose
+   lamps are drawn from the same bits: note any lamp that is not on its own key. Press PLAY and HOME.
+6. Press **EDIT**. Turn KNOB 1 to 4: pitch, decay, filter and drive change on the next hit.
    Press **FX**. KNOB 1 and 2: level and pan. Press SEQ, GLO and HOME: the page name
    changes. Turn **PRESETS**: the kit's name shows and the sound changes. Record any control that differs from docs/POCKET-UI.md: the encoder
    positions come from the emulator, not a device.
-6. Watch for 2 minutes: no stuck or endless sounds (a voice whose DECAY is at 127 sustains
+7. Watch for 2 minutes: no stuck or endless sounds (a voice whose DECAY is at 127 sustains
    by design), OVERRUNS not rising, no interruptions.
 
 ## MIDI test
@@ -178,12 +183,12 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
 **The first write this firmware makes to the device's Flash. Do it last, and only after the backups
 in "Before installation".** docs/POCKET-STORAGE.md says what is and is not known.
 
-1. Stopped, hold **SAVE** and press **EDIT**. The page shows 12 empty slots, or **FLASH IN USE: SAVING
+1. Stopped, tap **SAVE**. PROJECTS shows 9 empty slots, or **FLASH IN USE: SAVING
    OFF** or **NO USER FLASH**. Either of those two is a safe result and the end of this test: nothing has
    been written. Record it, and which firmware the unit came from.
-2. Press **SAVE** on slot 1. Record what is heard and how long the screen takes to show SAVED 1.
-3. Press ENV for another kit, then SAVE+EDIT and **OCT−**: the first kit is back.
-4. Power off, power on, SAVE+EDIT: slot 1 is listed, and loads.
+2. Tap **SAVE** again, on slot 1. Record what is heard and how long the screen takes to show SAVED 1.
+3. Press ENV for another kit, then tap SAVE and press **OCT−**: the first kit is back.
+4. Power off, power on, tap SAVE: slot 1 is listed, and loads.
 5. Install the same package again and check again: this is what shows whether an update leaves the
    sectors alone. Record the result either way.
 

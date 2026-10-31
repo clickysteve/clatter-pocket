@@ -64,7 +64,7 @@ static volatile uint8_t render_enabled, output_level;
 static volatile uint32_t ticks_sum, ticks_peak, ticks_blocks;
 
 static uint8_t state = POCKET_STATE_STARTING;
-static uint32_t block_ticks, status_ms, init_ms, tick_ms, shown_leds;
+static uint32_t block_ticks, status_ms, init_ms, tick_ms, shown_leds, shown_key_leds;
 static unsigned knob_level = ~0U;
 static struct pocket_panel panel;
 static struct pocket_panel_status status;
@@ -246,6 +246,14 @@ void groove_screen_init(void)
 	paint(POCKET_BANDS);
 }
 
+/* Lamps are bits in the scan's RAM, so this costs no bus traffic: only what changed is written. */
+static void show_leds(unsigned first, unsigned count, uint32_t leds, uint32_t* shown)
+{
+	for (unsigned b = 0; b < count; b++)
+		if ((leds ^ *shown) >> b & 1U) fm1_led_set(first + b, (leds >> b) & 1U);
+	*shown = leds;
+}
+
 void groove_screen_control(void)
 {
 	struct fm1_controls controls;
@@ -264,10 +272,8 @@ void groove_screen_control(void)
 		in.buttons = controls.buttons;
 		for (unsigned i = 0; i < POCKET_ENCODERS; i++) in.encoders[i] = controls.encoders[i];
 		(void)pocket_panel_apply(&panel, &in); /* HOME+ARP has nowhere to go back to */
-		const uint32_t leds = pocket_panel_leds(&panel);
-		for (unsigned b = 0; b < 14U; b++)
-			if ((leds ^ shown_leds) >> b & 1U) fm1_led_set(b, (leds >> b) & 1U);
-		shown_leds = leds;
+		show_leds(0, 14U, pocket_panel_leds(&panel), &shown_leds);
+		show_leds(14U, POCKET_KEYS, pocket_panel_key_leds(&panel), &shown_key_leds);
 	}
 	update_status(now);
 	paint(BANDS_PER_POLL);

@@ -20,7 +20,8 @@ import sys
 ROOTS = ('clatter_pocket_render', 'clatter_pocket_output_level', 'fm1_output_mix', 'pocket_lxr_render_q23',
          'pocket_seq_block', 'pocket_lxr_trigger_now')
 SRAM, FLASH = (0x01c00000, 0x01d00000), (0x02000000, 0x02100000)
-LABEL = re.compile(r'^([A-Za-z_.$][\w.$]*):\s*$')
+# .GJT labels are a function's own jump tables: the code after one is still that function's
+LABEL = re.compile(r'^((?!\.GJT)[A-Za-z_.$][\w.$]*):\s*$')
 INSTRUCTION = re.compile(r'^\s*([0-9a-f]{6,8}):\s')
 TARGET = re.compile(r'(?:call|goto)[^<]*<[^:>]*:\s*([0-9a-f]+)\s*>')
 
@@ -56,6 +57,10 @@ while stack:
         elif SRAM[0] <= address < SRAM[1]:
             stack.append(name)
 
+# a walk that stops short would pass for the wrong reason
+for function in ('calcDrumVoiceSyncBlock', 'Snare_calcSyncBlock', 'HiHat_calcSyncBlock', 'Cymbal_calcSyncBlock', 'midiParser_ccHandler', 'lockVoice'):
+    if function not in seen:
+        leaving.add(('the walk', f'{function}, which it never reached'))
 print(f'{len(seen)} functions reachable from the audio interrupt, all checked')
 for function, target in sorted(leaving):
     print(f'FAIL {function} calls {target}, in Flash')

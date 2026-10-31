@@ -59,6 +59,12 @@ enum {
 	POCKET_TRIG_OPEN_HAT
 };
 
+/* What a hit can be besides itself. Every track has A and B; DRUM 3 and SNARE also play a second
+ * sound on their voice, percussion and clap, with its own A and B. Those are a voice's parameters
+ * moved for a hit, so they replace the sound on that voice, as any hit on it does. */
+enum { POCKET_VARIATION_NONE, POCKET_VARIATION_A, POCKET_VARIATION_B, POCKET_VARIATION_ALT, POCKET_VARIATION_ALT_A, POCKET_VARIATION_ALT_B, POCKET_VARIATIONS };
+#define POCKET_VARIATION_LAST(trig) ((trig) == POCKET_TRIG_DRUM3 || (trig) == POCKET_TRIG_SNARE ? POCKET_VARIATION_ALT_B : POCKET_VARIATION_B)
+
 /* Q23 full scale (signed 24-bit PCM in an int32, as the FM-1 SDK's audio blocks). */
 #define POCKET_Q23_MAX 8388607
 #define POCKET_Q23_MIN (-8388608)
@@ -93,6 +99,9 @@ int pocket_lxr_trigger(int trig, int velocity, int note);
 /* Trigger with up to two one-hit parameter locks (p = PAR_* or 0, v = 0-127), applied with
  * the firmware's AutomationNode as the LXR sequencer applies its step automation. */
 int pocket_lxr_trigger_locked(int trig, int velocity, int note, int p1, int v1, int p2, int v2);
+/* Trigger as a POCKET_VARIATION_*: a set of one-hit locks, offsets from the kit. The next hit on
+ * that voice puts them back, and the kit is never written. */
+int pocket_lxr_trigger_variation(int trig, int velocity, int note, int variation);
 /* Master gain, Q12 (4096 = unity, 0-16384). */
 int pocket_lxr_set_master(int gain_q12);
 /* Output DC blocker (one-pole high-pass at about 5 Hz) on or off; off after init.
@@ -122,8 +131,8 @@ void pocket_lxr_set_block_hook(pocket_lxr_hook hook);
 /* ---------------------------------------------------------------- audio context */
 /* Trigger at once: for the block hook, which must not use the ring (the control context is its
  * only producer). The same path as pocket_lxr_trigger. `trig`, `velocity` (1-127) and `note`
- * (0-127, 60 = the programmed pitch) are not checked. */
-void pocket_lxr_trigger_now(int trig, int velocity, int note);
+ * (0-127, 60 = the programmed pitch) are not checked; an unknown `variation` plays as none. */
+void pocket_lxr_trigger_now(int trig, int velocity, int note, int variation);
 /* Render `frames` stereo frames (a multiple of POCKET_LXR_BLOCK) of the six voices, each
  * panned as the firmware pans it at trigger time, as signed Q23 interleaved L/R. With
  * `accumulate`, adds to `out` (saturating) instead of overwriting it. */

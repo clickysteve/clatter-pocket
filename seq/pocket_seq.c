@@ -40,17 +40,23 @@ static volatile uint8_t position;
 static volatile uint32_t stepsPlayed, triggers, lastTracks;
 /* audio only */
 static uint8_t running, step, pairSwing;
+static volatile uint8_t pass;              /* 0..11: 12 is every condition's whole cycle */
+static uint32_t dice;
 static volatile uint32_t phase, interval; /* read by pocket_seq_quantise */
 static uint32_t unitPerBlock;
 /* set at init */
 static uint32_t unitPerSwing;              /* 6 * rate */
 static pocket_seq_emit emit;
 
+/* The passes of 12 on which a condition sounds, a bit each: a table rather than a division. */
+static const uint16_t passes[POCKET_CONDITION_25] = { 0xfff, 0x555, 0xaaa, 0x249, 0x492, 0x924, 0x111, 0x222, 0x444, 0x888 };
+
 POCKET_CONTROL_CODE void pocket_seq_init(uint32_t sample_rate, unsigned block_frames, pocket_seq_emit fn)
 {
 	for (unsigned p = 0; p < 2; p++)
 		for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
-			for (unsigned s = 0; s < POCKET_SEQ_STEPS; s++) patterns[p].cell[t][s] = 0;
+			for (unsigned s = 0; s < POCKET_SEQ_MAX_STEPS; s++) patterns[p].cell[t][s] = 0;
+	patterns[0].last_page = patterns[1].last_page = 0;
 	for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++) skips[t] = 0;
 	live = 0;
 	runRequest = 0;
@@ -84,10 +90,17 @@ const struct pocket_pattern* pocket_seq_pattern(void) { return &patterns[live]; 
 
 POCKET_CONTROL_CODE void pocket_seq_set_step(int track, int step_, int velocity, int note)
 {
-	if (track < 0 || track >= POCKET_SEQ_TRACKS || step_ < 0 || step_ >= POCKET_SEQ_STEPS) return;
 	velocity = velocity < 0 ? 0 : velocity > 127 ? 127 : velocity;
-	patterns[live].cell[track][step_] = POCKET_CELL(velocity, velocity && note > 0 && note < 128 ? note : 0);
+	pocket_seq_set_cell(track, step_, POCKET_CELL(velocity, velocity && note > 0 && note < 128 ? note : 0));
 }
+
+POCKET_CONTROL_CODE void pocket_seq_set_cell(int track, int step_, uint32_t cell)
+{
+	if (track < 0 || track >= POCKET_SEQ_TRACKS || step_ < 0 || step_ >= POCKET_SEQ_MAX_STEPS) return;
+	patterns[live].cell[track][step_] = cell;
+}
+
+void pocket_seq_set_last_page(unsigned last_page) { patterns[live].last_page = (uint8_t)(last_page & 3u); }
 
 POCKET_CONTROL_CODE int pocket_seq_quantise(int nearest, int* ahead)
 {
@@ -106,7 +119,8 @@ POCKET_CONTROL_CODE int pocket_seq_quantise(int nearest, int* ahead)
 		return 0;
 	}
 	*ahead = nearest && at >= length / 2u;
-	return (int)((sounding + (unsigned)*ahead) & (POCKET_SEQ_STEPS - 1u));
+	sounding += (unsigned)*ahead;
+	return sounding < POCKET_PATTERN_STEPS(&patterns[live]) ? (int)sounding : 0;
 }
 
 void pocket_seq_skip(int track, int step_) { skips[track] = (uint8_t)(step_ + 1); }
@@ -124,26 +138,41 @@ void pocket_seq_edit_commit(void)
 	live = (uint8_t)!live;
 }
 
-void pocket_seq_undo(void) { pocket_seq_edit_commit(); }
+const struct pocket_pattern* pocket_seq_replaced(void) { return &patterns[!live]; }
 
 int pocket_seq_position(void) { return position; }
 uint32_t pocket_seq_steps_played(void) { return stepsPlayed; }
 uint32_t pocket_seq_triggers(void) { return triggers; }
 unsigned pocket_seq_last_tracks(void) { return lastTracks; }
+unsigned pocket_seq_pass(void) { return pass; }
 
 /* ------------------------------------------------------------------ audio context */
-/* The hats are one voice: an open hat on the step takes the voice, as CLATTER's choke does. */
+static unsigned sounds(uint32_t cell)
+{
+	const unsigned condition = POCKET_CELL_CONDITION(cell);
+	if (condition < POCKET_CONDITION_25) return passes[condition] >> pass & 1u;
+	dice ^= dice << 13;
+	dice ^= dice >> 17;
+	dice ^= dice << 5;
+	return dice >> 24 < (condition - POCKET_CONDITION_25 + 1u) * 64u;
+}
+
+/* The hats are one voice: an open hat that sounds on the step takes the voice, as CLATTER's choke
+ * does. One its condition leaves out takes nothing. */
 static void fire(void)
 {
 	const struct pocket_pattern* p = &patterns[live];
+	const uint32_t open = p->cell[OPEN_HAT][step];
+	const unsigned openSounds = POCKET_CELL_VELOCITY(open) && sounds(open);
 	uint32_t tracks = 0, count = 0;
 	for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
 	{
-		const unsigned cell = p->cell[t][step], v = POCKET_CELL_VELOCITY(cell), note = POCKET_CELL_NOTE(cell);
+		const uint32_t cell = p->cell[t][step];
+		const unsigned v = POCKET_CELL_VELOCITY(cell), note = POCKET_CELL_NOTE(cell);
 		const unsigned skip = skips[t];
 		if (skip) skips[t] = 0;
-		if (!v || skip == step + 1u || (t == CLOSED_HAT && POCKET_CELL_VELOCITY(p->cell[OPEN_HAT][step]))) continue;
-		emit((int)t, (int)v, note ? (int)note : POCKET_SEQ_NOTE_PROGRAMMED);
+		if (!v || skip == step + 1u || (t == OPEN_HAT ? !openSounds : (t == CLOSED_HAT && openSounds) || !sounds(cell))) continue;
+		emit((int)t, (int)v, note ? (int)note : POCKET_SEQ_NOTE_PROGRAMMED, (int)POCKET_CELL_VARIATION(cell));
 		tracks |= 1u << t;
 		count++;
 	}
@@ -161,6 +190,8 @@ void pocket_seq_block(void)
 		running = 1;
 		step = 0;
 		phase = 0;
+		pass = 0;
+		dice = 0x9e3779b9u;
 		pairSwing = swingPercent;
 		interval = unitPerSwing * pairSwing;
 		fire();
@@ -175,7 +206,11 @@ void pocket_seq_block(void)
 	phase += unitPerBlock * tempoBpm;
 	if (phase < interval) return;
 	phase -= interval;
-	step = (step + 1u) & (POCKET_SEQ_STEPS - 1u);
+	if (++step >= POCKET_PATTERN_STEPS(&patterns[live]))
+	{
+		step = 0;
+		pass = pass == 11u ? 0 : pass + 1u;
+	}
 	if (step & 1u)
 		interval = unitPerSwing * (100u - pairSwing);
 	else
