@@ -46,6 +46,7 @@
 void mixer_decimateBlock(const uint8_t voiceNr, int16_t* buffer);
 
 #include "pocket_params.h"
+#include "pocket_variations.h"
 #ifdef POCKET_PACKED_TABLES
 #include "lxr_tables_packed.h"
 #endif
@@ -102,7 +103,7 @@ enum { EV_PARAM, EV_TRIGGER, EV_MASTER, EV_BPM, EV_DC_BLOCK };
 
 struct event {
 	uint8_t type, a, b, c;  /* PARAM: a/b = p lo/hi, c = value. TRIGGER: trig, vel, note */
-	uint8_t p1lo, p1hi, v1, p2lo, p2hi, v2, pad[2];
+	uint8_t p1lo, p1hi, v1, p2lo, p2hi, v2, variation, pad;
 	int32_t value;          /* MASTER: gain. BPM: bpm */
 };
 
@@ -111,7 +112,7 @@ static volatile uint32_t ringHead; /* written by control */
 static volatile uint32_t ringTail; /* written by audio */
 
 static uint8_t paramShadow[END_OF_SOUND_PARAMETERS]; /* control's view */
-static AutomationNode lockNodes[POCKET_LXR_TRIGGERS][2];
+static AutomationNode lockNodes[POCKET_LXR_VOICES][VARIATION_LOCKS]; /* a voice's: the hats share them */
 static int32_t masterGain = POCKET_GAIN_UNITY;       /* audio's copy */
 static uint8_t dcBlock;                              /* audio's copy */
 static pocket_lxr_hook blockHook;                    /* set while the audio context is held off */
@@ -188,6 +189,24 @@ IN_ITCM_RAM static void triggerVoice(int trig, uint8_t vel, uint8_t note)
 		HiHat_trigger(vel, (uint8_t)(trig - 5), note);
 }
 
+/* A hit's locks: what the variation moves, from the kit's own values, for this hit. Whatever the
+ * last hit on the voice locked goes back first, as a sequencer step without automation does
+ * (CLATTER's clatter_trigger), so a variation cannot outlive the next hit. */
+IN_ITCM_RAM static AutomationNode* lockVoice(int trig, int variation)
+{
+	const struct variation_lock* row = variation >= POCKET_VARIATION_A && variation <= POCKET_VARIATION_LAST(trig) ? variations[variationRow[trig] + variation - 1] : 0;
+	AutomationNode* nodes = lockNodes[trig > POCKET_TRIG_CLOSED_HAT ? POCKET_TRIG_CLOSED_HAT : trig];
+	for (int i = 0; i < VARIATION_LOCKS; i++)
+	{
+		const int p = row ? row[i].param : 0;
+		autoNode_setDestination(&nodes[i], autoDest(p));
+		if (!p) continue;
+		const int v = activeParameters[p] + row[i].by, top = p >= POCKET_PAR_VELOA1 && p <= POCKET_PAR_VELOD6_OPEN ? VARIATION_LONGEST : 127;
+		autoNode_updateValue(&nodes[i], (uint8_t)(v < 0 ? 0 : v > top ? (activeParameters[p] > top ? activeParameters[p] : top) : v));
+	}
+	return nodes;
+}
+
 IN_ITCM_RAM static void apply(const struct event* e)
 {
 	switch (e->type)
@@ -202,12 +221,17 @@ IN_ITCM_RAM static void apply(const struct event* e)
 	case EV_TRIGGER:
 	{
 		const int p1 = e->p1lo | (e->p1hi << 8), p2 = e->p2lo | (e->p2hi << 8);
-		/* a hit without locks returns its automated parameters to their values, as a
-		   sequencer step without automation does (CLATTER's clatter_trigger) */
-		autoNode_setDestination(&lockNodes[e->a][0], autoDest(p1));
-		autoNode_setDestination(&lockNodes[e->a][1], autoDest(p2));
-		if (p1) autoNode_updateValue(&lockNodes[e->a][0], e->v1);
-		if (p2) autoNode_updateValue(&lockNodes[e->a][1], e->v2);
+		AutomationNode* nodes = lockVoice(e->a, e->variation);
+		if (p1)
+		{
+			autoNode_setDestination(&nodes[0], autoDest(p1));
+			autoNode_updateValue(&nodes[0], e->v1);
+		}
+		if (p2)
+		{
+			autoNode_setDestination(&nodes[1], autoDest(p2));
+			autoNode_updateValue(&nodes[1], e->v2);
+		}
 		triggerVoice(e->a, e->b, e->c);
 		break;
 	}
@@ -227,14 +251,10 @@ IN_ITCM_RAM static void apply(const struct event* e)
 	}
 }
 
-IN_ITCM_RAM void pocket_lxr_trigger_now(int trig, int velocity, int note)
+IN_ITCM_RAM void pocket_lxr_trigger_now(int trig, int velocity, int note, int variation)
 {
-	struct event e = { 0 };
-	e.type = EV_TRIGGER;
-	e.a = (uint8_t)trig;
-	e.b = (uint8_t)velocity;
-	e.c = (uint8_t)note;
-	apply(&e);
+	lockVoice(trig, variation);
+	triggerVoice(trig, (uint8_t)velocity, (uint8_t)note);
 }
 
 IN_ITCM_RAM static void drain(void)
@@ -304,6 +324,18 @@ POCKET_CONTROL_CODE int pocket_lxr_trigger_locked(int trig, int velocity, int no
 POCKET_CONTROL_CODE int pocket_lxr_trigger(int trig, int velocity, int note)
 {
 	return pocket_lxr_trigger_locked(trig, velocity, note, 0, 0, 0, 0);
+}
+
+POCKET_CONTROL_CODE int pocket_lxr_trigger_variation(int trig, int velocity, int note, int variation)
+{
+	if (trig < 0 || trig >= POCKET_LXR_TRIGGERS) return -1;
+	struct event e = { 0 };
+	e.type = EV_TRIGGER;
+	e.a = (uint8_t)trig;
+	e.b = (uint8_t)clamp(velocity, 1, 127);
+	e.c = (uint8_t)clamp(note, 0, 127);
+	e.variation = (uint8_t)variation;
+	return push(&e);
 }
 
 POCKET_CONTROL_CODE void pocket_lxr_set_block_hook(pocket_lxr_hook hook)
@@ -441,11 +473,8 @@ POCKET_CONTROL_CODE int pocket_lxr_init(uint32_t seed)
 	Snare_init();
 	HiHat_init();
 	Cymbal_init();
-	for (int t = 0; t < POCKET_LXR_TRIGGERS; t++)
-	{
-		autoNode_init(&lockNodes[t][0]);
-		autoNode_init(&lockNodes[t][1]);
-	}
+	for (int v = 0; v < POCKET_LXR_VOICES; v++)
+		for (int i = 0; i < VARIATION_LOCKS; i++) autoNode_init(&lockNodes[v][i]);
 
 	for (int p = 0; p < END_OF_SOUND_PARAMETERS && p + 8 < INIT_KIT_SIZE; p++)
 	{
