@@ -16,21 +16,21 @@ none, so use the mouse.
    seed. To choose a character first, turn PRESETS `↑ ↓`.
 2. **Generate a pattern.** Press ARP `9`. ALGORITHM `, .` chooses the style first, if you want one.
 3. **Press PLAY** `Space`. Leave it running: everything below works while it plays.
-4. **Switch keyboard modes.** SCL `2` changes KEYS: DRUM to KEYS: PITCH. In DRUM, the keys `A W S E D`
-   are kick, snare, snare, closed hat, open hat. In PITCH every key plays the selected voice, and
-   OCT− `Z` and OCT+ `X` change the octave.
+4. **Switch keyboard modes.** SCL `2` changes KEYS: DRUM to KEYS: PITCH. In DRUM, keys 1 to 9 are the
+   nine sounds, and 10 to 18 and 19 to 27 are the same nine in variations. In PITCH every key plays the
+   selected voice, and OCT− `Z` and OCT+ `X` change the octave.
 5. **Record notes.** Press REC `R`. Playing, what you hit lands on the nearest step. Stopped, what
    you hit lands on the selected step, and hitting it again removes it.
 6. **Edit the pattern.** SEQ `0` opens PATTERN. KNOB 4 moves the selected step, KNOB 1 sets its
-   velocity, KNOB 2 the tempo, KNOB 3 the swing.
+   velocity, KNOB 2 the tempo, KNOB 3 the swing. Hold SAVE `8` and turn KNOB 3 for more pages, KNOB 1
+   for the step's condition.
 7. **Regenerate one instrument.** Turn SELECT `← →` to a voice, or hit its key. **Hold SAVE `8`** and
    press ENV `3` for a new sound, or ARP `9` for a new rhythm. The rest stays as it was.
 8. **Mutate the rhythm.** LFO `4` varies the pattern; hold SAVE and press LFO for one track only.
 
-SAVE+OCT− `8`+`Z` undoes the last change to the pattern, and SAVE+OCT+ `8`+`X` the last change of kit.
+SAVE+OCT− `8`+`Z` undoes the last thing you did, kit or pattern, and SAVE+OCT+ `8`+`X` redoes it.
 
-To keep them: SAVE+EDIT `8`+`5` for the saved kits, SAVE+SEQ `8`+`0` for the saved patterns
-([POCKET-STORAGE.md](POCKET-STORAGE.md)).
+To keep it: tap SAVE `8`, choose a slot with SELECT, tap SAVE again ([POCKET-STORAGE.md](POCKET-STORAGE.md)).
 
 ## Control map
 
@@ -40,27 +40,28 @@ Every control below works on every page, unless it says otherwise.
 |---|---|---|
 | **Keys** | play: DRUM or PITCH, below | |
 | **SCL** | KEYS: DRUM or KEYS: PITCH | |
-| **OCT− / OCT+** | PITCH: octave, −3 to +3. DRUM: how hard the keys hit, 40, 70, 100 or 127 | OCT−: undo the pattern. OCT+: undo the kit. Again, redo |
+| **OCT− / OCT+** | PITCH: octave, −3 to +3. DRUM: how hard the keys hit, 40, 70, 100 or 127 | OCT−: undo. OCT+: redo. One history of kits and patterns |
 | **PLAY** | start or stop | |
 | **REC** | recording on or off | |
 | **ENV** | a new kit, in the character PRESETS chose | a new sound for the selected voice |
 | **ARP** | a new pattern, in the style ALGORITHM chose | a new pattern for the selected track |
 | **LFO** | mutate the pattern, at GLOBAL's MUTATE strength | mutate the selected track |
-| **SAVE** | a tap locks or unlocks the selected track: ARP and LFO leave it alone. On a save page, a tap stores | |
-| **SELECT** | the selected voice | |
+| **SAVE** | a tap opens PROJECTS. There, a tap stores | |
+| **FX** | MIXER | lock or unlock the selected track: ARP and LFO leave it alone |
+| **SELECT** | the selected voice. On PROJECTS, the slot | |
 | **PRESETS** | the kit: INIT, then 16 characters | |
 | **ALGORITHM** | the pattern style, of 11 | |
-| **HOME SEQ EDIT FX** | MAIN, PATTERN, SOUND, MIXER | SEQ: saved patterns. EDIT: saved kits |
+| **HOME SEQ EDIT** | MAIN, PATTERN, SOUND | |
 | **GLO** | GLOBAL; again, SYSTEM | |
 | **MASTER** | output level | |
 | HOME held at 1.5 s after power-on | SAFE MODE, unchanged | |
 
-| Knob | PATTERN | SOUND | MIXER | GLOBAL |
-|---|---|---|---|---|
-| KNOB 1 | selected step's velocity | pitch | level | row |
-| KNOB 2 | tempo | decay | pan | value |
-| KNOB 3 | swing | filter | | |
-| KNOB 4 | selected step | drive | | |
+| Knob | PATTERN | PATTERN, SAVE held | SOUND | MIXER | GLOBAL | PROJECTS |
+|---|---|---|---|---|---|---|
+| KNOB 1 | selected step's velocity | its condition | pitch | level | row | slot |
+| KNOB 2 | tempo | | decay | pan | value | |
+| KNOB 3 | swing | length, a page at a time | filter | | | |
+| KNOB 4 | selected step, across pages | a page at a time | drive | | | |
 
 Lights: PLAY playing, REC recording, SCL in PITCH, SAVE on a locked track.
 
@@ -68,9 +69,9 @@ Lights: PLAY playing, REC recording, SCL in PITCH, SAVE on a locked track.
 
 **SELECT cannot be held.** It is a rotary encoder with no switch: the SDK reports 14 buttons, 27 keys
 and 7 encoders, and an encoder is two contacts (`fm1_input.h`, `struct fm1_controls`). So every "hold
-SELECT" in the brief is **hold SAVE** here. SAVE was the button with the least to lose: a tap still
-locks, on release, and a chord never does. On a track that is locked, SAVE+ARP and SAVE+LFO refuse and
-say so. The footer shows the chord while SAVE is down.
+SELECT" in the brief is **hold SAVE** here. A tap of SAVE acts on release, and only if nothing else
+happened while it was down: any button, knob or key makes it a chord. On a track that is locked,
+SAVE+ARP and SAVE+LFO refuse and say so. The footer shows the chords while SAVE is down.
 
 **The keys have no velocity.** The scanner reports on and off, nothing else (`fm1_scan_decode`; the
 emulator's `fm1_velocity` is for another board, the SMK-37). So the keys play at one level that you
@@ -93,23 +94,57 @@ set, with OCT in DRUM or KEY VEL on GLOBAL. MIDI notes keep their own velocity.
 
 ### DRUM
 
-A key is an instrument, the same at every octave, and every key plays. Instruments play at their
-programmed pitch, whatever the key's position.
+Three banks of nine keys, the same nine sounds in the same order. Key 1 is F3, the lowest.
 
-| Key | C | C# | D | D# | E | F | F# | G | G# | A | A# | B |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Plays | kick | snare | snare | closed hat | open hat | low tom | high tom | cymbal | high tom | cymbal | closed hat | kick |
-| Track | D1 | SN | SN | CH | OH | D2 | D3 | CY | D3 | CY | CH | D1 |
-| CLATTER's role | kick | snare | clap | closed hat | open hat | low tom | high tom | cymbal | perc | fx | | |
+| Keys | Bank | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 to 9 | original | kick | snare | closed hat | open hat | low tom | high tom | cymbal | perc | clap |
+| 10 to 18 | A | … A | | | | | | | | |
+| 19 to 27 | B | … B | | | | | | | | |
+| | Track | D1 | SN | CH | OH | D2 | D3 | CY | D3 | SN |
 
-The LXR has **six voices and seven triggers**, not ten instruments. The ten keys of the brief are in
-the places it asked for, folded into seven tracks as CLATTER's default project routes them. So
-**the clap, percussion and FX keys play the same sound as the snare, high tom and cymbal**. A# and B
-give a second hat and kick, for two-finger rolls. Whether SN is a snare or a clap is the kit's choice,
-and likewise whether D3 is a tom or a percussion voice.
+The order is the drum machine's usual reading order: the backbeat under the first fingers, the hats next
+to it, toms then cymbal, and the two extra sounds last. MAIN and the other pages name what you played,
+KICK A or PERC B, beside the voice.
 
-OCT sets the keys' velocity rather than switching banks: all seven instruments fit in one octave, so
-a bank would have nothing to do.
+**Nine sounds from seven triggers.** The LXR has **six voices and seven triggers**, and two more
+independent voices would be a new synthesis engine, so there are not nine independent instruments.
+PERC and CLAP are the voices of D3 and SN with their parameters moved for one hit:
+
+- they are genuinely other sounds. PERC is high, short and FM; CLAP is noise with envelope repeats and
+  a resonant filter. Across all 17 kits their distance from the sound they share a voice with is
+  measured (below);
+- **they cannot sound with the sound they share a voice with**. HI TOM cuts PERC and SNARE cuts CLAP, and
+  the reverse, as any hit on a voice does. In a pattern, D3 and SN have one step each, so a step is the
+  tom or the perc, the snare or the clap. Say so here rather than pretend: six things can sound at
+  once, not nine.
+- CH and OH are one voice, as they always were.
+
+**Variations.** A is a moderate alternative, B goes further:
+
+| Sound | A | B |
+|---|---|---|
+| Kick | tighter, more click and drive | long, lower, driven |
+| Snare | tighter, higher, a little drive | longer, dirty, decimated |
+| Closed hat | darker | metallic: higher, resonant, driven |
+| Open hat | shorter, darker | longer, driven, decimated |
+| Low, high tom | higher, shorter | FM, longer, driven |
+| Cymbal | choked, brighter | a gong: lower, longer, driven, decimated |
+| Perc | higher, more FM | lower, the most FM, decimated |
+| Clap | more repeats, darker, longer | more repeats, decimated, driven: an FX |
+
+They are **offsets from the kit**, so they stay related to whatever the kit made of the voice.
+Decays stay between 2 and 100, and a decimator above 16: a variation cannot fall silent or ring for
+minutes.
+
+**Per hit.** A variation is up to four of the LXR's own one-hit parameter locks (`AutomationNode`, as its
+sequencer's step automation), read from the kit at the moment of the hit. **The kit is not written**.
+The next hit on that voice puts the locks back before it triggers. One thing needed help: a drum's
+drive is smoothed, and only while it sounds, so the next plain hit would have begun with the old
+drive and glided for a few milliseconds. The smoother is set when a lock comes or goes. Tests: the kit is
+byte-identical after every variation, and the next plain hit is the plain sound.
+
+OCT sets the keys' velocity rather than switching banks, as before.
 
 With FOLLOW on (the default), the selected voice follows the last DRUM key or MIDI note, so a hit
 selects what SAVE+ENV and SAVE+ARP act on. SCL never changes it.
@@ -128,37 +163,40 @@ tonal.
 
 Note-ons take the same path as the keys, so they play and record the same way, at their own velocity.
 In PITCH, a note plays the selected voice. In DRUM, the General MIDI drum notes play their voices, or
-with MIDI MAP on KEYS, the keys' map above.
+with MIDI MAP on KEYS, the 27 keys of the map above from F3, repeating past them.
 
 ## Recording
 
 REC is a mode: `REC ON` on the status line and the REC light. Off, the keys record nothing.
 
-Each step is one aligned 16-bit cell:
+Each step is one aligned 32-bit cell:
 
 ```c
-uint16_t cell[7][16]; /* low byte: velocity (0 off). High byte: 0 the programmed pitch, or the MIDI note */
+uint32_t cell[7][64]; /* velocity 0-6 (0 off); tone 8-15; condition 16-19 */
 ```
 
-A step's velocity and note change in one write, so the audio interrupt cannot see half of an edit.
-A pitch of C4 is stored as 0, because it is the programmed pitch: the same sound, so the same key
-removes it. Modes do not reinterpret anything: a note is what was recorded, in either mode. The track
-is the key's in DRUM and the selected voice in PITCH.
+A step changes in one write, so the audio interrupt cannot see half of an edit. The tone is 0 for the
+programmed pitch, a MIDI note, or 128 plus a variation: **a step has a note or a variation**, which is
+what keeps a project to 19 bits a step. A pitch of C4 is stored as 0, because it is the programmed
+pitch: the same sound, so the same key removes it. Modes do not reinterpret anything: a tone is what
+was recorded, in either mode. The track is the key's in DRUM and the selected voice in PITCH. A new tone
+on a step keeps its condition.
 
 **Stopped: step entry, at the selected step.**
 
 | Press | The step |
 |---|---|
 | a key for an empty step | is written |
-| the same note again | is removed |
-| another note on the track | takes the new note and velocity |
+| the same key again | is removed |
+| another note or variation on the track | takes the new one and its velocity |
 | another track | is left alone |
 
 AUTO STEP on GLOBAL moves the cursor on 1 to 4 steps after an entry (a chord is one entry, a removal
-does not move it). It is off by default.
+does not move it), across pages and round the pattern. It is off by default.
 
 **Playing: overdub.** A hit never removes anything, so hitting the same step on every pass is safe.
-It writes the step, replacing that track's note there; other tracks are untouched.
+It writes the step, replacing that track's note there; other tracks are untouched. While recording
+the grid follows the music from page to page.
 
 **Quantisation.** QUANTISE on GLOBAL:
 
@@ -167,7 +205,7 @@ It writes the step, replacing that track's note there; other tracks are untouche
 | NEAREST (default) | the step sounding if it is in its first half, otherwise the next |
 | BEHIND | the step sounding |
 
-Half is half of that step's real length, swing included, and the end of the bar rounds to step 0.
+Half is half of that step's real length, swing included, and the end of the pattern rounds to step 1.
 
 **No double trigger.** A hit rounded up was heard from the key, then the step would play it a moment
 later. So that step skips that track, once. The skip lasts for one step whatever happens: a hit that
@@ -214,10 +252,9 @@ parameters per control poll go to the engine through its event ring, so the audi
 most the bounded work it always did. With a pattern playing, emulated CPU peaks at 29.5 % while a kit
 loads (28.6 % playing), with no overruns or dropped events.
 
-**Protecting unsaved sounds.** A + after the name means hand edits. The kit before the last
-ENV, SAVE+ENV or browse is kept in RAM, and SAVE+OCT+ swaps it back, edits and all; again to go
-forward. A browse keeps the kit only if it was generated or edited: a factory kit can be browsed
-back to, and keeping it would overwrite the one worth keeping.
+**Protecting unsaved sounds.** A + after the name means hand edits. Undo takes back any ENV, SAVE+ENV
+or browse, edits and all. A turn through the kits with PRESETS is one undo, whose way back is the kit
+it started from, however many it passed.
 
 Kits do not touch LFOs or the FX bus: the first are off in every kit, the second is not in this build.
 
@@ -248,8 +285,38 @@ an octave either way.
 **SAVE+LFO** does one track, which matches what SAVE means with ENV and ARP. Locked tracks stay out
 of ARP and LFO, and all of this is deterministic: the same seed gives the same result.
 
-**Not implemented.** Step probability and per-track lengths were secondary and are deferred. A/B/C/D
-variations were dropped.
+**Past one page** a pattern is a phrase ([POCKET-SEQUENCER.md](POCKET-SEQUENCER.md)).
+
+**Not implemented.** Per-track lengths were secondary and are deferred. A/B/C/D pattern variations were
+dropped.
+
+## Undo and redo
+
+**SAVE+OCT−** undoes and **SAVE+OCT+** redoes, one history in the order things happened: UNDO and REDO
+on the status line, NOTHING TO UNDO and NOTHING TO REDO at the ends.
+
+| Undoable | As |
+|---|---|
+| ENV, SAVE+ENV, PRESETS | one action. A turn through PRESETS is one |
+| ARP, SAVE+ARP, LFO, SAVE+LFO | one action |
+| A knob on SOUND or MIXER | one action per turn: within 1.5 s on one parameter |
+| A step's velocity or condition | the same, per step |
+| Length | the same |
+| A step entered stopped | one action; a chord is one |
+| A live take | one action: hits less than 2 s apart, until PLAY or REC |
+| Loading a project or an old save | one action, kit, pattern and settings |
+
+Tempo, swing and the rows of GLOBAL are not actions, but a load's change to them goes back with it.
+
+**Nothing is regenerated.** What is recorded is what changed, never how: a word per changed step or
+parameter in a ring of 4,096 words, 16 KB of RAM, and the oldest actions go when it is full. So a knob
+turn costs one word and a new 64-step pattern what actually differed. A new edit after an undo forgets
+what redo held; an action that changed nothing does not. Nothing reaches Flash, and a restart starts
+with no history.
+
+The generators' seeds go back with their results, so ARP after an undo plays what it played the first
+time. The mutation and take counters do not: those keep moving, so the next one is a different one.
+
 
 ## GLOBAL
 
@@ -267,6 +334,7 @@ power-off.
 | AUTO STEP | 0-4 | after a stopped entry |
 | TEMPO | 30-300 | as KNOB 2 on PATTERN |
 | SWING | 50-75 | as KNOB 3 on PATTERN |
+| LENGTH | 16, 32, 48, 64 | as SAVE+KNOB 3 on PATTERN |
 | STYLE | of 11 | as ALGORITHM |
 | DENSITY, COMPLEX | 0-100 | the generator |
 | SEED | 0-9999 | the next ARP |
@@ -281,122 +349,152 @@ nothing and the clock is the audio's), a velocity curve, and a default tempo (th
 
 ## The screen
 
+White on black. Orange means selected, sounding or recording, and nothing else. Colours are RGB565:
+the display is a colour panel, read from the emulated LCD, and **how this orange looks on a real panel
+has not been seen**.
+
 | Where | What |
 |---|---|
-| Band 1, the status line | `KEYS: DRUM VEL 127  REC ON` or `KEYS: PITCH OCT 1  REC ON`. Inverted for a moment: what a control just did, or an audio overrun |
-| Voice line | the selected voice; on PATTERN the step, its note (`S5 N67`) and LOCK |
-| PATTERN | the step grid. A step with a note of its own is amber |
+| Band 1, the status line | `KEYS: DRUM VEL 127  REC ON` or `KEYS: PITCH OCT 1  REC ON`, REC in orange. In orange for a moment: what a control just did. An audio overrun is the one full orange band |
+| Voice line | the selected voice, in orange; on PATTERN the step, and what it holds (`S17 N67 1:3`, `S5 PA 25%`); elsewhere the DRUM sound last played (`PERC B`) |
+| PATTERN | PAGE 2/4, and a block a page: orange where it is playing, white on screen, grey in use. The step grid. A note is an orange bar; a variation hollow (A, X, XB) or striped (B, XA); a condition an orange corner. `X` is PERC on D3 and CLAP on SN |
 | MAIN | transport, tempo, swing, style, hits, a row of the pattern, the kit |
-| Footer | what the controls do here; with SAVE held, what the chord does |
+| Footer | what the controls do here; with SAVE held, the chords, in orange |
 | SYSTEM's footer | `BOOT+HOME SAFE`: how to reach SAFE MODE |
 
 ## Size
 
-`tools/flash-map.py` breaks it down; the figures below are for this firmware, 0.5.0, and
-[POCKET-STORAGE.md](POCKET-STORAGE.md) has what storage cost. Both builds `--replace --single-precision`:
+`tools/flash-map.py` breaks it down; the figures below are for this firmware, 0.6.0.
+[POCKET-STORAGE.md](POCKET-STORAGE.md) has what a project costs. Both builds `--replace --single-precision`:
 
-| | Controls (9b1e916) | This firmware | Change |
+| | 0.5.0 (4d8e2f4) | 0.6.0 | Change |
 |---|---|---|---|
-| App image | 436,860 | **433,628** | −3,232 |
-| Headroom under 453,921 | 17,061 | **20,293** | +3,232 |
-| Over the 16,384 hardware-fix margin | 677 | **3,909** | |
-| `.ram0_data` (SRAM code and data) | 105,820 | 105,564 | −256 |
-| `.ram0_bss` | 285,676 | 289,292 | +3,616 |
-| Runtime heap (SDK minimum 49,152) | 132,044 | **128,684** | −3,360 |
+| App image | 433,628 | **437,436** | +3,808 |
+| Headroom under 453,921 | 20,293 | **16,485** | −3,808 |
+| Over the 16,384 hardware-fix margin | 3,909 | **101** | |
+| `.ram0_data` (SRAM code and data) | 105,564 | 103,740 | −1,824 |
+| `.ram0_bss` | 289,292 | 309,964 | +20,672 |
+| Runtime heap (SDK minimum 49,152) | 128,684 | **109,836** | −18,848 |
 
-| Where it went | Bytes |
+**The margin is kept by 101 bytes.** The next feature needs flash found for it first.
+
+| RAM | Bytes |
 |---|---|
-| LXR tables: range coded, the sawtooth stored by its symmetry, from 23,892 to 17,650 | −6,242 |
-| CRC of the tables, checked at every start | +160 |
-| control-only engine code for size, packed style tables, compact MIDI map | −350 about |
-| **Recovered** | **−6,400** |
-| saving: the store 778, the panel about 1,500, the SDK's Flash driver 878 | +3,168 |
-| **Net** | **−3,232** |
+| Undo history | +16,404 |
+| Two patterns of 64 steps with conditions: 2 × 1,796 for 2 × 224 | +3,144 |
+| The sector in RAM, 4,096 for 3,104 | +992 |
 
-The target of 8 to 12 KB was not reached: 6.4 KB was what could be recovered safely. Of the image,
-359 KB is the binary SDK. It still links about 40 KB of unreachable stock engines, but the build's
-sealed SDK contract requires those symbols, so they stay. Compiling the LXR's parameter handler for
-size saved 160 bytes in code the audio interrupt runs, and was left out as not worth it.
+The heap falls by less than bss rises because the init-only parameter table moved out of SRAM.
 
-Stack and CPU below are from this firmware.
+| Flash | Bytes |
+|---|---|
+| Panel: pages, conditions, 27 keys, one history, PROJECTS, old saves | +3,316 |
+| Store: nine projects in four sectors, and reading old banks | +698 |
+| History | +586 |
+| Generator: phrases, 64 steps, offset by tighter style tables | +175 |
+| Engine and sequencer: variations, conditions, on the audio path | +670 |
+| **Recovered** | |
+| `parameterArray_init` as a table of 3 bytes an entry, checked against upstream's | −1,637 |
+| | **+3,808** |
 
-**Stack**, from the frames in the linked ELF:
+Of the image, 359 KB is the binary SDK. The upstream LXR file behind the table is included unchanged;
+`test_engine_packed` compares what the two fill in, entry by entry, and renders voices bit-identical.
+
+**Stack**, from the frames in the linked ELF (`tools/stack-depth.py`):
 
 | Path | Bytes |
 |---|---|
-| `pocket_gen_track` from the control task, deepest | about 500 |
-| `pocket_gen_mutate`, the same | about 450 |
-| `pocket_kit_voice`, the same | about 440 |
-| `pocket_panel_draw_band` | about 440 |
-| audio interrupt: `pocket_seq_block` 4, `fire` 44, trigger 28 | about 472 at most |
-| a save: `pocket_store_commit` to `fm1_flash_write`, before the SDK's own callees | 604 |
+| a save, deepest, through the SDK's driver and RTOS | 776 |
+| `pocket_panel_draw_band`, through a Flash read on PROJECTS | 644 |
+| `pocket_gen_track` | 304 (was about 500: no arrays on the stack now) |
+| `pocket_gen_mutate` | 168 |
+| `pocket_kit_voice` | 144 |
+| audio interrupt: render, deepest | 420 |
+| audio interrupt: the sequencer firing a variation | 340 |
 
-The control path stays under the 720 bytes the audit found, of an `app_core` stack of 2,048 units, except
-possibly a save, whose depth inside the SDK's driver is not known: it is the driver stock uses from this task.
-The audio figure is the audit's 400 plus those frames, 32 more than the sequencer's, because `fire`
-is no longer inlined. There is no division on the audio path.
+There is no division on the audio path.
 
-**CPU**, in the emulator at 240 MHz: 28.1 % stopped, 28.6 % mean and 29.4 % peak playing, 29.5 % peak
-while a kit loads. Start-up takes 38 ms longer, for the tables. **Not a device measurement**: the emulator counts about one instruction per cycle
-and models no cache or Flash wait states.
+**CPU**, in the emulator at 240 MHz:
+
+| | 0.5.0 | 0.6.0 |
+|---|---|---|
+| Stopped | 28.1 % | 28.1 % |
+| Playing, mean | 28.6 % | 27.9 % |
+| Playing, peak | 29.4 % | 29.2 % |
+| While a kit loads, peak | 29.5 % | 30.3 % |
+| 64 dense steps with hits on every variation, 300 BPM: mean, peak | | 28.7 %, 30.6 % |
+
+0 overruns and 0 dropped events through all of it. **Not a device measurement**: the emulator counts
+about one instruction per cycle and models no cache or Flash wait states.
 
 ## Tests
 
 | Command | Covers |
 |---|---|
-| `make test` | `test_kit`, 23 checks: ranges, determinism, seeds, families, one voice changing only itself, and **1,344 voices rendered through the real engine** (each character and trigger at WILD 0, 50, 100): none silent, none clipping alone, kicks low, hats above them |
-| | `test_panel`, 387 checks on the real engine: DRUM keys not transposing, by bit-identical audio; PITCH by measured frequency, returning exactly; modes changing nothing else; octave and velocity; stopped and live recording; quantising; double triggers; kits, undo, one voice and one track; MIDI; every GLOBAL row at both ends |
-| | `test_seq`, 13,334 checks with AddressSanitizer and UBSan, including notes through mutation, quantising every position with swing, skips, 15,400 one-track generations. The golden pattern hash is **unchanged** from the previous firmware |
-| | `test_midi`, every 3-byte message. Engine, libm and table checks unchanged |
-| | `test_store`, 1,379 checks: [POCKET-STORAGE.md](POCKET-STORAGE.md) |
-| `make compare CLATTER_DIR=…` | the engine against CLATTER's WebAssembly: **−80.8 dBFS** max error, pass |
+| `make test` | `test_panel`, 708 checks on the real engine: everything below by the panel's own controls, on a model of the Flash chip |
+| | `test_seq`, 23,986 checks with AddressSanitizer and UBSan, including every length playing in order, wrapping, shortening under the playhead, quantising and skips across pages; every condition at every length over 24 passes and after STOP and PLAY; phrases in every style and length; mutation to the last page; steps keeping their condition. The golden pattern hash is **unchanged** |
+| | `test_history`, 173,786 checks: order, redo, merging, overflow, and random actions against a shadow of every state |
+| | `test_store`, 6,357 checks: [POCKET-STORAGE.md](POCKET-STORAGE.md) |
+| | `test_kit`, 23 checks; `test_midi`; engine, libm and table checks; the parameter table against upstream |
 | `make emu-test EMU_WASM=…` | `tools/emu-test.mjs`, below |
 | `python3 tools/check-firmware.py` | size, margin, layout, placement, and that the build is `--single-precision` |
-| `node tools/emu-golden.mjs` | the firmware's own audio, each voice hashed: unchanged across these builds, bit for bit, once aligned for the later audio start with `--lead` |
-| `python3 tools/check-audio-path.py` | nothing the audio interrupt reaches is in Flash |
+| `node tools/emu-golden.mjs` | the firmware's own audio, each voice hashed: **bit-identical to 0.5.0**, all seven voices |
+| `python3 tools/check-audio-path.py` | nothing the audio interrupt reaches is in Flash: 99 functions |
+| `python3 tools/stack-depth.py` | the stack figures above |
+
+**Variations, measured.** Every one of the 27 keys is rendered on the init kit and all 16 characters,
+and compared by length, brightness and envelope, level left out: 0.14 is about 15 % longer, or two
+semitones. 561 comparisons: each variation against its bank's others, PERC against HIGH TOM and CLAP against
+SNARE. **12 of 561 fall below 0.14**, scattered, not one position: BROKEN's PERC against its A and B, CHAOS's
+PERC against its HI TOM, a few of the moderate A variations on single kits. On those, that variation
+is hardly one. None of the 27 is silent on any kit. That is measurement:
+**nobody has listened to these**.
 
 ### Emulator results
 
-The package below, the emulator's WebAssembly core (the deployed `fm1_web.wasm`), 240 MHz, **221 of 221
+The package below, the emulator's WebAssembly core (the deployed `fm1_web.wasm`), 240 MHz, **361 of 361
 checks**. All input is through the emulated panel; text and grids come from the LCD's pixels, pitch and
-timing from the emulated audio. Kits are compared with the host's for the same seed, patterns bit for bit.
+timing from the emulated audio.
 
-| Your success criterion | Result |
+| Asked for | Result |
 |---|---|
-| 1. Generate a complete kit | ENV: GENERATING KIT, KIT INDUSTRIAL 149; SOUND shows the host's values for that seed |
-| 2. Generate a rhythm | ARP, in the style ALGORITHM chose; the host's pattern bit for bit |
-| 3. PLAY and hear it | onsets in the audio; 10 of 10 recur exactly a loop later |
-| 4. DRUM and PITCH | SCL, shown; pattern and playback unchanged |
-| 5. Finger-drum | each of seven keys sounds its voice |
-| 6. One instrument chromatically | low tom 97 Hz, fifth × 1.50, octave 192 Hz |
-| 7. REC | stopped entry, removal, replacing a pitch; live hit on the track, others untouched, playback uninterrupted |
-| 8. Octaves | OCT+ is exactly the key an octave up; stops at +3; returns to 97 Hz |
-| 9. One sound | SAVE+ENV: the snare changed, the kick did not, the rhythm did not |
-| 10. One rhythm | SAVE+ARP: one track changed, six identical |
-| 11. Mutate | 1 to 9 steps a press; one-track mutation leaves six tracks identical |
-| 12. Browse kits | PRESETS: names, wraps, rhythm unchanged |
+| All 27 keys | each sounds, on its voice, named on screen, in the order of the map |
+| Variations recorded | stopped and live, on the host; played back the key's sound exactly |
+| 16 to 64 steps | PATTERN's blocks visit every page in order and wrap, at each length |
+| A long pattern repeats | 64 steps recur at 705,888 samples, from the emulated audio |
+| Conditions | 1:2, 2:2, 1:3, 2:3, 1:4, 4:4 heard on exactly the right passes, by onsets in the audio, again after STOP and PLAY |
+| One history | sound, pattern, kit back in that order and forward exact, to the ends of it, both messages shown |
+| Chords | SAVE with each of OCT−, OCT+, ENV, ARP, LFO opens no save page |
+| A project | saved, changed, loaded while playing, kit, both pages, note, condition, tempo, swing, length; a restart; a load undone and redone |
+| Flash | only our sectors changed; factory data intact; the vendor's area untouched; undo writes nothing |
+| Damage | a corrupted sector, an erase cut half way, a save cut before commit, both copies corrupted |
+| Old saves | listed, loaded, byte for byte untouched by a project beside them, erased only on a second press |
+| Refusals | foreign data, a stock sample bank over the sectors, SAFE MODE |
 
-All existing checks still pass: step timing, tempo and swing by measurement, SOUND and MIXER, DIN MIDI,
-20 s of the sequence with hits through it, no reset, 0 overruns and 0 dropped throughout, SAFE MODE
-silent with every new control tried, and the stock package failing the identity check.
+All earlier checks still pass: step timing, tempo and swing by measurement, SOUND and MIXER, DIN MIDI, 20 s
+of the sequence with hits through it, no reset, 0 overruns and 0 dropped throughout, SAFE MODE silent
+with every new control tried, and the stock package failing the identity check.
 
-**Not shown by any of this.** That it sounds good: kits were checked by rule and by measuring renders,
-**not by ear**, and whether a kit change clicks on a ringing voice has not been listened to. Real
-timing, the real display, encoder direction and acceleration, key feel. USB MIDI and BLE were not
-run: the emulator raises no USB controller interrupt. The update path was not exercised, though it
-is unchanged. The emulator's core was scripted; the browser page itself was not driven by hand.
+**Not shown by any of this.** That it sounds good: kits and variations were checked by rule and by
+measuring renders, **not by ear**, and whether a kit change clicks on a ringing voice has not been
+listened to. Real timing, the real display and its orange, encoder direction and acceleration, key
+feel. USB MIDI and BLE were not run: the emulator raises no USB controller interrupt. The update path was
+not exercised, though it is unchanged. The emulator's core was scripted; the browser page itself was
+not driven by hand. The website still offers 0.5.0.
 
 ## Known limitations
 
-- GLOBAL's settings are not saved, and a restart returns the init kit and seed 1 until something is
-  loaded. Kits and patterns can be: [POCKET-STORAGE.md](POCKET-STORAGE.md).
+- GLOBAL's playing preferences are not saved, and a restart returns the init kit and seed 1 until a
+  project is loaded: [POCKET-STORAGE.md](POCKET-STORAGE.md).
 - The keys have no velocity, and SELECT cannot be held: above.
-- Seven tracks: clap, percussion and FX share sounds with snare, high tom and cymbal. CH and OH are one
-  voice with a shared sound.
-- A step can have one note per track. Hats on one step still choke: the open hat wins.
+- Seven tracks: PERC shares a voice and a track with the high tom, CLAP with the snare, and neither
+  sounds with its partner. CH and OH are one voice with a shared sound.
+- A step can have one note or variation per track. Hats on one step still choke: an open hat that
+  sounds wins, and one its condition leaves out takes nothing.
 - The snare's noise does not transpose. Very high notes on a voice clamp at note 127.
-- Undo is one level each for pattern and kit. Step edits since the last generate go with an undo.
-- While playing, recording cannot remove a step, and steps are 16ths, one bar, no chaining.
+- The history holds about 4,096 changed things, not a number of actions: 21 levels of the densest new
+  patterns and kits together. Tempo and swing alone are not undoable.
+- While playing, recording cannot remove a step, and steps are 16ths, up to 64, no chaining.
 - Recording's timing is when the control task reads the key (after the scanner's debounce), then 16ths.
 - No MIDI clock, no MIDI output, no thru.
 - At high WILD a kit can be odd: that is the point. 1 voice of the 1,344 rendered rang past 2

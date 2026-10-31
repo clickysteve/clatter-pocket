@@ -61,13 +61,15 @@ checked as far as possible without the toolchain or device), **open**.
 
 ## C - Basic drum machine
 
-- **done (emulator; not on hardware)** a portable sequencer core (`seq/`): 16 steps, seven tracks,
-  velocity, tempo, swing, start/stop, exact sample-based timing in the audio interrupt, live
+- **done (emulator; not on hardware)** a portable sequencer core (`seq/`): up to 64 steps on four
+  pages, conditional steps, seven tracks, velocity, tempo, swing, start/stop, exact sample-based timing in the audio interrupt, live
   editing, undo; the PATTERN page. Timing tested to the sample on the host and by measuring the
   emulated audio (docs/POCKET-SEQUENCER.md)
 - **done** tracks: one per LXR trigger, CLATTER's ten roles folded as its default project routes them
-- **done (emulator; not on hardware)** save/load in the user Flash partition with CRC'd, versioned,
-  two-sector banks, after its own audit (docs/POCKET-STORAGE.md)
+- **done (emulator; not on hardware)** saved projects in the user Flash partition, CRC'd and versioned,
+  in the same four sectors, after their own audit (docs/POCKET-STORAGE.md)
+- **done (emulator; not on hardware)** three banks of nine sounds with per-hit variations, one undo and
+  redo of kits and patterns, a dark interface (docs/POCKET-CONTROLS.md)
 - **done (emulator; not on hardware)** DRUM and PITCH keyboards, step and live recording with a note
   per step, GLOBAL settings (docs/POCKET-CONTROLS.md)
 - **open** more than one pattern playing in turn, chaining, track lengths

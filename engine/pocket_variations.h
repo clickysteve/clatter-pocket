@@ -15,6 +15,8 @@
 
 #define VARIATION_LOCKS 4
 #define VARIATION_LONGEST 100 /* of a decay: 126 lasts minutes, and a hit must end */
+#define VARIATION_SHORTEST 2  /* and 0 is silence, which is no variation */
+#define VARIATION_SLOWEST 16  /* of a decimator: near 0 it holds a sample for seconds */
 #define L(name, by) { POCKET_PAR_##name, by }
 
 struct variation_lock {

@@ -44,7 +44,7 @@ function record(ms) {
 // arrive the same number of samples after that. The first frame the status line is on screen marks
 // it, whatever the start-up took; --lead fine-tunes it, in output blocks.
 const lcd = () => new Uint16Array(x.memory.buffer, x.fm1_lcd(), 240 * 240);
-const started = () => lcd()[16 * 240 + 5] === 0xffff;
+const started = () => lcd()[16 * 240 + 5] === 0xffff || lcd()[19 * 240 + 8] === 0xffff; // firmware before 0.6.0 was black on white
 let frames = 0, guard = 0;
 while (!started()) { record(2); frames += 128; if (++guard > 20000) throw new Error("no start"); }
 console.error(`audio start: about ${(frames / 44.118).toFixed(0)} ms of output, ${x.fm1_ms()} ms of clock`);

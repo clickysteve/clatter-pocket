@@ -196,14 +196,21 @@ IN_ITCM_RAM static AutomationNode* lockVoice(int trig, int variation)
 {
 	const struct variation_lock* row = variation >= POCKET_VARIATION_A && variation <= POCKET_VARIATION_LAST(trig) ? variations[variationRow[trig] + variation - 1] : 0;
 	AutomationNode* nodes = lockNodes[trig > POCKET_TRIG_CLOSED_HAT ? POCKET_TRIG_CLOSED_HAT : trig];
+	int moved = row != 0;
 	for (int i = 0; i < VARIATION_LOCKS; i++)
 	{
 		const int p = row ? row[i].param : 0;
+		moved |= nodes[i].destination != NO_AUTOMATION;
 		autoNode_setDestination(&nodes[i], autoDest(p));
 		if (!p) continue;
-		const int v = activeParameters[p] + row[i].by, top = p >= POCKET_PAR_VELOA1 && p <= POCKET_PAR_VELOD6_OPEN ? VARIATION_LONGEST : 127;
-		autoNode_updateValue(&nodes[i], (uint8_t)(v < 0 ? 0 : v > top ? (activeParameters[p] > top ? activeParameters[p] : top) : v));
+		const int v = activeParameters[p] + row[i].by, decay = p >= POCKET_PAR_VELOA1 && p <= POCKET_PAR_VELOD6_OPEN;
+		const int rate = p >= POCKET_PAR_VOICE_DECIMATION1 && p <= POCKET_PAR_VOICE_DECIMATION6;
+		const int top = decay ? VARIATION_LONGEST : 127, least = decay ? VARIATION_SHORTEST : rate ? VARIATION_SLOWEST : 0;
+		autoNode_updateValue(&nodes[i], (uint8_t)(v < least ? least : v > top ? (activeParameters[p] > top ? activeParameters[p] : top) : v));
 	}
+	/* a drum's drive is smoothed, and only while it sounds: without this the next hit would begin
+	   from the drive of the last, and glide */
+	if (moved && trig < 3) setOnePoleValue(&voiceArray[trig].distortion.DriveParamFilter, voiceArray[trig].distortion.shape);
 	return nodes;
 }
 

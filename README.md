@@ -17,14 +17,14 @@ pocket synthesizer, through M-VAVE's open firmware SDK
 | | |
 |---|---|
 | LXR engine (all six voices, seven triggers, the firmware's parameter handler, modulation, locks) | runs natively; 177 host checks pass; matches CLATTER's engine to within 3 LSB; the FM-1's packed tables unpack byte-identical |
-| FM-1 firmware, CLATTER Pocket **replacing** the stock instrument application | **builds and packages** reproducibly with the FM-1 toolchain: 433,628-byte image (20,293 bytes under the 453,921 limit), stock flash layout, all SDK firmware checks pass, user partition untouched, installer page ([FM1-REPLACEMENT.md](FM1-REPLACEMENT.md)) |
+| FM-1 firmware, CLATTER Pocket **replacing** the stock instrument application | **builds and packages** reproducibly with the FM-1 toolchain: 437,436-byte image (16,485 bytes under the 453,921 limit, 101 over the 16 KB margin), stock flash layout, all SDK firmware checks pass, user partition untouched, installer page ([FM1-REPLACEMENT.md](FM1-REPLACEMENT.md)) |
 | Pre-flash audit | done ([PRE-FLASH-AUDIT.md](PRE-FLASH-AUDIT.md)); first-test procedure: [FIRST-HARDWARE-TEST.md](FIRST-HARDWARE-TEST.md) |
 | FM-1 firmware, CLATTER Pocket **beside** the stock instrument (HOME + ARP) | compiles, links, passes the checks, but is 53,671 bytes too large for the flash layout |
 | On the device | **nothing has run on hardware** |
 | Website | `site/`, for GitHub Pages: browser demo, tested in Chromium and Chrome; hardware installation **off** until a release is verified ([docs/WEBSITE.md](docs/WEBSITE.md)) |
-| Sequencer and generator | 16 steps, seven tracks with notes, CLATTER's styles, whole-pattern and one-track generation, mutation; **tested in the FM-1 emulator** ([docs/POCKET-SEQUENCER.md](docs/POCKET-SEQUENCER.md)) |
-| Playing it | DRUM and PITCH keyboards, live and step recording, 16 kits and on-device kit generation from LXR parameters, GLOBAL settings; **tested in the FM-1 emulator** ([docs/POCKET-CONTROLS.md](docs/POCKET-CONTROLS.md)) |
-| Saving | 12 kits and 12 patterns in user Flash, written only to sectors checked blank or its own; **tested in the FM-1 emulator, not on a device** ([docs/POCKET-STORAGE.md](docs/POCKET-STORAGE.md)) |
+| Sequencer and generator | 64 steps on four pages, seven tracks with notes, variations and conditional steps, CLATTER's styles, whole-pattern and one-track generation, mutation; **tested in the FM-1 emulator** ([docs/POCKET-SEQUENCER.md](docs/POCKET-SEQUENCER.md)) |
+| Playing it | three banks of nine sounds and a PITCH keyboard, live and step recording, one undo and redo of everything, 16 kits and on-device kit generation from LXR parameters, GLOBAL settings; **tested in the FM-1 emulator** ([docs/POCKET-CONTROLS.md](docs/POCKET-CONTROLS.md)) |
+| Saving | 9 projects, kit and pattern together, in user Flash, written only to sectors checked blank or its own; **tested in the FM-1 emulator, not on a device** ([docs/POCKET-STORAGE.md](docs/POCKET-STORAGE.md)) |
 
 ## What it does on the FM-1 (once installed)
 
@@ -34,15 +34,16 @@ the stock instrument; it does not fit the flash.)
 
 | Control | Action |
 |---|---|
-| note keys | DRUM: each key an instrument. PITCH: the selected voice, chromatically (SCL switches) |
-| OCT− / OCT+ | PITCH: octave. DRUM: how hard the keys hit |
+| note keys | DRUM: three banks of the same nine sounds. PITCH: the selected voice, chromatically (SCL switches) |
+| OCT− / OCT+ | PITCH: octave. DRUM: how hard the keys hit. Held SAVE: undo, redo |
 | PLAY, REC | start or stop; recording on or off |
 | ENV, ARP, LFO | a new kit, a new pattern, mutate. Held SAVE: the selected voice only |
 | PRESETS, ALGORITHM | the kit, the pattern style |
-| SAVE+EDIT, SAVE+SEQ | saved kits, saved patterns |
+| SAVE, a tap | PROJECTS: choose a slot with SELECT, tap SAVE to store, OCT− to load |
+| SAVE+FX | lock the selected track |
 | SELECT | select DRUM 1-3, SNARE, CYMBAL, CL HAT, OP HAT |
 | HOME, SEQ, EDIT, FX, GLO | pages: MAIN, PATTERN, SOUND, MIXER, GLOBAL then SYSTEM |
-| KNOB 1-4 | PATTERN: velocity, tempo, swing, step. SOUND: pitch, decay, filter, drive. MIXER: level, pan. GLOBAL: row, value |
+| KNOB 1-4 | PATTERN: velocity, tempo, swing, step; held SAVE: condition, length, page. SOUND: pitch, decay, filter, drive. MIXER: level, pan. GLOBAL: row, value |
 | MASTER | master volume (stock) |
 | HOME + ARP | (overlay build only) back to the stock instrument |
 

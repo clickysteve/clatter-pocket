@@ -502,15 +502,22 @@ static void kit_pump(struct pocket_panel* panel)
 /* ------------------------------------------------------------------ saved projects */
 /* A project is everything that makes the music, on the record's own terms. A sound and a rhythm
  * are as they were in the banks of kits and patterns before projects, which are still read. */
-struct saved_sound {
+struct saved_sound_head {
 	uint8_t used, kit, generated, edited;
 	uint16_t seed;
+};
+struct saved_sound {
+	struct saved_sound_head head;
 	uint8_t wild, reserved;
 	uint8_t params[POCKET_SOUND_PARAMS];
 };
 struct saved_rhythm {
 	uint8_t used, swing, density, complexity, style, mutate, locks, last_page;
 	uint16_t seed, tempo;
+};
+struct saved_head { /* as much of a project as its row shows */
+	struct saved_rhythm rhythm;
+	struct saved_sound_head sound;
 };
 struct saved_pattern {
 	struct saved_rhythm rhythm;
@@ -627,11 +634,11 @@ static void store_save(struct pocket_panel* panel)
 		const struct saved_rhythm rhythm = { 1, (uint8_t)pocket_seq_swing(), (uint8_t)panel->density, (uint8_t)panel->complexity, (uint8_t)panel->style,
 			(uint8_t)panel->mutate_strength, panel->locks, pattern->last_page, panel->seed, (uint16_t)pocket_seq_tempo() };
 		p->rhythm = rhythm;
-		p->sound.used = 1;
-		p->sound.kit = panel->kit;
-		p->sound.generated = panel->kit_generated;
-		p->sound.edited = panel->kit_edited;
-		p->sound.seed = panel->kit_seed;
+		p->sound.head.used = 1;
+		p->sound.head.kit = panel->kit;
+		p->sound.head.generated = panel->kit_generated;
+		p->sound.head.edited = panel->kit_edited;
+		p->sound.head.seed = panel->kit_seed;
 		p->sound.wild = (uint8_t)panel->kit_wild;
 		kit_sync(panel);
 		for (int k = 1; k < POCKET_SOUND_PARAMS; k++) p->sound.params[k] = kitTarget[k];
@@ -646,10 +653,10 @@ static void load_sound(struct pocket_panel* panel, const struct saved_sound* s)
 {
 	for (int p = 1; p < POCKET_SOUND_PARAMS; p++) kitNext[p] = s->params[p];
 	for (int v = 0; v < POCKET_LXR_VOICES; v++) kitNext[POCKET_PAR_VOLUME_MOD_ON_OFF1 + v] = 1;
-	panel->kit = s->kit < POCKET_KITS ? s->kit : 0;
-	panel->kit_generated = s->generated != 0;
-	panel->kit_edited = s->edited != 0;
-	panel->kit_seed = s->seed;
+	panel->kit = s->head.kit < POCKET_KITS ? s->head.kit : 0;
+	panel->kit_generated = s->head.generated != 0;
+	panel->kit_edited = s->head.edited != 0;
+	panel->kit_seed = s->head.seed;
 	panel->kit_wild = (int8_t)limited(s->wild, 0, 100);
 	panel->kit_settings_changed = 0;
 	panel->kit_takes = 0;
@@ -1469,10 +1476,10 @@ static void draw_store(const struct pocket_panel* panel, unsigned line, uint16_t
 		append(d, "ERASE OLD SAVES");
 	else if (slot < SLOT_OLD_KITS)
 	{
-		struct { struct saved_rhythm rhythm; struct saved_sound sound; } head;
+		struct saved_head head;
 		d = number(d, (uint32_t)slot + 1u, 2) + 2;
 		d = append(d, " ");
-		pocket_store_peek((unsigned)slot, &head, sizeof head - POCKET_SOUND_PARAMS);
+		pocket_store_peek((unsigned)slot, &head, sizeof head);
 		if ((unsigned)slot >= pocket_store_room()) append(d, "HELD BY OLD SAVES");
 		else if (!head.rhythm.used) append(d, "--");
 		else
@@ -1486,7 +1493,7 @@ static void draw_store(const struct pocket_panel* panel, unsigned line, uint16_t
 	else
 	{
 		const unsigned kind = slot < SLOT_OLD_PATTERNS ? POCKET_STORE_OLD_KITS : POCKET_STORE_OLD_PATTERNS, old = (unsigned)(slot - SLOT_OLD_KITS) % POCKET_STORE_OLD_SLOTS;
-		union { struct saved_rhythm rhythm; struct saved_sound sound; } head;
+		union { struct saved_rhythm rhythm; struct saved_sound_head sound; } head;
 		d = append_number(append(d, kind == POCKET_STORE_OLD_KITS ? "OLD KIT " : "OLD PAT "), old + 1u);
 		d = append(d, " ");
 		pocket_store_old_peek(kind, old, &head, sizeof head.rhythm);

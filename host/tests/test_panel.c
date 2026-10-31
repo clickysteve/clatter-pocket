@@ -5,7 +5,9 @@
  * Copyright (C) 2026 The CLATTER contributors
  * SPDX-License-Identifier: GPL-3.0-only
  */
+#include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "pocket_lxr.h"
 #include "pocket_params.h"
@@ -232,7 +234,7 @@ static void test_sequencer(void)
 	/* GLOBAL holds what the knobs of PATTERN used to: the generator's settings */
 	press(&panel, BUTTON(GLO));
 	CHECK(panel.page == POCKET_PAGE_GLOBAL, "GLO opens GLOBAL");
-	turn(&panel, POCKET_ENC_KNOB1, 12);
+	turn(&panel, POCKET_ENC_KNOB1, 13);
 	turn(&panel, POCKET_ENC_KNOB2, -5);
 	CHECK(panel.mutate_strength == POCKET_MUTATE_SMALL, "GLOBAL sets the mutation");
 	turn(&panel, POCKET_ENC_KNOB1, -3);
@@ -272,7 +274,7 @@ static void test_sequencer(void)
 	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
 	CHECK(!memcmp(&first_pattern, pocket_seq_pattern(), sizeof expected), "SAVE+OCT- undoes it");
 	CHECK(panel.locks == 0, "a chord does not lock");
-	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_UP));
 
 	/* MUTATE changes the pattern and each press differs; a locked track stays */
 	panel.trigger = 0;
@@ -1190,51 +1192,61 @@ static void test_old_saves(void)
 	press(&panel, BUTTON(SAVE));
 	CHECK(!strcmp(panel.notice, "SAVED 9"), "the last one too: %s", panel.notice);
 	uint8_t used = 0;
-	pocket_store_peek(1, &used, 1);
+	pocket_store_peek(0, &used, 1);
 	CHECK(used, "and the projects saved beside them are there");
 }
 
-/* A note of what a sound is, independent of how loud: how it decays and how bright it is. */
-#define SHAPE_WINDOWS 40
-struct shape { float envelope[SHAPE_WINDOWS], crossings[SHAPE_WINDOWS]; double energy; };
+/* What a sound is, independent of how loud: how it moves, how long it lasts, how bright it is. */
+#define SHAPE_WINDOW 128
+#define SHAPE_WINDOWS 320
+struct shape { double envelope[SHAPE_WINDOWS], energy, length, brightness; };
 
 static void shape_of(struct shape* s, const int32_t* samples)
 {
-	double peak = 0;
+	double peak = 0, crossings = 0;
 	s->energy = 0;
 	for (int w = 0; w < SHAPE_WINDOWS; w++)
 	{
 		double sum = 0;
 		int cross = 0;
-		for (int i = 0; i < 1024; i++)
+		for (int i = 0; i < SHAPE_WINDOW; i++)
 		{
-			const int32_t x = samples[2 * (w * 1024 + i)];
+			const int32_t x = samples[2 * (w * SHAPE_WINDOW + i)];
 			sum += (double)x * x;
-			if (i && (x < 0) != (samples[2 * (w * 1024 + i - 1)] < 0)) cross++;
+			if ((i || w) && (x < 0) != (samples[2 * (w * SHAPE_WINDOW + i - 1)] < 0)) cross++;
 		}
-		s->envelope[w] = (float)sum;
-		s->crossings[w] = (float)cross;
+		s->envelope[w] = sum;
 		s->energy += sum;
+		crossings += sum * cross;
 		if (sum > peak) peak = sum;
 	}
-	for (int w = 0; w < SHAPE_WINDOWS; w++) s->envelope[w] = peak > 0 ? (float)(s->envelope[w] / peak) : 0;
-}
-
-/* 0 for the same sound: differences of decay and of brightness, level left out. */
-static float shape_distance(const struct shape* a, const struct shape* b)
-{
-	float d = 0;
+	s->brightness = s->energy > 0 ? crossings / s->energy : 0;
+	s->length = 1;
 	for (int w = 0; w < SHAPE_WINDOWS; w++)
 	{
-		const float e = a->envelope[w] - b->envelope[w];
-		d += e < 0 ? -e : e;
-		const float c = a->crossings[w] * a->envelope[w] - b->crossings[w] * b->envelope[w];
-		d += (c < 0 ? -c : c) / 64.f;
+		if (peak > 0 && s->envelope[w] > peak / 100) s->length = w + 1; /* 20 dB down */
+		s->envelope[w] = peak > 0 ? s->envelope[w] / peak : 0;
 	}
-	return d;
 }
 
-#define SOUND_FRAMES (SHAPE_WINDOWS * 1024)
+/* 0 for the same sound. The largest of: the ratio of lengths, the ratio of brightness, and how much
+ * of the envelope differs, so 0.14 is about 15 % longer, or two semitones, or a seventh of its shape. */
+static double shape_distance(const struct shape* a, const struct shape* b)
+{
+	double moved = 0, area = 0;
+	for (int w = 0; w < SHAPE_WINDOWS; w++)
+	{
+		moved += fabs(a->envelope[w] - b->envelope[w]);
+		area += a->envelope[w] + b->envelope[w];
+	}
+	const double length = fabs(log(a->length / b->length));
+	const double bright = a->brightness > 0 && b->brightness > 0 ? fabs(log(a->brightness / b->brightness)) : 9;
+	double d = area > 0 ? moved / area : 0;
+	if (length > d) d = length;
+	return bright > d ? bright : d;
+}
+
+#define SOUND_FRAMES (SHAPE_WINDOWS * SHAPE_WINDOW)
 static int32_t sound[2 * SOUND_FRAMES];
 
 /* Key k on a fresh engine, kit `kit` of PRESETS. */
@@ -1253,12 +1265,14 @@ static void render_key(struct pocket_panel* panel, int kit, int k)
 	for (long f = 0; f + 128 <= SOUND_FRAMES; f += 128) pocket_lxr_render_q23(sound + 2 * f, 128, 0);
 }
 
+#define CLOSE 0.14
+
 static void test_variations(void)
 {
 	struct pocket_panel panel;
 	static struct shape shapes[POCKET_KEYS];
 	int close = 0, silent = 0, total = 0;
-	float weakest = 1e9f;
+	double weakest = 1e9;
 	for (int kit = 0; kit < POCKET_KITS; kit++)
 	{
 		for (int k = 0; k < POCKET_KEYS; k++)
@@ -1267,63 +1281,86 @@ static void test_variations(void)
 			shape_of(&shapes[k], sound);
 			silent += shapes[k].energy == 0;
 		}
+		if (getenv("VARIATIONS"))
+		{
+			printf("kit %2d:", kit);
+			for (int position = 0; position < POCKET_BANK_KEYS; position++)
+				printf(" %s%.2f/%.2f/%.2f", shapes[position].energy == 0 || shapes[position + 9].energy == 0 || shapes[position + 18].energy == 0 ? "!" : "",
+				       shape_distance(&shapes[position], &shapes[position + 9]), shape_distance(&shapes[position], &shapes[position + 18]), shape_distance(&shapes[position + 9], &shapes[position + 18]));
+			printf("  perc %.2f clap %.2f\n", shape_distance(&shapes[5], &shapes[7]), shape_distance(&shapes[1], &shapes[8]));
+		}
 		/* bank against bank, position by position, and the two sounds sharing a voice */
 		for (int position = 0; position < POCKET_BANK_KEYS; position++)
 			for (int bank = 0; bank < 3; bank++)
 				for (int other = bank + 1; other < 3; other++)
 				{
-					const float d = shape_distance(&shapes[position + 9 * bank], &shapes[position + 9 * other]);
+					const double d = shape_distance(&shapes[position + 9 * bank], &shapes[position + 9 * other]);
 					total++;
-					close += d < 1.f;
+					close += d < CLOSE;
 					if (d < weakest) weakest = d;
 				}
 		for (int bank = 0; bank < 3; bank++)
 		{
 			total += 2;
-			close += shape_distance(&shapes[5 + 9 * bank], &shapes[7 + 9 * bank]) < 1.f;
-			close += shape_distance(&shapes[1 + 9 * bank], &shapes[8 + 9 * bank]) < 1.f;
+			close += shape_distance(&shapes[5 + 9 * bank], &shapes[7 + 9 * bank]) < CLOSE;
+			close += shape_distance(&shapes[1 + 9 * bank], &shapes[8 + 9 * bank]) < CLOSE;
 		}
 	}
 	printf("  variations: %d of %d comparisons close, weakest %.2f, across %d kits\n", close, total, weakest, POCKET_KITS);
 	CHECK(!silent, "no sound of 27 is silent on any kit: %d", silent);
 	CHECK(close * 10 < total, "variations are different sounds, level aside: %d of %d too close", close, total);
 
-	/* per hit: the kit is not touched, and the next plain hit is the plain sound */
+	/* per hit: the kit is not touched, and the next plain hit is the plain sound, to the bit:
+	   compared with plain hits at the same moments, which use the noise source the same way */
 	static uint8_t before[POCKET_SOUND_PARAMS], after[POCKET_SOUND_PARAMS];
+	static int32_t plain[2 * SOUND_FRAMES];
 	for (int position = 0; position < POCKET_BANK_KEYS; position++)
 	{
-		struct shape plain, again;
-		render_key(&panel, 0, position);
-		shape_of(&plain, sound);
-		start_engine(&panel);
-		poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
-		kit_now(before);
-		for (int bank = 1; bank < 3; bank++)
+		for (int run = 0; run < 2; run++)
 		{
-			tap_keys(&panel, 1u << (position + 9 * bank));
-			render_seconds(3 * 44100);
+			start_engine(&panel);
+			poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+			kit_now(before);
+			for (int bank = 1; bank < 3; bank++)
+			{
+				tap_keys(&panel, 1u << (position + (run ? 9 * bank : 0)));
+				render_seconds(4 * 44100 - 128);
+				render_seconds(4 * 44100 - 128);
+			}
+			kit_now(after);
+			CHECK(!memcmp(before, after, sizeof before), "position %d: variations leave the kit", position);
+			tap_keys(&panel, 1u << position);
+			for (long f = 0; f + 128 <= SOUND_FRAMES; f += 128) pocket_lxr_render_q23((run ? sound : plain) + 2 * f, 128, 0);
 		}
-		kit_now(after);
-		CHECK(!memcmp(before, after, sizeof before), "position %d: variations leave the kit", position);
-		tap_keys(&panel, 1u << position);
-		for (long f = 0; f + 128 <= SOUND_FRAMES; f += 128) pocket_lxr_render_q23(sound + 2 * f, 128, 0);
-		shape_of(&again, sound);
-		const float d = shape_distance(&plain, &again);
-		CHECK(d < 0.25f, "position %d: the next plain hit is the plain sound: %.3f", position, d);
+		/* the tonal voices restart exactly; noise and free-running oscillators differ every hit anyway */
+		int64_t worst = 0, peak = 0;
+		for (long i = 0; i < 2 * SOUND_FRAMES; i++)
+		{
+			const int64_t d = llabs((int64_t)sound[i] - plain[i]);
+			if (d > worst) worst = d;
+			if (llabs((int64_t)plain[i]) > peak) peak = llabs((int64_t)plain[i]);
+		}
+		struct shape was, is;
+		shape_of(&was, plain);
+		shape_of(&is, sound);
+		if (position == 0 || position == 4 || position == 5) CHECK(worst * 1000 < peak, "position %d: after both variations the plain hit is the plain sound: %lld of %lld", position, (long long)worst, (long long)peak);
+		CHECK(shape_distance(&was, &is) < 0.08, "position %d: and sounds as it did: %.3f", position, shape_distance(&was, &is));
 	}
 	/* the hats share a voice: a variation on one does not outlive a hit on the other */
+	for (int run = 0; run < 2; run++)
 	{
-		struct shape plain, again;
-		render_key(&panel, 0, 3);
-		shape_of(&plain, sound);
 		start_engine(&panel);
 		poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
-		tap_keys(&panel, 1u << (2 + 18)); /* the closed hat's B */
-		render_seconds(44100);
+		tap_keys(&panel, 1u << (run ? 2 + 18 : 2)); /* the closed hat, or its B */
+		render_seconds(4 * 44100 - 128);
 		tap_keys(&panel, 1u << 3);
-		for (long f = 0; f + 128 <= SOUND_FRAMES; f += 128) pocket_lxr_render_q23(sound + 2 * f, 128, 0);
-		shape_of(&again, sound);
-		CHECK(shape_distance(&plain, &again) < 0.25f, "a hat's variation ends at the other hat: %.3f", shape_distance(&plain, &again));
+		for (long f = 0; f + 128 <= SOUND_FRAMES; f += 128) pocket_lxr_render_q23((run ? sound : plain) + 2 * f, 128, 0);
+	}
+	{
+		struct shape was, is;
+		shape_of(&was, plain);
+		shape_of(&is, sound);
+		CHECK(shape_distance(&was, &is) < 0.08, "a hat's variation ends at the other hat: %.3f", shape_distance(&was, &is));
 	}
 
 	/* recorded: stopped and live, it is that variation, and played back it is the key's sound */

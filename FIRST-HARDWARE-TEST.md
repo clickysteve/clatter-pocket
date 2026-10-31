@@ -167,12 +167,12 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
 **The first write this firmware makes to the device's Flash. Do it last, and only after the backups
 in "Before installation".** docs/POCKET-STORAGE.md says what is and is not known.
 
-1. Stopped, hold **SAVE** and press **EDIT**. The page shows 12 empty slots, or **FLASH IN USE: SAVING
+1. Stopped, tap **SAVE**. PROJECTS shows 9 empty slots, or **FLASH IN USE: SAVING
    OFF** or **NO USER FLASH**. Either of those two is a safe result and the end of this test: nothing has
    been written. Record it, and which firmware the unit came from.
-2. Press **SAVE** on slot 1. Record what is heard and how long the screen takes to show SAVED 1.
-3. Press ENV for another kit, then SAVE+EDIT and **OCT−**: the first kit is back.
-4. Power off, power on, SAVE+EDIT: slot 1 is listed, and loads.
+2. Tap **SAVE** again, on slot 1. Record what is heard and how long the screen takes to show SAVED 1.
+3. Press ENV for another kit, then tap SAVE and press **OCT−**: the first kit is back.
+4. Power off, power on, tap SAVE: slot 1 is listed, and loads.
 5. Install the same package again and check again: this is what shows whether an update leaves the
    sectors alone. Record the result either way.
 

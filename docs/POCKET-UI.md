@@ -63,18 +63,24 @@ copy of M-VAVE's firmware it had kept: select another entry first.
   buffer and sent with `fm1_screen_blit`;
 - each band has a dirty bit; at most 4 bands are sent per control poll, and none while a
   transfer is pending;
-- a 3 × 5 font at 2× (3× for the title), no images, no allocation; a line holds 28 characters.
+- a 3 × 5 font at 2× (3× for the title), no images, no allocation; a line holds 28 characters;
+- black, white, orange, and two greys: `INK`, `PAPER`, `ACCENT`, `DIM`, `FAINT` in `ui/pocket_panel.c`.
+  Nothing is inverted but an overrun and a lit activity cell. A selected row is orange with a mark in
+  the margin, not a white bar.
+
+The panel is a colour display, so this is real orange, 0xFBE0 as the firmware has always written it.
+The emulator reads it back as RGB565. Nobody has seen it on a device, so its exact shade is unverified.
 
 `ui/pocket_panel.c` is platform-independent; the same code runs in the host tests.
 
 | Bands | Content |
 |---|---|
-| 0 | CLATTER POCKET, page name |
-| 1 | the keyboard and REC; inverted, what a control just did, or AUDIO OVERRUN n for 3 s after an overrun |
+| 0 | CLATTER POCKET, page name in orange |
+| 1 | the keyboard and REC; in orange, what a control just did; a full orange band, AUDIO OVERRUN n for 3 s after an overrun |
 | 2 | selected voice |
-| 3 | MIDI: WAITING, MESSAGES n, or NOTE n and the voice, inverted for 200 ms after a hit |
+| 3 | MIDI: WAITING, MESSAGES n, or NOTE n and the voice, orange for 200 ms after a hit |
 | 4 to 11 | the page |
-| 12 | seven activity cells, inverted for 120 ms on a trigger |
+| 12 | seven activity cells, orange for 120 ms on a trigger |
 | 13 | output level meter |
 | 14 | what the controls do here |
 
@@ -90,7 +96,7 @@ The whole control map is in [POCKET-CONTROLS.md](POCKET-CONTROLS.md). The earlie
 "ENC 7" labels were matrix indices: they were physically SELECT, ALGORITHM, KNOB 1 and PRESETS. **No
 control updates anything, and only SAVE on a save page writes Flash**
 ([POCKET-STORAGE.md](POCKET-STORAGE.md)). Otherwise: A control can replace a pattern or a kit, and
-SAVE+OCT− and SAVE+OCT+ bring them back.
+SAVE+OCT− and SAVE+OCT+ walk one history of them.
 
 SAFE MODE is unchanged: HOME is read once, at the 1.5 s point, and a button held then does not
 act afterwards. So HOME's page function cannot reach SAFE MODE, or the reverse.
@@ -99,18 +105,18 @@ act afterwards. So HOME's page function cannot reach SAFE MODE, or the reverse.
 
 - **MAIN**: transport, tempo, swing, style, hits from the sequence and from the keys, a row
   showing how many tracks play each step, with the playhead, and the kit.
-- **PATTERN**: the step editor. Line 1 is the transport, tempo and swing; then a
-  ruler of the same activity row with the playhead and the selected step; then seven rows of 16
-  cells, bars as tall as their velocity; then the four knobs' fields. All 16 steps fit, 12 pixels
-  each, with the beats set apart, so there is no paging. The playhead has a band to itself, so a
-  step redraws one band, not the grid.
+- **PATTERN**: the step editor. Line 1 is the transport, tempo, PAGE 2/4 and a block a page, so where
+  the music is stays visible whichever page is on screen; then a ruler of the same activity row with
+  the playhead and the selected step; then seven rows of 16 cells, bars as tall as their velocity;
+  then the four knobs' fields. The page on screen is the selected step's, and while recording the
+  music's. The playhead has a band to itself, so a step redraws one band, not the grid.
 - **SOUND**: four parameters of the selected voice: COARSE, velocity decay, filter frequency,
   and drive (DRIVE1-3, or the snare, cymbal and hat distortion). The hats share pitch, filter
   and drive; each has its own decay.
 - **MIXER**: LEVEL and PAN of the selected voice, MASTER (shown; set by the pot), a level bar
   per voice. The LXR's pan is taken at each trigger, so a move is heard on the next hit.
-- **GLOBAL**: the settings, 17 rows of which 8 show (POCKET-CONTROLS.md). GLO opens it.
-- **SAVED KITS**, **SAVED PATS**: SAVE+EDIT, SAVE+SEQ, 12 slots each ([POCKET-STORAGE.md](POCKET-STORAGE.md)).
+- **GLOBAL**: the settings, 18 rows of which 8 show (POCKET-CONTROLS.md). GLO opens it.
+- **PROJECTS**: a tap of SAVE, 9 slots ([POCKET-STORAGE.md](POCKET-STORAGE.md)).
 - **SYSTEM**: GLO from GLOBAL. Version, build, CPU mean and peak, overruns, clipped samples, dropped events,
   heap, and how to reach SAFE MODE.
 
@@ -140,12 +146,12 @@ So there is no per-voice level measurement: the cells show triggers, the meter t
 
 ### Emulator results
 
-221 checks pass, on the package in FM1-REPLACEMENT.md, in the emulator's WebAssembly core at 240 MHz.
+361 checks pass, on the package in FM1-REPLACEMENT.md, in the emulator's WebAssembly core at 240 MHz.
 [POCKET-CONTROLS.md](POCKET-CONTROLS.md) has what they cover.
 
 Limits of what this shows:
 - **Not run:** USB MIDI (the emulator's controller raises no interrupt yet) and BLE.
-- **The CPU figure, 28.6 % playing, is not a device measurement.** The emulator counts about one
+- **The CPU figure, 27.9 % playing, is not a device measurement.** The emulator counts about one
   instruction per cycle and models no cache or Flash wait states.
 - The firmware update path was not exercised.
 - Timing, the real screen, knob directions and sound are for the hardware test.
