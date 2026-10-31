@@ -496,7 +496,8 @@ try {
         # pocket/flash/ (init-only: the packed tables) and pocket/ui/ (the panel, control task
         # only) are never placed in SRAM, and are optimised for size
         $controlOnly = $source -like 'pocket/flash/*' -or $source -like 'pocket/ui/*'
-        if ($controlOnly) { $options = @($options | Where-Object { $_ -cne '-O2' }) + @('-Oz') }
+        # the parameter switch stays in SRAM, for the audio context, which runs it an event at a time
+        if ($controlOnly -or $source -eq 'pocket/lxr/bridge/lxr_params.c') { $options = @($options | Where-Object { $_ -cne '-O2' }) + @('-Oz') }
         $prefix = if ($controlOnly) { 'obj/pocketflash_' } else { 'obj/lxr_' }
         $output = $prefix + ($objectIndex++) + '_' + ($source -replace '[^a-zA-Z0-9._-]', '_') + '.obj'
         $arguments = @($options) + @('-MMD','-MF',($output + '.d'),'-c',(Join-Path $root $source),'-o',$output)

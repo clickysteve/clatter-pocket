@@ -26,11 +26,11 @@ static int failures, checks;
 #endif
 
 /* the voices: what was triggered, when */
-static struct { uint64_t at; int track, velocity, note; } events[MAX_EVENTS];
+static struct { uint64_t at; int track, velocity, note, variation; } events[MAX_EVENTS];
 static int event_count;
 static uint64_t now;
 
-static void record(int track, int velocity, int note)
+static void record(int track, int velocity, int note, int variation)
 {
 	if (event_count < MAX_EVENTS)
 	{
@@ -38,6 +38,7 @@ static void record(int track, int velocity, int note)
 		events[event_count].track = track;
 		events[event_count].velocity = velocity;
 		events[event_count].note = note;
+		events[event_count].variation = variation;
 		event_count++;
 	}
 }
@@ -298,9 +299,9 @@ static void test_live_editing(void)
 
 	/* undo returns the replaced pattern, and undo again returns */
 	CHECK(POCKET_CELL_VELOCITY(pocket_seq_pattern()->cell[0][0]) == 20, "the new pattern shows");
-	pocket_seq_undo();
+	pocket_seq_edit_commit();
 	CHECK(POCKET_CELL_VELOCITY(pocket_seq_pattern()->cell[0][0]) == 10, "undo");
-	pocket_seq_undo();
+	pocket_seq_edit_commit();
 	CHECK(POCKET_CELL_VELOCITY(pocket_seq_pattern()->cell[0][0]) == 20, "redo");
 }
 
@@ -319,7 +320,7 @@ static void test_boundaries(void)
 	pocket_seq_set_step(-1, 0, 100, 0);
 	pocket_seq_set_step(POCKET_SEQ_TRACKS, 0, 100, 0);
 	pocket_seq_set_step(0, -1, 100, 0);
-	pocket_seq_set_step(0, POCKET_SEQ_STEPS, 100, 0);
+	pocket_seq_set_step(0, POCKET_SEQ_MAX_STEPS, 100, 0);
 	CHECK(!memcmp(&before, pocket_seq_pattern(), sizeof before), "out-of-range edits ignored");
 	pocket_seq_set_step(0, 0, 500, 0);
 	CHECK(POCKET_CELL_VELOCITY(pocket_seq_pattern()->cell[0][0]) == 127, "velocity ceiling");
@@ -359,7 +360,7 @@ static struct pocket_pattern generated(uint32_t seed, int density, int complexit
 {
 	struct pocket_pattern p;
 	memset(&p, 0, sizeof p);
-	struct pocket_gen_settings s = { seed, (uint8_t)density, (uint8_t)complexity, (uint8_t)style, (uint8_t)locks };
+	struct pocket_gen_settings s = { seed, (uint8_t)density, (uint8_t)complexity, (uint8_t)style, (uint8_t)locks, 0 };
 	pocket_gen_generate(&p, &s);
 	return p;
 }
@@ -506,7 +507,7 @@ static void test_experimental(void)
 static void test_locks(void)
 {
 	struct pocket_pattern p = generated(7, 50, 50, 0, 0), before = p;
-	struct pocket_gen_settings s = { 8, 90, 90, 1, (1u << 0) | (1u << 3) };
+	struct pocket_gen_settings s = { 8, 90, 90, 1, (1u << 0) | (1u << 3), 0 };
 	pocket_gen_generate(&p, &s);
 	CHECK(!memcmp(p.cell[0], before.cell[0], sizeof p.cell[0]), "a locked kick survives GENERATE");
 	CHECK(!memcmp(p.cell[3], before.cell[3], sizeof p.cell[3]), "a locked snare survives GENERATE");
@@ -696,7 +697,7 @@ static void test_one_track(void)
 			for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
 			{
 				struct pocket_pattern p = generated(seed, 50, 30, (int)style, 0), a = p, b = p;
-				const struct pocket_gen_settings s = { seed, 50, 30, (uint8_t)style, 0 };
+				const struct pocket_gen_settings s = { seed, 50, 30, (uint8_t)style, 0, 0 };
 				a.cell[t][3] = POCKET_CELL(100, 70); /* a recorded note goes with the old rhythm */
 				const struct pocket_pattern c = a;
 				pocket_gen_track(&a, &s, t, 0);
@@ -722,7 +723,7 @@ static void test_one_track(void)
 	struct pocket_pattern x, y;
 	memset(&x, 0, sizeof x);
 	memset(&y, 0, sizeof y);
-	const struct pocket_gen_settings s = { 9, 50, 30, 2, 0 };
+	const struct pocket_gen_settings s = { 9, 50, 30, 2, 0, 0 };
 	pocket_gen_track(&x, &s, 3, 4);
 	pocket_gen_track(&y, &s, 3, 4);
 	CHECK(!memcmp(&x, &y, sizeof x), "a one-track pattern is deterministic");
@@ -737,6 +738,266 @@ static void print_pattern(int argc, char** argv)
 		for (int i = 0; i < POCKET_SEQ_STEPS; i++) putchar(POCKET_CELL_VELOCITY(p.cell[t][i]) ? '1' : '0');
 		putchar('\n');
 	}
+}
+
+/* ------------------------------------------------------------------ pages */
+static void play_steps(int steps)
+{
+	const uint32_t from = pocket_seq_steps_played();
+	while ((int)(pocket_seq_steps_played() - from) < steps) { pocket_seq_block(); now += BLOCK; }
+}
+
+static void test_pages(void)
+{
+	for (unsigned last = 0; last < POCKET_SEQ_PAGES; last++)
+	{
+		const int length = (int)(last + 1u) * POCKET_SEQ_STEPS;
+		reset(RATE);
+		pocket_seq_set_last_page(last);
+		CHECK((int)POCKET_PATTERN_STEPS(pocket_seq_pattern()) == length, "length %d", length);
+		for (int i = 0; i < POCKET_SEQ_MAX_STEPS; i++) pocket_seq_set_step(0, i, 1 + i, 0);
+		pocket_seq_play(1);
+		play_steps(1);
+		int bad = 0;
+		for (int i = 1; i < 3 * length + 2; i++)
+		{
+			play_steps(1);
+			bad += pocket_seq_position() != i % length;
+		}
+		CHECK(!bad, "%d steps play in order across their pages and wrap: %d wrong", length, bad);
+		for (int e = 0; e < event_count; e++) bad += events[e].velocity != 1 + e % length;
+		CHECK(!bad, "every step of a %d-step pattern is the one heard: %d wrong", length, bad);
+		CHECK(pocket_seq_pass() == 3, "three wraps are three passes: %u", pocket_seq_pass());
+	}
+	/* a pattern shortened under the playhead wraps there, and lengthened goes on */
+	reset(RATE);
+	pocket_seq_set_last_page(3);
+	pocket_seq_set_step(0, 0, 100, 0);
+	pocket_seq_play(1);
+	play_steps(40);
+	pocket_seq_set_last_page(0);
+	play_steps(1);
+	CHECK(pocket_seq_position() == 0, "shorter than the position: back to the top, %d", pocket_seq_position());
+	pocket_seq_set_last_page(1);
+	play_steps(20);
+	CHECK(pocket_seq_position() == 20, "longer: on to step %d", pocket_seq_position());
+	/* quantising wraps at the pattern's own end */
+	reset(RATE);
+	pocket_seq_set_last_page(1);
+	pocket_seq_play(1);
+	play_steps(32);
+	CHECK(pocket_seq_position() == 31, "last step: %d", pocket_seq_position());
+	for (int b = 0; b < 72; b++) { pocket_seq_block(); now += BLOCK; }
+	int ahead = 0;
+	CHECK(pocket_seq_quantise(1, &ahead) == 0 && ahead, "a late hit on the last step rounds to the first");
+	play_steps(16);
+	CHECK(pocket_seq_position() == 15, "and not to a step past the end");
+	for (int b = 0; b < 72; b++) { pocket_seq_block(); now += BLOCK; }
+	CHECK(pocket_seq_quantise(1, &ahead) == 16 && ahead, "a hit crosses the page");
+	/* a skip on a late page */
+	reset(RATE);
+	pocket_seq_set_last_page(3);
+	pocket_seq_set_step(1, 40, 90, 0);
+	pocket_seq_play(1);
+	play_steps(40);
+	pocket_seq_skip(1, 40);
+	play_steps(1);
+	CHECK(event_count == 0, "a skip works on page 3");
+	play_steps(64);
+	CHECK(event_count == 1, "for one pass");
+	/* a pattern change keeps the position and carries its own length */
+	reset(RATE);
+	struct pocket_pattern* next = pocket_seq_edit_begin();
+	next->last_page = 2;
+	pocket_seq_edit_commit();
+	CHECK(pocket_seq_pattern()->last_page == 2 && pocket_seq_replaced()->last_page == 0, "the length is published with the pattern");
+}
+
+static void conditional(int track, int step, unsigned condition)
+{
+	pocket_seq_set_cell(track, step, POCKET_CELL_WITH_CONDITION(POCKET_CELL(100, 0), condition));
+}
+
+/* n passes of the pattern: a bit per pass in which step 0 of the track sounded. */
+static unsigned heard(int length, int passes, int track)
+{
+	unsigned on = 0;
+	for (int p = 0; p < passes; p++)
+	{
+		const int was = event_count;
+		play_steps(length);
+		for (int e = was; e < event_count; e++) on |= (unsigned)(events[e].track == track) << p;
+	}
+	return on;
+}
+
+static void test_conditions(void)
+{
+	static const struct { unsigned condition, every, turn; } table[] = {
+		{ POCKET_CONDITION_1_2, 2, 0 }, { POCKET_CONDITION_2_2, 2, 1 }, { POCKET_CONDITION_1_3, 3, 0 }, { POCKET_CONDITION_2_3, 3, 1 },
+		{ POCKET_CONDITION_3_3, 3, 2 }, { POCKET_CONDITION_1_4, 4, 0 }, { POCKET_CONDITION_2_4, 4, 1 }, { POCKET_CONDITION_3_4, 4, 2 },
+		{ POCKET_CONDITION_4_4, 4, 3 }
+	};
+	for (unsigned last = 0; last < POCKET_SEQ_PAGES; last++)
+		for (unsigned c = 0; c < sizeof table / sizeof *table; c++)
+		{
+			const int length = (int)(last + 1u) * POCKET_SEQ_STEPS;
+			unsigned want = 0;
+			reset(RATE);
+			pocket_seq_set_last_page(last);
+			conditional(3, 0, table[c].condition);
+			for (unsigned p = 0; p < 24; p++) want |= (unsigned)(p % table[c].every == table[c].turn) << p;
+			pocket_seq_play(1);
+			CHECK(heard(length, 24, 3) == want, "condition %u, %d steps, over 24 passes", table[c].condition, length);
+			/* stopped and started: from the first pass again */
+			pocket_seq_play(0);
+			run_blocks(2);
+			pocket_seq_play(1);
+			CHECK(heard(length, 24, 3) == want, "condition %u after STOP and PLAY", table[c].condition);
+		}
+	/* ALWAYS is what a step was before there were conditions */
+	reset(RATE);
+	conditional(0, 0, POCKET_CONDITION_ALWAYS);
+	pocket_seq_play(1);
+	CHECK(heard(POCKET_SEQ_STEPS, 16, 0) == 0xffffu, "ALWAYS");
+	/* a condition on a late step, across pages */
+	reset(RATE);
+	pocket_seq_set_last_page(3);
+	conditional(2, 57, POCKET_CONDITION_2_2);
+	pocket_seq_play(1);
+	CHECK(heard(64, 6, 2) == 0x2au, "2:2 on step 58 of 64");
+	/* the hats: an open hat left out by its condition does not choke the closed one */
+	reset(RATE);
+	pocket_seq_set_step(5, 0, 100, 0);
+	conditional(6, 0, POCKET_CONDITION_1_2);
+	pocket_seq_play(1);
+	const unsigned closed = heard(POCKET_SEQ_STEPS, 8, 5);
+	CHECK(closed == 0xaau, "the closed hat plays when the open one does not: %x", closed);
+	reset(RATE);
+	pocket_seq_set_step(5, 0, 100, 0);
+	conditional(6, 0, POCKET_CONDITION_1_2);
+	pocket_seq_play(1);
+	CHECK(heard(POCKET_SEQ_STEPS, 8, 6) == 0x55u, "and the open one on the others");
+	/* chance: about what it says, the same on every run from PLAY */
+	static const unsigned percent[3] = { 25, 50, 75 };
+	for (unsigned c = 0; c < 3; c++)
+	{
+		unsigned count[2] = { 0, 0 };
+		for (int run = 0; run < 2; run++)
+		{
+			reset(RATE);
+			for (int t = 0; t < 2; t++) conditional(t, 0, POCKET_CONDITION_25 + c);
+			pocket_seq_play(1);
+			for (int p = 0; p < 2000; p++) { const int was = event_count; play_steps(POCKET_SEQ_STEPS); count[run] += (unsigned)(event_count - was); event_count = 0; }
+		}
+		CHECK(count[0] == count[1], "chance repeats from PLAY: %u %u", count[0], count[1]);
+		CHECK(count[0] > (percent[c] - 5u) * 40u && count[0] < (percent[c] + 5u) * 40u, "%u %% of 4000: %u", percent[c], count[0]);
+	}
+	/* a variation comes out as it went in, with a condition or without */
+	reset(RATE);
+	pocket_seq_set_cell(3, 0, POCKET_CELL(90, POCKET_TONE_VARIATION(4)));
+	pocket_seq_set_step(1, 0, 90, 72);
+	pocket_seq_play(1);
+	play_steps(1);
+	CHECK(event_count == 2 && events[0].track == 1 && events[0].note == 72 && !events[0].variation, "a note is a note");
+	CHECK(events[1].track == 3 && events[1].note == POCKET_SEQ_NOTE_PROGRAMMED && events[1].variation == 4, "a variation is a variation at its programmed pitch");
+}
+
+/* Longer patterns: a phrase, not one bar four times and not four unrelated bars. */
+static void test_phrases(void)
+{
+	for (unsigned style = 0; style < POCKET_GEN_STYLES; style++)
+		for (unsigned last = 0; last < POCKET_SEQ_PAGES; last++)
+		{
+			int repeats = 0, unrelated = 0, runs = 0, overruns = 0;
+			for (uint32_t seed = 1; seed < 80; seed++)
+				for (unsigned complexity = 10; complexity <= 70; complexity += 30)
+				{
+					static struct pocket_pattern p;
+					struct pocket_gen_settings s = { seed, 50, (uint8_t)complexity, (uint8_t)style, 0, (uint8_t)last };
+					memset(&p, 0x55, sizeof p);
+					pocket_gen_generate(&p, &s);
+					const int steps = (int)POCKET_PATTERN_STEPS(&p);
+					CHECK(p.last_page == last, "the pattern has the length asked for");
+					int same = 0, hits = 0;
+					for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
+						for (int i = 0; i < POCKET_SEQ_MAX_STEPS; i++)
+						{
+							if (i >= steps) { overruns += p.cell[t][i] != 0; continue; }
+							overruns += POCKET_CELL_VELOCITY(p.cell[t][i]) > 127;
+							if (i < POCKET_SEQ_STEPS || !p.cell[t][i]) continue;
+							hits++;
+							same += p.cell[t][i % POCKET_SEQ_STEPS] != 0;
+						}
+					if (last && hits)
+					{
+						runs++;
+						repeats += same == hits;
+						unrelated += same * 2 < hits;
+					}
+				}
+			CHECK(!overruns, "style %u, %u pages: nothing out of range or past the end: %d", style, last + 1, overruns);
+			if (last)
+			{
+				CHECK(repeats * 4 < runs, "style %u, %u pages: later pages are not all the first again: %d of %d", style, last + 1, repeats, runs);
+				/* Euclidean styles run on across pages on purpose, so only the others must stay close */
+				if (style != 8 && style != 9) CHECK(unrelated * 4 < runs, "style %u, %u pages: later pages answer the first: %d of %d unrelated", style, last + 1, unrelated, runs);
+			}
+		}
+	/* one page: bit for bit the pattern of before there were pages */
+	static struct pocket_pattern a, b;
+	const struct pocket_gen_settings one = { 7, 50, 30, 2, 0, 0 }, two = { 7, 50, 30, 2, 0, 1 };
+	pocket_gen_generate(&a, &one);
+	pocket_gen_generate(&b, &two);
+	int first = 0;
+	for (int t = 0; t < POCKET_SEQ_TRACKS; t++) first += !memcmp(a.cell[t], b.cell[t], POCKET_SEQ_STEPS * sizeof a.cell[t][0]);
+	CHECK(first >= 4, "the first page of two is mostly the one-page pattern: %d tracks of 7", first);
+	/* mutation and one-track generation reach every page, and stay in the pattern */
+	for (unsigned last = 1; last < POCKET_SEQ_PAGES; last++)
+	{
+		static struct pocket_pattern p, was;
+		const struct pocket_gen_settings s = { 11, 50, 40, 0, 0, (uint8_t)last };
+		pocket_gen_generate(&p, &s);
+		int late = 0, outside = 0;
+		const int steps = (int)POCKET_PATTERN_STEPS(&p);
+		for (int m = 0; m < 200; m++)
+		{
+			was = p;
+			pocket_gen_mutate(&p, 1000u + (unsigned)m, POCKET_MUTATE_LARGE, 0);
+			for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
+				for (int i = 0; i < POCKET_SEQ_MAX_STEPS; i++)
+				{
+					if (i >= steps) outside += p.cell[t][i] != 0;
+					else if (i >= steps - POCKET_SEQ_STEPS) late += p.cell[t][i] != was.cell[t][i];
+				}
+		}
+		CHECK(late > 0, "%u pages: mutation reaches the last page", last + 1);
+		CHECK(!outside, "and nothing beyond it");
+		was = p;
+		pocket_gen_track(&p, &s, 3, 1);
+		int others = 0, changed = 0;
+		for (int t = 0; t < POCKET_SEQ_TRACKS; t++)
+			for (int i = 0; i < steps; i++)
+			{
+				if (t != 3) others += p.cell[t][i] != was.cell[t][i];
+				else changed += p.cell[t][i] != was.cell[t][i];
+			}
+		CHECK(changed && !others, "one track of %d steps, and no other", steps);
+	}
+	/* mutation moves a step whole: its condition and variation go with it */
+	static struct pocket_pattern c;
+	memset(&c, 0, sizeof c);
+	c.last_page = 1;
+	for (int i = 0; i < 32; i += 3) c.cell[0][i] = POCKET_CELL_WITH_CONDITION(POCKET_CELL(100, POCKET_TONE_VARIATION(2)), POCKET_CONDITION_1_3);
+	for (int m = 0; m < 400; m++) pocket_gen_mutate(&c, 77u + (unsigned)m, POCKET_MUTATE_SMALL, 0);
+	int kept = 0, stray = 0;
+	for (int i = 0; i < 32; i++)
+	{
+		const uint32_t cell = c.cell[0][i];
+		if (POCKET_CELL_TONE(cell) == POCKET_TONE_VARIATION(2)) kept += POCKET_CELL_CONDITION(cell) == POCKET_CONDITION_1_3;
+		else stray += POCKET_CELL_NOTE(cell) != 0 && POCKET_CELL_VARIATION(cell) != 0;
+	}
+	CHECK(kept > 0 && !stray, "a variation keeps its condition through mutation: %d, %d stray", kept, stray);
 }
 
 int main(int argc, char** argv)
@@ -765,6 +1026,9 @@ int main(int argc, char** argv)
 	test_notes();
 	test_quantise();
 	test_one_track();
+	test_pages();
+	test_conditions();
+	test_phrases();
 	printf("sequencer: %d checks, %d failed\n", checks, failures);
 	return failures ? 1 : 0;
 }

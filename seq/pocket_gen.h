@@ -30,6 +30,7 @@ struct pocket_gen_settings {
 	uint8_t complexity; /* 0-100: how unpredictable */
 	uint8_t style;      /* below POCKET_GEN_STYLES */
 	uint8_t locks;      /* tracks never touched, bit per track */
+	uint8_t last_page;  /* the pattern's length, as in pocket_pattern */
 };
 
 /* The keyed hash and the seeded draw below n, shared with the kit generator. */
@@ -37,7 +38,8 @@ uint32_t pocket_gen_mix(uint32_t h, uint32_t k);
 unsigned pocket_gen_below(uint32_t* state, unsigned n);
 
 const char* pocket_gen_style_name(unsigned style);
-/* Replace every unlocked track of `pattern`, and the notes on it. */
+/* Replace every unlocked track of `pattern`, and the notes on it, and set its length. Past the
+ * first page a pattern is a phrase: the first page varied, by role, and a fill into its end. */
 void pocket_gen_generate(struct pocket_pattern* pattern, const struct pocket_gen_settings* settings);
 /* Replace one track, whatever the locks say, and no other. `take` draws another rhythm from the
  * same settings; a track never comes back empty. */

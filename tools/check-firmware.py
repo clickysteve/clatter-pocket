@@ -74,6 +74,9 @@ for symbol in ("clatter_pocket_render", "clatter_pocket_output_level", "pocket_l
 check(within("lxr_packed_sine_table", FLASH), "packed tables in Flash, not SRAM")
 check("fm1_flash_map" not in symbols, "not linked: fm1_flash_map")
 check(within("pocket_store_commit", FLASH), "the store in Flash: only a button runs it")
+check(within("pocket_history_undo", FLASH), "the undo history in Flash: only a button runs it")
+check(within("parameterArray_init", FLASH), "the parameter table's init in Flash: it runs once")
+check(within("paramArray_setParameter", SRAM), "and what the audio reads of that file in SRAM")
 for symbol in ("fm1_master_gain", "groove_project_apply_edit", "groove_tuning_apply"):
     check(symbol not in symbols, f"stock application absent: {symbol}")
 print("result:", "FAILED" if failed else "passed")

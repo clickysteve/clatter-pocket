@@ -9,9 +9,10 @@
  * the engine tests run on this variant too. The firmware's files declare them const; here they are written once,
  * by pocket_lxr_tables_unpack(), before the engine reads them.
  *
- * Format (tools/pack-lxr-tables.py): per table a predictor order p (0: x, 1: x - x[-1],
- * 2: x - 2x[-1] + x[-2], over the whole table in memory order); residuals zigzag-coded, then
- * through an LZMA-style binary range coder: the value's bit length in unary, in a context set by
+ * Format (tools/pack-lxr-tables.py): per table a fixed predictor of order p (1: x[-1], 2: 2x[-1] -
+ * x[-2], over the whole table in memory order), and a four-tap sign-sign LMS filter of what that
+ * leaves, integer and exactly the same in both directions; residuals zigzag-coded, then through an
+ * LZMA-style binary range coder: the value's bit length in unary, in a context set by
  * the size of the last two values, the first bit below the leading one modelled by length, the
  * rest raw.
  * The sawtooth is exactly odd in every row, x[1024 - i] = -x[i], so only the first SAW_KEPT
@@ -39,6 +40,7 @@ struct reader
 
 /* the models, here rather than on the stack: the engine's start is the deepest control path */
 static uint16_t probs[LXR_PACK_SIZES * LXR_PACK_LENGTHS + LXR_PACK_LENGTHS];
+static int32_t weights[LXR_PACK_FILTER], history[LXR_PACK_FILTER];
 
 static void normalise(struct reader* r)
 {
@@ -77,6 +79,11 @@ static unsigned raw(struct reader* r)
 	return b;
 }
 
+static int sign(int32_t v)
+{
+	return (v > 0) - (v < 0);
+}
+
 static unsigned bit_length(uint32_t z)
 {
 	unsigned n = 0;
@@ -91,6 +98,7 @@ static int unpack(const struct lxr_packed_table* t, void* out, size_t n, unsigne
 	for (unsigned i = 0; i < sizeof probs / sizeof *probs; i++) probs[i] = 1u << (LXR_PACK_PROB_BITS - 1);
 	struct reader r = { t->data, 0xffffffffu, 0 };
 	for (unsigned i = 0; i < 4; i++) r.code = r.code << 8 | *r.p++;
+	for (unsigned i = 0; i < LXR_PACK_FILTER; i++) weights[i] = history[i] = 0;
 	int32_t x1 = 0, x2 = 0;
 	uint32_t z1 = 0, z2 = 0;
 	for (size_t i = 0; i < n; i++)
@@ -108,8 +116,15 @@ static int unpack(const struct lxr_packed_table* t, void* out, size_t n, unsigne
 		z2 = z1;
 		z1 = z;
 		const int32_t residual = (int32_t)(z >> 1) ^ -(int32_t)(z & 1u);
-		const int32_t predicted = t->order == 2 ? 2 * x1 - x2 : t->order == 1 ? x1 : 0;
-		const int32_t x = predicted + residual;
+		const int32_t fixed = t->order == 2 ? 2 * x1 - x2 : x1;
+		int32_t filtered = 0;
+		for (unsigned j = 0; j < LXR_PACK_FILTER; j++) filtered += weights[j] * history[j];
+		const int32_t x = fixed + (filtered >> t->shift) + residual;
+		for (unsigned j = LXR_PACK_FILTER; j--;)
+		{
+			weights[j] += sign(residual) * sign(history[j]);
+			history[j] = j ? history[j - 1u] : x - fixed;
+		}
 		if (width == 2) ((int16_t*)out)[i] = (int16_t)x;
 		else ((int8_t*)out)[i] = (int8_t)x;
 		x2 = x1;

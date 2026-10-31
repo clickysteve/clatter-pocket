@@ -85,9 +85,10 @@ cp -R "$repo/lxr/shim" "$pocket/lxr/"
 	while read -r f; do mkdir -p "$tree/pocket/$(dirname "$f")"; cp "$repo/$f" "$tree/pocket/$f"; done
 cp "$repo/lxr/bridge/lxr_params.c" "$repo/lxr/bridge/libm.c" "$pocket/lxr/bridge/"
 cp "$repo/engine/pocket_lxr.c" "$repo/engine/pocket_lxr.h" "$repo/engine/pocket_params.h" \
-	"$repo/engine/fx_off.c" "$repo/engine/single_precision.h" "$pocket/engine/"
+	"$repo/engine/fx_off.c" "$repo/engine/single_precision.h" "$repo/engine/pocket_variations.h" "$pocket/engine/"
 cp "$repo/ui/pocket_panel.c" "$repo/ui/pocket_panel.h" "$repo/ui/pocket_midi.c" "$repo/ui/pocket_midi.h" \
-	"$repo/ui/pocket_store.c" "$repo/ui/pocket_store.h" "$pocket/ui/"
+	"$repo/ui/pocket_store.c" "$repo/ui/pocket_store.h" \
+	"$repo/ui/pocket_history.c" "$repo/ui/pocket_history.h" "$pocket/ui/"
 # the sequencer's clock runs in the audio interrupt: with the engine, in SRAM. The generators
 # run only on a button press: with the panel, in Flash, -Oz.
 cp "$repo/seq/pocket_seq.c" "$repo/seq/pocket_seq.h" "$pocket/engine/"
@@ -96,6 +97,9 @@ cp "$repo/seq/pocket_gen.c" "$repo/seq/pocket_gen.h" "$repo/seq/pocket_styles.h"
 cp "$here/pocket_fm1_config.h" "$here/pocket_fm1_libm.c" "$pocket/fm1/"
 # init-only code and data: stays in Flash with every placement
 mkdir -p "$pocket/flash"
+# compiled through engine/pocket_param_table.c, which holds what its long init did as a table
+mv "$tree/pocket/lxr/upstream/Core/Src/Soundengine/MIDI/ParameterArray.c" "$pocket/flash/ParameterArray_upstream.inc"
+cp "$repo/engine/pocket_param_table.c" "$pocket/flash/"
 cp "$repo/engine/lxr_tables_packed.c" "$repo/engine/lxr_tables_unpack.c" "$pocket/flash/"
 cp "$repo/engine/lxr_tables_packed.h" "$pocket/engine/"
 echo "   $(find "$pocket" -name '*.c' | wc -l | tr -d ' ') CLATTER Pocket sources, fm1_open $actual + $([[ $replace == 1 ]] && echo "replace/fm1_open-replace.patch, stock instrument application removed" || echo fm1_open.patch)"
