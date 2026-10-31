@@ -5,7 +5,7 @@
     {
       "id": "clatter-pocket",
       "name": "CLATTER Pocket",
-      "version": "0.5.0 UNVERIFIED",
+      "version": "0.7.0 UNVERIFIED",
       "author": "The CLATTER contributors",
       "license": "GPL-3.0-only",
       "about": "A generative drum machine on the LXR sound engine. An emulator build: it has never run on a physical FM-1.",
