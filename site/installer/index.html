@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CLATTER Pocket installer</title>
-<meta name="description" content="The CLATTER Pocket firmware installer. Disabled until the firmware has been verified on hardware.">
+<meta name="description" content="The CLATTER Pocket firmware installer for the M-VAVE FM-1.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="../styles.css">
@@ -12,69 +12,85 @@
 </head>
 <body class="installer">
 <a class="skip" href="#main">Skip to the content</a>
-<p class="strip" role="status"><b id="strip-status">{{status}}</b> <span>Installing is off.</span></p>
+<p class="strip" role="status"><b id="strip-status">{{status}}</b> <span><!-- @if experimental -->Experimental firmware. It has never run on a physical FM-1.<!-- @else --><!-- @if open -->Hardware-verified release.<!-- @else -->Installing is off.<!-- @end --><!-- @end --></span></p>
 <header class="top">
   <a class="brand" href="../">CLATTER POCKET</a>
-  <nav aria-label="Site"><a href="../#install">Status</a><a href="../demo/">Demo</a><a href="../#recovery">Recovery</a></nav>
+  <nav aria-label="Site"><a href="#recovery">Recovery</a><a href="../demo/">Demo</a><a href="../#faq">FAQ</a></nav>
 </header>
 
 <main id="main" class="installer-main">
   <h1 class="section">Installer</h1>
 
-  <div class="notice" id="notice" role="status">
-    <p class="notice-head" id="notice-head">INSTALLATION DISABLED</p>
-    <p class="notice-body" id="notice-body">{{not-available}}</p>
-    <p id="notice-detail">Everything below stays off until a release has been tested on a device and is marked so, deliberately, in the site's release configuration. This page contains no firmware, and no code that can reach a device.</p>
-  </div>
+  <!-- @if open --><!-- @else --><div class="notice" id="notice" role="status">
+    <p class="notice-head">INSTALLATION DISABLED</p>
+    <p class="notice-body">{{not-available}}</p>
+    <p>This page contains no firmware, and no code that can reach a device.</p>
+  </div><!-- @end -->
 
   <dl class="facts" id="facts">
     <div><dt>Firmware</dt><dd id="fact-version">{{version}}</dd></div>
     <div><dt>Status</dt><dd id="fact-status">{{status}}</dd></div>
-    <div><dt>Package</dt><dd id="fact-package">None published</dd></div>
-    <div><dt>SHA-256</dt><dd id="fact-sha"><code>none</code></dd></div>
+    <div><dt>Hardware</dt><dd>{{hardware}}</dd></div>
+    <div><dt>Package</dt><dd id="fact-package">{{package}}</dd></div>
+    <div><dt>SHA-256</dt><dd><code>{{package-sha}}</code></dd></div>
+    <div><dt>Check</dt><dd id="package-state"><!-- @if open -->Checking the package…<!-- @else -->None to check.<!-- @end --></dd></div>
     <div><dt>This browser</dt><dd id="fact-browser">Not checked: this page needs JavaScript.</dd></div>
   </dl>
 
   <ol class="wizard">
     <li class="stage">
-      <h2>Connect the FM-1 by USB</h2>
-      <p>Use a data cable, and close other MIDI software. Keep the FM-1 powered throughout.</p>
+      <h2>Prepare</h2>
+      <ul class="plain">{{requires}}</ul>
+      <p>Close other MIDI software, keep the FM-1 powered throughout, and keep the <a href="#recovery">recovery notes</a> open in another tab.</p>
     </li>
     <li class="stage">
-      <h2>Use a compatible browser</h2>
-      <p>Chrome or Edge on a computer. The FM-1 updates over USB-MIDI SysEx, so the browser asks to allow MIDI.</p>
-    </li>
-    <li class="stage">
-      <h2>Connect to the device</h2>
+      <h2>Connect to the FM-1</h2>
+      <p>Connect it by USB and switch it on. Your browser will ask to allow MIDI: allow it. This only asks the FM-1 what it is running. Nothing is written.</p>
       <p><button type="button" class="button" id="connect" disabled>CONNECT FM-1</button></p>
+      <p id="device-state" role="status" class="device-state">No device connected.</p>
     </li>
     <li class="stage">
-      <h2>Check the device and prerequisites</h2>
-      <p>It must be running official fm1_open firmware. Back up projects, samples and voices with <a href="https://open.m-vave.com/fm1-workbench">M-VAVE's workbench</a> first: that backup is not available while CLATTER Pocket is installed.</p>
-      <p id="device-state" role="status" class="dim">No device connected.</p>
-    </li>
-    <li class="stage">
-      <h2>Review the firmware and warnings</h2>
-      <p>Firmware defects may cause data loss or a device that does not start. Installing is at your own risk.</p>
-      <p><label class="check"><input type="checkbox" id="backup" disabled> I have backed up my FM-1, and I can reinstall official firmware with M-VAVE's workbench.</label></p>
+      <h2>Confirm</h2>
+      <!-- @if experimental --><div class="warning" id="warning">
+        <p class="notice-head">EXPERIMENTAL FIRMWARE</p>
+        <p>CLATTER Pocket has passed emulator testing but has not yet been verified on physical hardware.</p>
+        <p>Installing it replaces the FM-1’s stock instrument firmware.</p>
+        <p>There is a risk of installation failure, loss of settings or requiring firmware recovery.</p>
+      </div><!-- @end -->
+      <p><label class="check"><input type="checkbox" id="confirm" disabled> I understand this and accept the risk, and I have backed up my FM-1.</label></p>
     </li>
     <li class="stage">
       <h2>Install</h2>
-      <p><button type="button" class="button primary" id="install" disabled>INSTALL CLATTER POCKET</button></p>
+      <p><button type="button" class="button primary" id="install" disabled>{{install-label}}</button></p>
       <div class="progress" id="progress" hidden><div class="bar"><span id="bar"></span></div><p id="phase" role="status"></p></div>
-    </li>
-    <li class="stage">
-      <h2>Finish</h2>
-      <p>Do not unplug, close this page or let the computer sleep until it says it has finished. It finishes when the FM-1 has restarted and reports this build.</p>
+      <p>Do not unplug, close this page or let the computer sleep until it says it has finished. It finishes only when the FM-1 has restarted and reports this exact build.</p>
+      <div id="after-failure" class="after" hidden>
+        <p><b>Keep this page open.</b> Reconnect the same FM-1, then press Connect and Install again: the updater resumes from its loader. If that does not work, follow the recovery notes below.</p>
+      </div>
+      <div id="after-done" class="after" hidden>
+        <p><b>Now run the first hardware test.</b> Follow <a href="https://github.com/clickysteve/clatter-pocket/blob/main/FIRST-HARDWARE-TEST.md#first-boot">FIRST-HARDWARE-TEST.md</a> from First boot, and stop if any of its stop conditions happen.</p>
+      </div>
       <pre class="log" id="log" hidden></pre>
     </li>
   </ol>
 
-  <details class="refusals" id="why">
+  <section id="recovery" aria-labelledby="h-recovery">
+    <h2 id="h-recovery" class="tab">Recovery</h2>
+    <p>None of these routes has been tried with CLATTER Pocket on a device.</p>
+    <ul class="plain link-list">
+      <li><a href="https://github.com/clickysteve/clatter-pocket/blob/main/FIRST-HARDWARE-TEST.md#recovery">Recovery procedure</a>: restoring official firmware, and when to stop.</li>
+      <li><a href="https://github.com/clickysteve/clatter-pocket/blob/main/FIRST-HARDWARE-TEST.md#stop-conditions-read-first">Stop conditions</a>: read these first.</li>
+      <li><a href="https://github.com/clickysteve/clatter-pocket/blob/main/FM1-REPLACEMENT.md#start-up-safe-mode-diagnostics">SAFE MODE</a>: hold HOME 1.5 s after power-on. The engine stays off and the updater keeps running.</li>
+      <li><a href="https://open.m-vave.com/fm1-workbench">M-VAVE's official workbench</a>: the restore route. Keep it open in another tab.</li>
+      <li><a href="https://thefirmwarehub.com/kb/#rescue">The FM-1 Firmware Hub's rescue guide</a>: the community's tools, for other firmwares. Its OCT− USB rescue is not something CLATTER Pocket provides or has been tested with.</li>
+    </ul>
+  </section>
+
+  <details class="refusals" id="why" hidden>
     <summary>Why it is off</summary>
     <ul id="why-list"><li>This page needs JavaScript to read the release configuration. Installing stays off without it.</li></ul>
   </details>
 </main>
-<footer class="foot"><p><a href="../#recovery">Recovery</a> · <a href="../#source">Source and licences</a></p></footer>
+<footer class="foot"><p><a href="../#source">Source and licences</a></p></footer>
 </body>
 </html>

@@ -1,7 +1,7 @@
 # Test the website and publish it on GitHub Pages (Settings -> Pages -> Source: GitHub Actions).
-# This publishes what is in site/. It does not build firmware, and no firmware reaches the site
-# by this route: the demo's package is promoted by hand, and installation stays off unless
-# site/release.json names a release that passes site/installer/gate.mjs (docs/WEBSITE.md).
+# This publishes what is in site/. It does not build firmware. Packages reach the site only by
+# hand: the demo's through tools/promote-emulator-build.mjs, the installer's through
+# tools/promote-release.mjs, which names one in site/release.json (docs/WEBSITE.md).
 
 name: Website
 
@@ -10,7 +10,10 @@ on:
     branches: [main]
     paths:
       - site/**
+      - releases/**
       - tools/build-site.mjs
+      - tools/fm1-web.mjs
+      - tools/fm1-update-sim.mjs
       - tools/test-site.mjs
       - tools/serve-site.mjs
       - docs/POCKET-CONTROLS.md
@@ -19,7 +22,10 @@ on:
   pull_request:
     paths:
       - site/**
+      - releases/**
       - tools/build-site.mjs
+      - tools/fm1-web.mjs
+      - tools/fm1-update-sim.mjs
       - tools/test-site.mjs
       - tools/serve-site.mjs
       - docs/POCKET-CONTROLS.md
@@ -40,7 +46,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true      # third_party/fm1_open: its licences go with the site
+          submodules: true      # third_party/fm1_open: its update code and licences go with the site
+          fetch-depth: 0        # a test compares the release with the firmware sources' history
 
       - uses: actions/setup-node@v4
         with:

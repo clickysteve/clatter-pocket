@@ -5,13 +5,14 @@ PRE-FLASH-AUDIT.md) on one M-VAVE FM-1. **Nothing here has been done yet.** Step
 **UNVERIFIED** follow from the SDK's source and build, not from a device. The owner decides
 whether to start, and every step can be the point to stop.
 
-Candidate:
-- `clatter-pocket-fm1-replace-UNVERIFIED.fwsc`, SHA-256
-  `bcfef5946b9c45b9c6402c7c7d177df8b43d8ce1f8686d7a31fbc3029d3550e8`;
-- installer `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-  `20b22912dc9a12c63aecaf7e0ef0926f1ecd6c8c7fb297741ae9fa9d43086865`.
+Candidate: firmware 0.5.0, commit `f97fbf3`, SHA-256
+`bcfef5946b9c45b9c6402c7c7d177df8b43d8ce1f8686d7a31fbc3029d3550e8`.
 
-Both are produced by:
+**Install it from <https://clickysteve.github.io/clatter-pocket/installer/>**, which runs the steps
+below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
+`20b22912dc9a12c63aecaf7e0ef0926f1ecd6c8c7fb297741ae9fa9d43086865`.
+
+Both packages are produced by:
 
 ```
 firmware/fm1/build.sh --replace --single-precision
@@ -65,15 +66,14 @@ Then go to Recovery.
 
 ## First installation (UNVERIFIED)
 
-The page runs M-VAVE's own update code (`sdk/WebUpdate.js`, unchanged, in a minimal page).
+The page runs M-VAVE's own update code (`sdk/WebUpdate.js`, unchanged).
 
-1. Open `clatter-pocket-installer-UNVERIFIED.html` in Chrome, served from localhost or
-   opened as a file, and allow MIDI with SysEx when asked. The log must say "Package
-   verified".
-2. Connect the FM-1, running official Open, by USB and press **Connect FM-1**. Expected:
-   "Connected: FM-1_8000014" and "Ready to install". If the page says the FM-1 does not run
-   fm1_open firmware, stop and follow step 1 of "Before installation".
-3. Tick the backup confirmation and press **Install CLATTER Pocket**. The updater then:
+1. Open the installer in Chrome. It must say "Package verified".
+2. Connect the FM-1, running official Open, by USB and press **Connect FM-1**. Allow MIDI with
+   SysEx when asked. Expected: "Ready to install over FM-1_8000014". Connect writes nothing. If the
+   page says the FM-1 does not run fm1_open firmware, stop and follow step 1 of "Before installation".
+3. Read the warning, tick the confirmation and press **Install experimental firmware**. The
+   updater then:
    1. arms the update in the running firmware;
    2. sends the loader-preparation request;
    3. waits for the FM-1 to reconnect as its update loader (`ota-FM-1_015`);

@@ -3,7 +3,7 @@
 // (tools/build-site.mjs). Any failure here leaves the buttons as the page ships them: disabled.
 // Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
 
-import { NOT_AVAILABLE, browserSupport, installAllowed, refusals, statusLabel } from './gate.mjs';
+import { browserSupport, installAllowed, refusals, statusLabel } from './gate.mjs';
 
 const $ = id => document.getElementById(id);
 
@@ -15,6 +15,7 @@ const support = browserSupport({
 $('fact-browser').textContent = support.message;
 
 function showRefusals(reasons) {
+  $('why').hidden = false;
   $('why-list').replaceChildren(...reasons.map(text => {
     const li = document.createElement('li');
     li.textContent = text;
@@ -34,12 +35,12 @@ try {
 if (release) {
   $('fact-version').textContent = release.version ?? 'unknown';
   $('fact-status').textContent = statusLabel(release);
-  showRefusals(refusals(release));
 }
 
 if (installAllowed(release)) {
   const { start } = await import('./driver.js');
   await start({ release, support, $ });
-} else {
-  $('notice-body').textContent = NOT_AVAILABLE;
+} else if (release) {
+  showRefusals(refusals(release));
+  $('package-state').textContent = 'Stopped: this release may not be installed.';
 }

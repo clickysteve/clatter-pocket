@@ -1,10 +1,25 @@
 {
   "schema": 1,
   "version": "0.5.0",
-  "status": "emulator-only",
-  "installEnabled": false,
-  "releaseDate": null,
-  "firmware": null,
+  "status": "experimental",
+  "installEnabled": true,
+  "releaseDate": "2026-10-31",
+  "firmware": {
+    "filename": "clatter-pocket-0.5.0-bcfef594-UNVERIFIED.fwsc",
+    "sha256": "bcfef5946b9c45b9c6402c7c7d177df8b43d8ce1f8686d7a31fbc3029d3550e8",
+    "bytes": 492084,
+    "buildId": "7220434e5b7762c09fc338c12d2f62f664c41fa6519c4242bf08e0cd272abfb7",
+    "loaderSha256": "ef1f2db89b011fa53e71df363f0122de0ea896618c53fb53e8da676322004541",
+    "product": "FM-1_8000014",
+    "family": 7,
+    "checks": {
+      "commit": "f97fbf3",
+      "singlePrecision": true,
+      "firmwareChecks": true,
+      "audioPath": true,
+      "emulator": true
+    }
+  },
   "verification": null,
   "compatibility": {
     "device": "M-VAVE FM-1",

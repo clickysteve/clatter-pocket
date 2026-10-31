@@ -14,9 +14,12 @@ make site-serve  # http://127.0.0.1:8770/clatter-pocket/, the base path Pages wi
 | `site/index.html`, `styles.css`, `app.js` | the page. `<!-- @name -->` and `{{name}}` are filled by the build |
 | `site/assets/controls.mjs` | the control guide's data and the panel drawing, used by the build and the browser |
 | `site/release.json` | **the public release**: the only thing that says what may be installed |
+| `releases/<version>/` | the installable packages. Copied to the site only if `site/release.json` names one |
 | `site/installer/gate.mjs` | the rule, used by the build and the browser |
 | `site/installer/index.html`, `installer.js` | the installer's interface |
 | `site/installer/driver.js` | the update driver: **left out of the site while the gate is closed** |
+| `tools/promote-release.mjs` | name a package as the installable release, after checking it |
+| `tools/fm1-update-sim.mjs` | a simulated FM-1 at the Web MIDI level, for the installer's tests |
 | `site/demo/` | the demo page; `emu/` is the vendored emulator; `emulator-build.json` pins what it runs |
 | `tools/build-site.mjs`, `test-site.mjs`, `serve-site.mjs` | build, tests, a server with the base path |
 | `tools/promote-emulator-build.mjs` | put a package on the demo, by hand |
@@ -58,48 +61,79 @@ determined visitor could rename, and the name is there to stop an accident rathe
 |---|---|---|
 | Development builds | `build/`, never committed | never |
 | Emulator build | `site/demo/emu/`, pinned by SHA-256 in `emulator-build.json` | `promote-emulator-build.mjs`, by hand. Runs in the demo only |
-| Public release | `releases/<version>/`, named in `site/release.json` | a release, below |
+| Release | `releases/<version>/`, named in `site/release.json` | `promote-release.mjs`, by hand. Installable |
 
 ## The installer
 
-`site/release.json` drives it. `status` is `emulator-only`, `experimental` or `hardware-verified`.
+It is real: it transfers firmware to a device. It drives M-VAVE's unchanged `sdk/WebUpdate.js`, over
+USB-MIDI SysEx through Web MIDI, with `force: false`, as `tools/make-installer-page.py` does.
 
-The gate (`site/installer/gate.mjs`) opens only if **all** of these hold: status `hardware-verified`;
-`installEnabled` exactly `true`; a release date and notes; a firmware with a `clatter-pocket-*.fwsc`
-name without UNVERIFIED, SHA-256, build identity, loader hash, size, fm1_open identity and family 7; a
-verification record with date, units, an HTTPS report and `recoveryTested`, whose `firmwareSha256`
-equals the firmware's; and compatibility requirements.
+`site/release.json` drives it. `status` is `emulator-only`, `experimental` or `hardware-verified`:
 
-That last match is the point: a verification belongs to one package, by hash. A new build cannot
-inherit it, and a firmware file sitting in the repository changes nothing.
+| Status | Shown as | Can be installed | Needs |
+|---|---|---|---|
+| `emulator-only` | UNVERIFIED: EMULATOR ONLY | no | |
+| `experimental` | UNVERIFIED: EXPERIMENTAL | when enabled | the checks below, and UNVERIFIED in the package's name |
+| `hardware-verified` | HARDWARE VERIFIED | when enabled | the same, and a verification record for this package's hash |
+
+Hardware verification is not needed to install an experimental release: installing it is how the
+verification happens. **Nothing is installable unless `installEnabled` is exactly `true`** and one
+package is named, so a new build never becomes installable by itself.
+
+The gate (`site/installer/gate.mjs`) needs, for either kind: a release date and notes; a firmware
+with a `clatter-pocket-*.fwsc` name, SHA-256, build identity, loader hash, size, fm1_open identity and
+family 7; a record that the build was `--single-precision` and passed `check-firmware.py`,
+`check-audio-path.py` and the emulator suite; and compatibility requirements.
+
+What still stops an install, whatever the status:
+
+| When | Check |
+|---|---|
+| Building the site | the gate; the file's size and SHA-256; `FM1Web.prepare` on the real file |
+| Opening the page | the same gate; `FM1Web.prepare`: SHA-256, package format, CRCs, identity, loader hash |
+| Connect | the device must report an fm1_open identity and family 7, or be in this package's loader. M-VAVE's stock firmware and other firmware stop here, with nothing written |
+| Install | the explicit confirmation; identity and capability read again; the device's own acceptance of the package |
+| While writing | every read must be inside the package; the stages must match; a stall or lost connection stops it |
+| After restart | the device must report this exact build |
 
 While the gate is closed, the build leaves out `driver.js`, M-VAVE's update code and any firmware, and
 **stops with an error** if the output contains a firmware file or anything that could request MIDI
-access outside the vendored emulator. So the published site cannot reach a device: there is no flag to
-flip in a browser. If `installEnabled` is true and the gate is closed, the build fails rather than
-quietly staying off.
+access outside the vendored emulator. If `installEnabled` is true and the gate refuses the release,
+the build fails rather than quietly staying off. To turn installing off, set `installEnabled` to
+`false` and `status` to `emulator-only`: the pages change with it.
 
 The emulator can use Web MIDI for its MIDI input jack: it asks without SysEx, only when a visitor picks
 an input, and carries no update code.
 
-When the gate is open, `driver.js` drives M-VAVE's unchanged `sdk/WebUpdate.js` with `force: false`,
-exactly as `tools/make-installer-page.py` does. `FM1Web.prepare` then checks the package's SHA-256,
-identity and loader in the browser.
+## Testing the installer
+
+`make site-test` runs M-VAVE's real update code and the real package against
+`tools/fm1-update-sim.mjs`, which plays the device at the MIDI port level: complete installs, comparing
+every byte written; every refusal; and faults such as a lost cable, a refused package or a device that
+restarts on another build.
+
+**The simulator was written from the client's code, not from a device.** It shows that the installer
+behaves. It cannot show that a real FM-1 will accept the transfer, or that the firmware starts.
+Emulators cannot either: fm1-emu raises no USB interrupt, so the update path has never been run.
 
 ## Making a release
 
-Do this only after FIRST-HARDWARE-TEST.md has been completed for this exact package, including
-leaving it for official firmware.
+1. Commit the firmware. Build from that commit, on a clean tree:
+   `firmware/fm1/build.sh --replace --single-precision`.
+2. Run `python3 tools/check-firmware.py`, disassemble for `tools/check-audio-path.py`, and
+   `make emu-test`, into a log that also has the package's `shasum -a 256`.
+3. `node tools/promote-emulator-build.mjs <package> <commit>`, so that the demo runs the same bytes.
+4. `node tools/promote-release.mjs <that log>`. It repeats the checks, refuses an outdated or changed
+   build, copies the package to `releases/` and writes `site/release.json`.
+5. `make site-test`, commit, and merge to `main`.
 
-1. Commit the package as `releases/<version>/clatter-pocket-<version>.fwsc`.
-2. Fill in `site/release.json`: `version`, `releaseDate`, `firmware`, `notes`, and `verification` with the
-   hash of that file and a link to the published report. Then set `status` and `installEnabled`.
-3. **Change the page's words.** `index.html` and the FAQ state the current status in prose, and only you
-   can decide what is true of the new one: the status strip, Install, Recovery, "Is installation
-   currently safe?", and the table in Source.
-4. `make site-test`. The first tests will fail on purpose, because they pin today's status. Change them
-   in the same commit, so that the change is on the record.
-5. Merge to `main`.
+**A firmware commit on `main` stops the site's deployment until this has been done**: a test compares
+the release with the firmware sources, so the site cannot silently go on offering an outdated build.
+
+To mark a release verified, after FIRST-HARDWARE-TEST.md has passed for this exact package, including
+leaving it for official firmware: give it a name without UNVERIFIED, set `status` to `hardware-verified`,
+add `verification`, and change the pages' words. The tests pin today's status, on purpose: change them
+in the same commit.
 
 ## Screenshots
 

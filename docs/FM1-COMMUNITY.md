@@ -34,7 +34,7 @@ So the running firmware's co-operation is what makes an update possible. `sdk/We
 ## Can an installer be reused?
 
 **Yes, and this repository already does.** `tools/make-installer-page.py` drives M-VAVE's `sdk/WebUpdate.js`,
-unchanged, and the website's `site/installer/driver.js` is the same logic. No protocol was written
+unchanged, and the website's installer (`site/installer/driver.js`) is the same logic. No protocol was written
 here. M-VAVE's code is the source; a community installer would only be a copy of it. The Hub links no
 source for its own installer.
 

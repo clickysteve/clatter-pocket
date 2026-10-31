@@ -3,11 +3,12 @@
 //
 //   node tools/build-site.mjs [--out dir] [--release file] [--releases dir]
 //
-// The site/ folder is copied, its index page's markers filled in, and the licences added.
-// Hardware installation is decided here as well as in the browser (site/installer/gate.mjs):
-// while the gate is closed the output holds no firmware and no code that can talk to a device,
-// and this script refuses to finish if it does. installEnabled set without a complete
-// verified release is an error, not a quiet "off".
+// The site/ folder is copied, its pages' markers filled in, and the licences added.
+// Installation is decided here as well as in the browser (site/installer/gate.mjs): while the
+// gate is closed the output holds no firmware and no code that can talk to a device, and this
+// script refuses to finish if it does. installEnabled set on a release the gate refuses is an
+// error, not a quiet "off". With the gate open, the named package must match its hash and be
+// accepted by M-VAVE's own package checks before the site is built around it.
 //
 // Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
 
@@ -15,8 +16,9 @@ import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { NOT_AVAILABLE, installAllowed, refusals, statusLabel } from '../site/installer/gate.mjs';
+import { NOT_AVAILABLE, STATUS, installAllowed, installLabel, refusals, statusLabel } from '../site/installer/gate.mjs';
 import { CONTROLS, controlTable, panelSvg, pixelText } from '../site/assets/controls.mjs';
+import { loadFM1Web, metaFor } from './fm1-web.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -60,6 +62,12 @@ const fill = {
   version: release.version,
   status: statusLabel(release),
   'not-available': NOT_AVAILABLE,
+  'install-label': installLabel(release),
+  'hardware': release.compatibility?.device ?? 'M-VAVE FM-1',
+  'requires': (release.compatibility?.requires ?? []).map(r => `<li>${r.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</li>`).join(''),
+  'package': release.firmware?.filename ?? 'None published',
+  'package-sha': release.firmware?.sha256 ?? 'none',
+  'package-commit': release.firmware?.checks?.commit ?? '',
   'emu-commit': build.commit,
   'emu-version': build.version,
   'emu-sha': build.sha256,
@@ -73,7 +81,15 @@ const fill = {
 };
 for (const page of ['index.html', 'demo/index.html', 'installer/index.html']) {
   const path = join(out, page);
-  const text = readFileSync(path, 'utf8').replace(/<!-- @([\w-]+) -->|\{\{([\w-]+)\}\}/g, (all, a, b) => {
+  // <!-- @if name --> this <!-- @else --> that <!-- @end -->, innermost first, so that they nest
+  const when = { open, experimental: open && release.status === STATUS.EXPERIMENTAL };
+  const block = /<!-- @if (\w+) -->((?:(?!<!-- @if )[\s\S])*?)(?:<!-- @else -->((?:(?!<!-- @if )[\s\S])*?))?<!-- @end -->/;
+  let chosen = readFileSync(path, 'utf8');
+  while (block.test(chosen)) chosen = chosen.replace(block, (all, name, yes, no = '') => {
+    if (!(name in when)) fail(`${page}: unknown condition ${name}`);
+    return when[name] ? yes : no;
+  });
+  const text = chosen.replace(/<!-- @([\w-]+) -->|\{\{([\w-]+)\}\}/g, (all, a, b) => {
     const value = fill[a ?? b];
     if (value === undefined) fail(`${page}: unknown marker ${all}`);
     return value;
@@ -100,6 +116,8 @@ if (open) {
   if (!existsSync(file)) fail(`${file} is missing`);
   const data = readFileSync(file);
   if (data.length !== fw.bytes || sha(data) !== fw.sha256) fail(`${fw.filename} does not match site/release.json`);
+  await loadFM1Web().prepare(metaFor(fw, release.version, data))
+    .catch(error => fail(`${fw.filename} failed M-VAVE's package checks: ${error.message}`));
   mkdirSync(join(out, 'installer/firmware'));
   cpSync(file, join(out, 'installer/firmware', fw.filename));
   cpSync(join(root, 'site/installer/driver.js'), join(out, 'installer/driver.js'));

@@ -21,7 +21,7 @@ pocket synthesizer, through M-VAVE's open firmware SDK
 | Pre-flash audit | done ([PRE-FLASH-AUDIT.md](PRE-FLASH-AUDIT.md)); first-test procedure: [FIRST-HARDWARE-TEST.md](FIRST-HARDWARE-TEST.md) |
 | FM-1 firmware, CLATTER Pocket **beside** the stock instrument (HOME + ARP) | compiles, links, passes the checks, but is 53,671 bytes too large for the flash layout |
 | On the device | **nothing has run on hardware** |
-| Website | `site/`, for GitHub Pages: browser demo, tested in Chromium and Chrome; hardware installation **off** until a release is verified ([docs/WEBSITE.md](docs/WEBSITE.md)) |
+| Website | <https://clickysteve.github.io/clatter-pocket/>: browser demo, and a working installer for the UNVERIFIED experimental release ([docs/WEBSITE.md](docs/WEBSITE.md)). The install path has been tested against a simulated device only |
 | Sequencer and generator | 16 steps, seven tracks with notes, CLATTER's styles, whole-pattern and one-track generation, mutation; **tested in the FM-1 emulator** ([docs/POCKET-SEQUENCER.md](docs/POCKET-SEQUENCER.md)) |
 | Playing it | DRUM and PITCH keyboards, live and step recording, 16 kits and on-device kit generation from LXR parameters, GLOBAL settings; **tested in the FM-1 emulator** ([docs/POCKET-CONTROLS.md](docs/POCKET-CONTROLS.md)) |
 | Saving | 12 kits and 12 patterns in user Flash, written only to sectors checked blank or its own; **tested in the FM-1 emulator, not on a device** ([docs/POCKET-STORAGE.md](docs/POCKET-STORAGE.md)) |

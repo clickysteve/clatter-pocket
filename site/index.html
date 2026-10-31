@@ -32,7 +32,7 @@
   <p class="lede">Seven voices of authentic LXR drum synthesis. Generative kits, evolving rhythms, live recording and melodic percussion, running directly on the M-VAVE FM-1.</p>
   <div class="cta">
     <a class="button primary" href="demo/">TRY IN BROWSER</a>
-    <a class="button" href="#install">INSTALL FIRMWARE</a>
+    <!-- @if open --><a class="button" href="installer/">{{install-label}}</a><!-- @else --><a class="button" href="#install">INSTALL FIRMWARE</a><!-- @end -->
     <a class="link" href="https://github.com/clickysteve/clatter-pocket">VIEW SOURCE ON GITHUB ↗</a>
   </div>
   <figure class="hero-panel">
@@ -135,34 +135,41 @@
 
 <section id="install" aria-labelledby="h-install">
   <h2 id="h-install" class="section"><span>05</span> Install</h2>
-  <div class="notice" role="status">
+  <!-- @if experimental --><div class="notice" role="status">
+    <p class="notice-head">EXPERIMENTAL FIRMWARE</p>
+    <p class="notice-body">CLATTER Pocket has passed emulator testing but has not yet been verified on physical hardware.</p>
+    <p>Installing it replaces the FM-1’s stock instrument firmware. There is a risk of installation failure, loss of settings or requiring firmware recovery.</p>
+    <p class="cta"><a class="button primary" href="installer/">{{install-label}}</a></p>
+  </div><!-- @else --><!-- @if open --><div class="notice" role="status">
+    <p class="notice-head">{{status}}</p>
+    <p class="notice-body">Firmware {{version}} has been tested on a physical FM-1.</p>
+    <p class="cta"><a class="button primary" href="installer/">{{install-label}}</a></p>
+  </div><!-- @else --><div class="notice" role="status">
     <p class="notice-head">{{status}}</p>
     <p class="notice-body">{{not-available}}</p>
-    <p>Firmware {{version}} has passed its emulator and host tests, but those cannot show how it behaves on a device: its first run on real hardware has not happened. There is nothing to install here yet.</p>
-  </div>
+    <p>Firmware {{version}} has passed its emulator and host tests. There is nothing to install here yet.</p>
+    <p class="cta"><a class="button" href="installer/">OPEN THE INSTALLER</a></p>
+  </div><!-- @end --><!-- @end -->
   <div class="columns">
     <div>
-      <h3>How it will work</h3>
-      <p>The FM-1 updates over <b>USB-MIDI SysEx</b>, not WebUSB. When a verified release exists, this site will run M-VAVE's own update code, unchanged:</p>
+      <h3>How it works</h3>
+      <p>The FM-1 updates over <b>USB-MIDI SysEx</b>, not WebUSB. The installer runs M-VAVE's own update code, unchanged, in Chrome or Edge on a computer:</p>
       <ol class="plain">
-        <li>Connect the FM-1 by USB.</li>
-        <li>Open this site in Chrome or Edge on a computer.</li>
-        <li>Connect, and allow MIDI with SysEx.</li>
-        <li>The page checks the device and the prerequisites.</li>
-        <li>Review the version, the checksum and the warnings.</li>
-        <li>Install.</li>
-        <li>Keep it connected until the FM-1 restarts and reports the new build.</li>
+        <li>Connect the FM-1 by USB, and allow MIDI with SysEx.</li>
+        <li>The page checks the device and the package.</li>
+        <li>Review the version, the checksum and the warning, and confirm.</li>
+        <li>Install, and keep it connected.</li>
+        <li>It finishes when the FM-1 restarts and reports this exact build.</li>
       </ol>
-      <p><a class="button" href="installer/">OPEN THE INSTALLER</a></p>
     </div>
     <div>
-      <h3>What it will need</h3>
+      <h3>What it needs</h3>
       <ul class="plain">
-        <li>An FM-1 running official fm1_open firmware. The updater will not go over any other firmware: from V15, install official Open with M-VAVE's workbench first.</li>
+        <li>An FM-1 running official fm1_open firmware. The updater will not go over any other firmware: from M-VAVE's stock firmware, install official Open with M-VAVE's workbench first.</li>
         <li>Your projects, samples and voices backed up first with <a href="https://open.m-vave.com/fm1-workbench">M-VAVE's workbench</a>. That backup is not available while CLATTER Pocket is installed.</li>
         <li>A USB data cable, with other MIDI software closed.</li>
       </ul>
-      <p><a href="https://github.com/clickysteve/clatter-pocket/blob/main/FIRST-HARDWARE-TEST.md">FIRST-HARDWARE-TEST.md</a> is the procedure the first installation will follow.</p>
+      <p><a href="https://github.com/clickysteve/clatter-pocket/blob/main/FIRST-HARDWARE-TEST.md">FIRST-HARDWARE-TEST.md</a> is the procedure for the first installation.</p>
     </div>
   </div>
 </section>
@@ -199,7 +206,7 @@
     <details><summary>Can I try it without hardware?</summary>
       <p>Yes. <a href="demo/">The demo</a> runs the firmware in the FM-1 emulator, in your browser.</p></details>
     <details><summary>Is installation currently safe?</summary>
-      <p><b>No, not yet.</b> The firmware has never run on a physical FM-1, so its safety is unknown, and this site will not install it. A firmware that does not start could need recovery tools, or M-VAVE's help.</p></details>
+      <!-- @if experimental --><p><b>It is unproven.</b> The firmware has never run on a physical FM-1, so its safety is unknown. The installer keeps M-VAVE's compatibility and integrity checks, but those cannot show how the firmware behaves on a device. Install it only if you accept that a firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @else --><p><b>No, not yet.</b> The firmware has never run on a physical FM-1, so its safety is unknown, and this site will not install it. A firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @end --></details>
   </div>
 </section>
 
@@ -210,7 +217,7 @@
     <thead><tr><th scope="col">Build</th><th scope="col">What it is</th><th scope="col">Where</th></tr></thead>
     <tbody>
       <tr><th scope="row">Emulator build</th><td>Firmware {{emu-version}}, commit <code>{{emu-commit}}</code>. Tested in the emulator. For the demo only.</td><td><a href="demo/">Runs in the demo</a></td></tr>
-      <tr><th scope="row">Experimental firmware</th><td>Built from source by you. Unverified, and not safe to assume flashable.</td><td><a href="https://github.com/clickysteve/clatter-pocket/blob/main/BUILDING.md">BUILDING.md</a>. Not published here</td></tr>
+      <!-- @if experimental --><tr><th scope="row">Experimental firmware</th><td>Firmware {{version}}, commit <code>{{package-commit}}</code>. The same package as the emulator build. Unverified: it has passed emulator testing, not a device.</td><td><a href="installer/">The installer</a></td></tr><!-- @else --><tr><th scope="row">Experimental firmware</th><td>Built from source by you. Unverified, and not safe to assume flashable.</td><td><a href="https://github.com/clickysteve/clatter-pocket/blob/main/BUILDING.md">BUILDING.md</a>. Not published here</td></tr><!-- @end -->
       <tr><th scope="row">Hardware-verified release</th><td>A build tested on a device, end to end, with the way back tested too.</td><td><b>None yet</b></td></tr>
     </tbody>
   </table>

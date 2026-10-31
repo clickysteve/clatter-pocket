@@ -18,111 +18,139 @@ const script = src => new Promise((resolve, reject) => {
 export const packageMeta = release => ({
   schema: 1, product: release.firmware.product, profile: 'dx7', family: release.firmware.family,
   release_version: release.version, build_id: release.firmware.buildId, sha256: release.firmware.sha256,
-  bytes: release.firmware.bytes, loader_sha256: release.firmware.loaderSha256, hardware_validated: true,
+  bytes: release.firmware.bytes, loader_sha256: release.firmware.loaderSha256,
+  hardware_validated: release.status === 'hardware-verified',
   url: `firmware/${release.firmware.filename}`,
 });
 
-/** One device conversation. `ui` is { log(text), phase(text, percent), ready(ok) }. */
+export const NOT_OPEN =
+  "This FM-1 is not running official fm1_open firmware, so nothing was installed. Install official Open with M-VAVE's workbench first, check that it works, then come back here.";
+
+/**
+ * One device conversation, from Connect to the end of an install.
+ * States: idle, connecting, ready, blocked, installing, done, failed.
+ * `ui` is { state(name, text), log(text), phase(text, percent) }.
+ */
 export class Session {
-  constructor(FM1Web, access, pkg, ui, translate = String) {
+  constructor(FM1Web, access, pkg, ui, translate = String, timing = {}) {
     this.t = translate;
     this.ui = ui;
-    this.updater = new FM1Web.Updater(access, pkg, (phase, percent) => ui.phase(this.t(phase), percent));
-    this.ok = false;
+    this.updater = new FM1Web.Updater(access, pkg, (phase, percent) => ui.phase(this.t(phase), percent), timing);
+    this.state = 'idle';
+  }
+
+  go(state, text) {
+    this.state = state;
+    this.ui.log(text);
+    this.ui.state(state, text);
   }
 
   async connect() {
-    this.ok = false;
-    const result = await this.updater.connect({ force: false });
-    this.ui.log(`Connected: ${result.identity}`);
-    if (result.migration || result.legacy) {
-      this.ui.log("Not installing: this FM-1 does not run fm1_open firmware. Install M-VAVE's official Open firmware with the official workbench first.");
-    } else if (result.same) {
-      this.ui.log('This build is already installed.');
-    } else if (result.resume) {
-      this.ui.log('The FM-1 is in its update loader: Install resumes this package.');
-      this.ok = true;
-    } else {
-      this.ui.log(`Ready to install over ${result.identity} (build ${String(result.current).slice(0, 16)}).`);
-      this.ok = true;
+    this.go('connecting', 'Connecting…');
+    let result;
+    try {
+      result = await this.updater.connect({ force: false });
+    } catch (error) {
+      this.go('failed', `Connect failed: ${this.t(error.message)}`);
+      return false;
     }
-    this.ui.ready(this.ok);
-    return this.ok;
+    this.ui.log(`Connected: ${result.identity}`);
+    if (result.migration || result.legacy) this.go('blocked', `${NOT_OPEN} It reports ${result.identity}.`);
+    else if (result.same) this.go('blocked', 'This build is already installed.');
+    else if (result.resume) this.go('ready', 'The FM-1 is in its update loader: Install resumes this package.');
+    else this.go('ready', `Ready to install over ${result.identity} (build ${String(result.current).slice(0, 16)}).`);
+    if (this.state === 'blocked') await this.updater.disconnect().catch(() => {});
+    return this.state === 'ready';
   }
 
   async install() {
-    if (!this.ok) throw new Error('No device is ready.');
-    await this.updater.install({ force: false });
-    this.ok = false;
-    this.ui.ready(false);
+    if (this.state !== 'ready') throw new Error('No device is ready.');
+    this.go('installing', 'Installing. Do not unplug the FM-1.');
+    try {
+      await this.updater.install({ force: false });
+    } catch (error) {
+      this.go('failed', `Install did not finish: ${this.t(error.message)}`);
+      return false;
+    }
+    this.go('done', 'Installed: the FM-1 restarted and reports this build.');
+    return true;
   }
 }
 
 export async function start({ release, support, $ }) {
-  await script('I18n.js');
-  await script('WebUpdate.js');
-  const t = text => (globalThis.FM1I18n ? globalThis.FM1I18n.t(String(text)) : String(text));
-  const logLine = text => { $('log').hidden = false; $('log').textContent += `${t(text)}\n`; };
-
-  const fail = text => { $('notice-head').textContent = 'INSTALLATION STOPPED'; $('notice-body').textContent = text; };
-  let pkg;
+  const stopped = text => {
+    $('package-state').textContent = text;
+    $('package-state').classList.add('stopped');
+  };
   try {
-    pkg = await globalThis.FM1Web.prepare(packageMeta(release));
+    await script('I18n.js');
+    await script('WebUpdate.js');
   } catch (error) {
-    fail(`The package failed its checks, so nothing can be installed: ${t(error.message)}`);
+    stopped(`The update code could not load, so nothing can be installed: ${error.message}`);
     return;
   }
+  const FM1Web = globalThis.FM1Web;
+  const t = text => (globalThis.FM1I18n ? globalThis.FM1I18n.t(String(text)) : String(text));
 
-  let session = null, busy = false, writing = false;
+  let pkg;
+  try {
+    pkg = await FM1Web.prepare(packageMeta(release));
+  } catch (error) {
+    stopped(`The package failed its checks, so nothing can be installed: ${t(error.message)}`);
+    return;
+  }
+  $('package-state').textContent = 'Package verified: SHA-256, format, update identity and loader.';
+
+  let session = null, busy = false;
   const buttons = () => {
+    const state = session?.state ?? 'idle';
+    const ready = state === 'ready';
+    busy = state === 'connecting' || state === 'installing';
     $('connect').disabled = busy || !support.ok;
-    $('backup').disabled = busy || !session?.ok;
-    $('install').disabled = busy || !session?.ok || !$('backup').checked;
+    $('confirm').disabled = busy || !ready;
+    if (!ready) $('confirm').checked = false;
+    $('install').disabled = busy || !ready || !$('confirm').checked;
   };
   const ui = {
-    log: logLine,
+    log(text) { $('log').hidden = false; $('log').textContent += `${t(text)}\n`; },
     phase(text, percent) {
       $('progress').hidden = false;
       $('phase').textContent = percent === undefined ? text : `${text} ${percent} %`;
       if (percent !== undefined) $('bar').style.width = `${percent}%`;
     },
-    ready(ok) { $('device-state').textContent = ok ? 'Ready.' : 'Not ready: see the log below.'; buttons(); },
+    state(name, text) {
+      $('device-state').textContent = text;
+      $('device-state').dataset.state = name;
+      $('after-failure').hidden = name !== 'failed';
+      $('after-done').hidden = name !== 'done';
+      buttons();
+    },
   };
 
-  $('notice-head').textContent = 'READY TO CONNECT';
-  $('notice-body').textContent = `Package verified: ${release.firmware.filename}.`;
-  $('notice-detail').textContent = 'Read each step before you start. Keep the FM-1 connected and powered until this page says it has finished.';
-  $('strip-status').nextElementSibling.textContent = 'Hardware-verified release.';
-  $('fact-package').textContent = `${release.firmware.filename}, ${release.firmware.bytes} bytes`;
-  $('fact-sha').firstElementChild.textContent = release.firmware.sha256;
-  $('why').hidden = true;
-  addEventListener('beforeunload', event => { if (writing) { event.preventDefault(); event.returnValue = ''; } });
-  $('backup').addEventListener('change', buttons);
+  addEventListener('beforeunload', event => {
+    if (session?.state === 'installing') { event.preventDefault(); event.returnValue = ''; }
+  });
+  $('confirm').addEventListener('change', buttons);
 
   $('connect').addEventListener('click', async () => {
-    busy = true; buttons();
     try {
       if (!navigator.requestMIDIAccess) throw new Error('This browser has no Web MIDI: use Chrome or Edge on a computer.');
       const access = await navigator.requestMIDIAccess({ sysex: true });
       if (!access.sysexEnabled) throw new Error('Allow MIDI SysEx for this page.');
-      if (session) await session.updater.disconnect();
-      session = new Session(globalThis.FM1Web, access, pkg, ui, t);
+      await session?.updater.disconnect().catch(() => {});
+      session = new Session(FM1Web, access, pkg, ui, t);
       await session.connect();
     } catch (error) {
-      logLine(`Connect failed: ${t(error.message)}`);
-    } finally { busy = false; buttons(); }
+      session = null;
+      ui.state('failed', `Connect failed: ${t(error.message)}`);
+    }
+    buttons();
   });
 
   $('install').addEventListener('click', async () => {
-    if (!confirm(`Install CLATTER Pocket ${release.version}? Keep the FM-1 connected and powered until the page says it has finished.`)) return;
-    busy = true; writing = true; buttons();
-    try {
-      await session.install();
-      logLine('Installed and verified: the FM-1 reports this build.');
-    } catch (error) {
-      logLine(`Install did not finish: ${t(error.message)}`);
-      logLine('Keep this page open; reconnect the same FM-1 and use Connect, then Install, to resume.');
-    } finally { busy = false; writing = false; buttons(); }
+    if (session?.state !== 'ready' || !$('confirm').checked) return;
+    await session.install();
+    buttons();
   });
   buttons();
 }
