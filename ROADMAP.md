@@ -70,6 +70,7 @@ checked as far as possible without the toolchain or device), **open**.
   in the same four sectors, after their own audit (docs/POCKET-STORAGE.md)
 - **done (emulator; not on hardware)** three banks of nine sounds with per-hit variations, one undo and
   redo of kits and patterns, a dark interface (docs/POCKET-CONTROLS.md)
+- **done (emulator; not on hardware)** the keyboard as the pattern on SEQ: steps on the white keys, pages on the black, held steps, key lamps
 - **done (emulator; not on hardware)** DRUM and PITCH keyboards, step and live recording with a note
   per step, GLOBAL settings (docs/POCKET-CONTROLS.md)
 - **open** more than one pattern playing in turn, chaining, track lengths

@@ -35,7 +35,7 @@ enum {
 	POCKET_ENC_SELECT, POCKET_ENC_ALGORITHM, POCKET_ENC_KNOB1, POCKET_ENC_KNOB2, POCKET_ENC_KNOB3,
 	POCKET_ENC_KNOB4, POCKET_ENC_PRESETS
 };
-#define POCKET_FW_VERSION "0.6.0 UNVERIFIED"
+#define POCKET_FW_VERSION "0.7.0 UNVERIFIED"
 
 struct pocket_panel_input {
 	uint32_t keys;                      /* held note keys */
@@ -67,6 +67,9 @@ enum { POCKET_PAGE_MAIN, POCKET_PAGE_PATTERN, POCKET_PAGE_SOUND, POCKET_PAGE_MIX
 enum { POCKET_KEYS_DRUM, POCKET_KEYS_PITCH };
 #define POCKET_BANK_KEYS 9
 #define POCKET_KEY_LOWEST 53    /* key 0 is F3; C4 (60) sounds a voice's programmed pitch */
+/* On PATTERN the keyboard is the pattern: 16 white keys, a page of the selected track's steps, and
+ * the first four black keys, the pages. REC gives it back to play and record. */
+#define POCKET_STEP_HOLD_MS 300U /* a key down this long, or a knob turned, is a hold: no toggle */
 #define POCKET_OCTAVE_MIN (-3)
 #define POCKET_OCTAVE_MAX 3
 /* Recording while playing: a hit goes to the step sounding, or the nearest. */
@@ -144,6 +147,9 @@ struct pocket_panel {
 	uint16_t track_takes;               /* one-track patterns drawn: each one differs */
 	int16_t shown_position;             /* what the screen and the cells last showed */
 	uint32_t shown_steps;
+	/* The keys as steps. Last: offsets above fit the byte tables of pocket_panel.c. */
+	uint8_t step_held;                  /* white key last pressed, still down, + 1, or 0 */
+	uint16_t step_tap_ms[POCKET_SEQ_STEPS]; /* per white key: time left for its release to be a tap */
 };
 
 /* The screen is drawn in bands of POCKET_BAND_ROWS rows of POCKET_SCREEN_W pixels, RGB565. */
@@ -167,8 +173,10 @@ int pocket_panel_param(const struct pocket_panel* panel, int c);
 /* A note-on from MIDI, channel 0-15: the same path as the keys, so it plays the same way in DRUM
  * and PITCH and is recorded. Returns 1 if it played a voice. */
 int pocket_panel_midi(struct pocket_panel* panel, unsigned channel, unsigned note, unsigned velocity);
-/* The buttons to light (bit per POCKET_BTN_*): PLAY, REC, SCL in PITCH, SAVE on a locked track. */
+/* The buttons to light (bit per POCKET_BTN_*): PLAY, REC, SCL in PITCH, SAVE on a locked track, SEQ on PATTERN. */
 uint32_t pocket_panel_leds(const struct pocket_panel* panel);
+/* The note keys to light (bit per key, F3 up), the steps of the page and the page, on PATTERN. */
+uint32_t pocket_panel_key_leds(const struct pocket_panel* panel);
 /* Time passing: follows the sequencer, applies a kit a little at a time, ends indications. */
 void pocket_panel_tick(struct pocket_panel* panel, uint32_t elapsed_ms);
 /* New measurements: stores them, redraws what shows them, raises the overrun warning. */

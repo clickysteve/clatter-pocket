@@ -9,6 +9,7 @@
 // the playhead from the LCD's pixels, and a generated pattern is compared with the host's.
 // --wasm is the emulator's WebAssembly core (web/build.sh, or fm1_web.wasm from its site).
 // --stock is a negative control: a stock package must fail the identity check.
+// --only steps runs the keyboard as the pattern alone.
 // Writes a PNG of each screen to --out. Exit status 0 only if every check passed.
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -424,13 +425,17 @@ async function performance(m) {
   // ---- 4. SCL
   selectVoice(m, 1); // the low tom
   const pattern = m.grid().join();
+  m.tap(BUTTON.HOME, 90);
   m.tap(BUTTON.SCL, 60);
   shows(m, "KEYS: PITCH", "SCL: KEYS: PITCH");
   check(m.leds()[BUTTON.SCL] >= 0, "SCL's light is read");
   m.run(1400);
   shows(m, "KEYS: PITCH OCT 0", "the status line keeps the mode and octave");
-  check(m.grid().join() === pattern, "SCL leaves the pattern");
   m.png(`${out}/perf-3-pitch.png`);
+  m.tap(BUTTON.SEQ, 90);
+  m.run(200);
+  check(m.grid().join() === pattern, "SCL leaves the pattern");
+  m.tap(BUTTON.HOME, 90);
 
   // ---- 6, 8. one instrument chromatically, across octaves, in the emulated audio
   const voice = /VOICE (DRUM \d|SNARE|CYMBAL|CL HAT|OP HAT)/.exec(m.text())?.[1];
@@ -452,8 +457,9 @@ async function performance(m) {
   const c4again = m.pitchOf(NOTE(60));
   check(Math.abs(c4again / c4 - 1) < 0.02, `back at OCT 0 the pitch is the same: ${c4.toFixed(0)}, ${c4again.toFixed(0)}`, `${c4} ${c4again}`);
 
-  // ---- 7. REC, stopped: the insertion point
+  // ---- 7. REC, stopped: the insertion point. On PATTERN, REC gives the keys back
   m.tap(BUTTON.SCL, 90); // DRUM
+  m.tap(BUTTON.SEQ, 90);
   m.run(1400);
   m.tap(BUTTON.REC, 60);
   shows(m, "REC ON", "REC ON");
@@ -1173,9 +1179,315 @@ async function sequencer(m) {
   m.tap(BUTTON.HOME, 90);
 }
 
+// The keyboard as the pattern, on a machine of its own. Keys are named by the piano, F3 up.
+const WHITE = [0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26], BLACK = [1, 3, 5, 8];
+// Which lamps are on, over a stretch the firmware has had to show it. Levels are since the last look.
+function lamps(m, ms = 60) {
+  m.leds();
+  m.run(ms);
+  return [...m.leds()].map((v) => v > 0.02);
+}
+const row16 = (l) => WHITE.map((k) => (l[KEY(k)] ? "1" : "0")).join("");
+const pagesLit = (l) => BLACK.map((k) => (l[KEY(k)] ? "1" : "0")).join("");
+const hold = (m, id, ms = 400) => { m.x.fm1_key(id, 1); m.run(ms); };
+const release = (m, id) => { m.x.fm1_key(id, 0); m.run(120); };
+const undo = (m) => { m.chord(BUTTON.SAVE, BUTTON.OCTDN); m.run(200); };
+const redo = (m) => { m.chord(BUTTON.SAVE, BUTTON.OCTUP); m.run(200); };
+// After listenTo's press of PLAY: its release, seen, and a press to stop.
+const stop = (m) => { m.x.fm1_key(BUTTON.PLAY, 0); m.run(60); m.tap(BUTTON.PLAY); };
+
+async function stepKeyboard(pkg) {
+  const m = await new Machine().boot(pkg);
+  m.x.fm1_pot(1023);
+  m.run(3000);
+  const OFF = "0".repeat(STEPS);
+  check(row16(lamps(m)) === OFF && pagesLit(lamps(m)) === "0000", "MAIN: no key lamps");
+  m.tap(BUTTON.SEQ, 90);
+  m.run(300);
+  shows(m, "KEYS: STEPS", "SEQ: the keys are steps");
+  shows(m, "PATTERN");
+  check(lamps(m)[BUTTON.SEQ], "and SEQ is lit");
+
+  // ---- every lamp is the track's data, on every track; then the keys clear them
+  m.takePeak();
+  for (let t = 0; t < TRACKS; t++) {
+    selectVoice(m, t);
+    const row = m.grid()[t];
+    check(row16(lamps(m)) === row, `${VOICE[t]}: the lamps are its steps ${row}`, row16(lamps(m)));
+    for (let s = 0; s < STEPS; s++) if (row[s] === "1") m.tap(KEY(WHITE[s]), 40);
+    m.run(200);
+    check(m.grid()[t] === OFF, `${VOICE[t]}: tapped, its steps are off`, m.grid()[t]);
+    check(row16(lamps(m)) === OFF, "and so are the lamps");
+  }
+  check(m.grid().every((r) => r === OFF), "only each track's own keys did that", m.grid().join("\n"));
+  selectVoice(m, 0);
+  m.run(800);
+  m.takePeak();
+
+  // ---- 1. each white key, in order, its own step; nothing heard
+  for (let s = 0; s < STEPS; s++) {
+    m.tap(KEY(WHITE[s]), 40);
+    m.run(120);
+    const want = "1".repeat(s + 1) + "0".repeat(STEPS - s - 1);
+    check(m.grid()[0] === want, `white key ${s + 1} is step ${s + 1}`, m.grid()[0]);
+    check(row16(lamps(m)) === want, "and its lamp");
+    shows(m, `STEP ${s + 1}`, "and it is selected");
+  }
+  check(m.takePeak() < SILENT, "stepping on 16 keys makes no sound");
+  for (let s = 0; s < STEPS; s++) m.tap(KEY(WHITE[s]), 40);
+  m.run(200);
+  check(m.grid()[0] === OFF, "tapped again: off");
+  for (const k of [10, 13, 15, 17, 20, 22, 25]) m.tap(KEY(k), 40);
+  m.run(200);
+  check(m.grid().every((r) => r === OFF) && m.takePeak() < SILENT, "the other black keys do nothing");
+
+  // ---- 2. pages, and a pattern that is not lengthened by asking for them
+  check(pagesLit(lamps(m)) === "1000", "the first black key is lit", pagesLit(lamps(m)));
+  m.tap(KEY(BLACK[2]), 60);
+  shows(m, "PAST THE END", "a page past the end is refused, and says so");
+  shows(m, "PAGE 1/1", "and the pattern is no longer");
+  m.chordTurn(ENC.KNOB3, 3);
+  shows(m, "PAGE 1/4", "SAVE+KNOB3 lengthens it");
+  for (let p = 0; p < 4; p++) {
+    m.tap(KEY(BLACK[p]), 60);
+    m.run(200);
+    shows(m, `PAGE ${p + 1}/4`, `black key ${p + 1}: page ${p + 1}`);
+    check(pagesLit(lamps(m)) === "0000".slice(0, p) + "1" + "0000".slice(p + 1), "and only its lamp");
+    m.tap(KEY(WHITE[0]), 40); m.tap(KEY(WHITE[15]), 40);
+    m.run(200);
+    shows(m, `STEP${16 * p + 16}/64`, "the last key is the page's last step");
+    check(m.grid()[0] === "1" + "0".repeat(14) + "1", "first and last key of the page", m.grid()[0]);
+    check(row16(lamps(m)) === "1" + "0".repeat(14) + "1", "and their lamps");
+    m.tap(KEY(WHITE[0]), 40); m.tap(KEY(WHITE[15]), 40);
+    m.run(200);
+    check(m.grid()[0] === OFF, "off again");
+  }
+  m.tap(BUTTON.OCTUP, 60);
+  m.run(200);
+  shows(m, "PAGE 1/4", "OCT+ goes round the pattern, no further");
+
+  // ---- 5. hold: nothing toggles, all four knobs reach the step, and it is one undo
+  m.tap(KEY(BLACK[1]), 60);
+  m.tap(KEY(WHITE[6]), 40);   // step 23
+  m.run(200);
+  hold(m, KEY(WHITE[6]));
+  shows(m, "STEP 23 VEL 127", "held, the line is the step");
+  shows(m, "K1 VEL K2 NOTE K3 COND K4 VAR", "and the footer the knobs");
+  m.turn(ENC.KNOB1, -4); m.turn(ENC.KNOB3, 1);
+  m.run(150);
+  shows(m, "STEP 23 VEL 111 COND 1:2", "KNOB1 and KNOB3, shown");
+  m.png(`${out}/steps-hold.png`);
+  m.turn(ENC.KNOB2, 5);
+  m.run(150);
+  shows(m, "N65", "KNOB2: its pitch");
+  m.run(1800); // longer than a knob's undo merges
+  m.turn(ENC.KNOB4, 2);
+  m.run(150);
+  shows(m, "STEP 23 VEL 111 B COND 1:2", "KNOB4: a variation, for the note");
+  release(m, KEY(WHITE[6]));
+  check(m.grid()[0][6] === "1", "held and turned, it is still on", m.grid()[0]);
+  hold(m, KEY(WHITE[6]));
+  release(m, KEY(WHITE[6]));
+  check(m.grid()[0][6] === "1", "held and not turned, the same");
+  hold(m, KEY(WHITE[7]));
+  m.turn(ENC.KNOB1, 3);
+  shows(m, "STEP 24 OFF", "a step that is off says so");
+  release(m, KEY(WHITE[7]));
+  check(m.grid()[0][7] === "0", "and stays off", m.grid()[0]);
+  m.turn(ENC.KNOB2, 1); m.run(100);   // no key: the tempo, as ever
+  m.turn(ENC.KNOB2, -1);
+  m.run(200);
+
+  // ---- 11. undo: a hold is one, a toggle is one
+  m.chord(BUTTON.SAVE, BUTTON.OCTDN); m.run(300);
+  shows(m, "UNDO");
+  hold(m, KEY(WHITE[6]));
+  shows(m, "STEP 23 VEL 127", "one undo takes the whole hold back");
+  check(!/STEP 23 VEL 127 /.test(m.text()), "note, variation and condition with it", m.text());
+  release(m, KEY(WHITE[6]));
+  check(m.grid()[0][6] === "1", "and the step is on");
+  redo(m);
+  hold(m, KEY(WHITE[6]));
+  shows(m, "STEP 23 VEL 111 B COND 1:2", "redo brings all of it");
+  release(m, KEY(WHITE[6]));
+  undo(m);
+  undo(m);
+  check(m.grid()[0][6] === "0", "the toggle is an undo of its own", m.grid()[0]);
+  redo(m);
+  check(m.grid()[0][6] === "1", "and comes back");
+  undo(m);
+
+  // ---- 6. tracks: the page stays, and edits are the track's
+  selectVoice(m, 3);
+  shows(m, "PAGE 2/4", "SELECT stays on the page");
+  m.tap(KEY(WHITE[2]), 40);
+  m.run(200);
+  check(m.grid()[3][2] === "1" && m.grid()[0][2] === "0", "the selected track's step", m.grid().join("\n"));
+  check(row16(lamps(m))[2] === "1", "lit");
+  selectVoice(m, 0);
+  check(row16(lamps(m))[2] === "0", "and not the kick's");
+  selectVoice(m, 3);
+  m.tap(KEY(WHITE[2]), 40);
+  selectVoice(m, 0);
+  m.run(200);
+
+  // ---- 7, 9. what is on the keys is what plays, at each length, and the lamps go with it
+  m.tap(KEY(BLACK[0]), 60);
+  m.turn(ENC.KNOB2, 120); // 240 BPM
+  m.run(200);
+  const sixteenth = (RATE * 15) / 240;
+  for (let pages = 1; pages <= 4; pages++) {
+    m.chordTurn(ENC.KNOB3, -3);
+    if (pages > 1) m.chordTurn(ENC.KNOB3, pages - 1); // no detents would be a tap of SAVE
+    m.tap(KEY(WHITE[8]), 40);          // step 9, far enough from the next that both are heard
+    m.tap(KEY(BLACK[pages - 1]), 60);
+    m.tap(KEY(WHITE[15]), 40);         // and the last of the last page
+    m.run(600);
+    shows(m, `PAGE ${pages}/${pages}`, `${16 * pages} steps`);
+    const passes = pages < 3 ? 3 : 2, length = 16 * pages;
+    const o = m.listenTo(() => m.x.fm1_key(BUTTON.PLAY, 1), ((length * passes * 15000) / 240) + 120);
+    stop(m);
+    m.run(700);
+    const want = [];
+    for (let i = 0; i < passes; i++) want.push((i * length + 8) * sixteenth, (i * length + length - 1) * sixteenth);
+    const first = o[0] ?? 0;
+    check(o.length === want.length && o.every((v, i) => near(v - first, want[i] - want[0], 200)), `${length} steps: the keys' two steps, heard where they are, ${passes} passes`, `${o.map((v) => v - first)}\n${want.map((v) => v - want[0])}`);
+    m.tap(KEY(WHITE[15]), 40);
+    m.tap(KEY(BLACK[0]), 60);
+    m.tap(KEY(WHITE[8]), 40);
+    m.run(300);
+    check(m.grid()[0] === OFF, "cleared");
+  }
+
+  // ---- 5, 8. a condition set from a held key, heard
+  m.chordTurn(ENC.KNOB3, -3);
+  m.tap(KEY(WHITE[0]), 40);
+  hold(m, KEY(WHITE[0]), 100);
+  m.turn(ENC.KNOB3, 1);
+  release(m, KEY(WHITE[0]));
+  m.run(200);
+  const firsts = m.listenTo(() => m.x.fm1_key(BUTTON.PLAY, 1), 3900); // four passes of a second
+  check(firsts.length === 2 && near(firsts[1] - firsts[0], 2 * 16 * sixteenth, 200), `1:2 from a held key: every other pass (${firsts.length} hits)`, firsts.join());
+  stop(m);
+  undo(m); // the condition
+  undo(m); // the step
+  check(m.grid()[0] === OFF, "undone, step and all", m.grid()[0]);
+
+  // ---- 3, 5, 7. all of it while the pattern plays: edits land, pages turn, the lamps keep up
+  m.chordTurn(ENC.KNOB3, 3);
+  m.turn(ENC.KNOB2, -120); // 120 BPM
+  m.run(100);
+  m.tap(BUTTON.PLAY);
+  m.run(200);
+  shows(m, "PAGE 1/4");
+  const seen = new Set();
+  let onIt = 0, looks = 0;
+  for (let i = 0; i < 60; i++) { // a look takes most of a step, so some are passed over. Nothing is on: the only lamp is the playhead's
+    const row = row16(lamps(m, 25)), at = m.playhead();
+    if (at < 0) continue;
+    seen.add(at);
+    looks++;
+    if (row[at] === "1") onIt++;
+  }
+  check(seen.size >= 12 && onIt > looks * 0.9, `the playhead's lamp runs along the keys: ${seen.size} steps, on it ${onIt} of ${looks} looks`);
+  m.takePeak();
+  for (let p = 0; p < 4; p++) {
+    m.tap(KEY(BLACK[p]), 40);
+    m.tap(KEY(WHITE[p + 4]), 30);
+    m.run(100);
+    shows(m, `PAGE ${p + 1}/4`, `page ${p + 1} while playing`);
+    check(m.grid()[0][p + 4] === "1", "a toggle while playing");
+  }
+  shows(m, "PLAY", "the pattern never stopped");
+  let flashed = new Set();
+  for (let i = 0; i < 240; i++) { flashed.add(pagesLit(lamps(m, 20))); }
+  check(flashed.size >= 2, `the page playing flashes on its black key (${[...flashed].join(" ")})`);
+  // what was toggled on the run is what plays, on time: steps 5, 22, 39 and 56 of 64
+  m.tap(BUTTON.PLAY);
+  m.run(900);
+  const beat = m.listenTo(() => m.x.fm1_key(BUTTON.PLAY, 1), 7900);
+  const seventeen = 17 * (RATE * 15) / 120;
+  check(beat.length === 4 && gaps(beat).every((g) => near(g, seventeen, 64)), `the four steps, 17 steps apart at 120 BPM: ${gaps(beat).join(" ")} (${seventeen} exact)`, beat.join());
+  stop(m);
+  m.run(300);
+
+  // ---- 13. changing mode with keys down: nothing sounds, sticks or toggles
+  const before = m.grid()[0];
+  m.run(800);
+  m.takePeak();
+  hold(m, KEY(WHITE[8]), 100);
+  m.tap(BUTTON.HOME, 90);
+  release(m, KEY(WHITE[8]));
+  check(m.takePeak() < SILENT, "a step key held out of SEQ does not sound");
+  check(row16(lamps(m)) === OFF, "the lamps go with SEQ");
+  shows(m, "KEYS: DRUM", "the status line says so");
+  m.tap(BUTTON.SEQ, 90);
+  m.run(300);
+  check(m.grid()[0] === before, "and it toggled nothing", m.grid()[0]);
+  check(m.listen(600).length === 0 && m.takePeak() < SILENT, "nothing is left sounding");
+  m.tap(BUTTON.HOME, 90);
+  m.run(100);
+  m.takePeak();
+  hold(m, KEY(0), 100);
+  check(m.takePeak() > LOUD / 5, "on MAIN a key sounds");
+  m.tap(BUTTON.SEQ, 90);
+  release(m, KEY(0));
+  m.run(200);
+  check(m.grid()[0] === before, "held into SEQ, it is no step", m.grid()[0]);
+  m.run(1600);
+  m.takePeak();
+  m.run(100);
+  check(m.takePeak() < SILENT * 40, "and rings out as a hit does");
+
+  // ---- 10. the performance modes, and REC, are as they were
+  m.tap(BUTTON.REC, 60);
+  shows(m, "REC ON", "REC on PATTERN");
+  check(row16(lamps(m)) === OFF, "REC: the lamps give the keys back");
+  m.run(100);
+  m.takePeak();
+  m.tap(KEY(0), 60);
+  check(m.takePeak() > LOUD / 5, "with REC a key sounds");
+  check(m.grid()[0] !== before, "and is recorded", m.grid()[0]);
+  m.tap(BUTTON.REC, 60);
+  m.run(1400);
+  shows(m, "KEYS: STEPS", "REC off: the keys are steps");
+  m.tap(BUTTON.HOME, 90);
+  m.run(800);
+  for (const k of [0, 1, 26]) {
+    m.takePeak();
+    m.tap(KEY(k), 60);
+    check(m.takePeak() > LOUD / 5, `DRUM: key ${k + 1} sounds`);
+    m.run(400);
+  }
+  selectVoice(m, 1); // the low tom: a pitch to measure
+  m.tap(BUTTON.SCL, 60);
+  m.run(100);
+  const low = m.pitchOf(NOTE(60)), high = m.pitchOf(NOTE(72));
+  check(high / low > 1.8 && high / low < 2.2, `PITCH is chromatic: ${low.toFixed(0)} to ${high.toFixed(0)} Hz`);
+  m.tap(BUTTON.SCL, 60);
+  m.midi(0x99, 36, 100);
+  m.run(100);
+  check(m.takePeak() > LOUD / 5, "MIDI plays");
+
+  // ---- 12. the machine under all of it
+  systemPage(m);
+  m.run(800);
+  const sys = m.text();
+  check(/OVERRUNS +0\b/.test(sys) && /DROPPED +0\b/.test(sys), "no overruns or dropped events through the step keys", sys);
+  console.log(`     step keys: CPU mean ${/CPU MEAN +([\d.]+)%/.exec(sys)?.[1]} %, peak ${/CPU PEAK +([\d.]+)%/.exec(sys)?.[1]} %`);
+  m.tap(BUTTON.SEQ, 90);
+  m.run(300);
+  m.png(`${out}/steps-page.png`);
+}
+
 async function main() {
   const pkg = readFileSync(fwsc);
   console.log(`${fwsc} at ${MHZ} MHz, emulated`);
+  if (arg("--only") === "steps") {
+    await stepKeyboard(pkg);
+    console.log(`emulator: ${checks} checks, ${failures} failed`);
+    process.exit(failures ? 1 : 0);
+  }
 
   // ---- start-up
   let m = await new Machine().boot(pkg);
@@ -1257,7 +1569,7 @@ async function main() {
   systemPage(m);
   m.run(800);
   const first = m.text();
-  shows(m, "0.6.0 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
+  shows(m, "0.7.0 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
   const heap = /HEAP +(\d+) LINKED/.exec(first);
   check(heap && Number(heap[1]) >= 49152, `SYSTEM shows the heap (${heap?.[1]})`, first);
   const cpu = /CPU MEAN +([\d.]+)%/.exec(first), peak = /CPU PEAK +([\d.]+)%/.exec(first);
@@ -1273,6 +1585,7 @@ async function main() {
 
   // ---- a long run: the pattern playing, hits through it, no reset (the start screen would come back)
   let resets = 0;
+  m.tap(BUTTON.HOME, 90);
   m.tap(BUTTON.PLAY);
   for (let s = 0; s < 20; s++) {
     m.tap(KEY(12));
@@ -1291,6 +1604,7 @@ async function main() {
   m.tap(BUTTON.PLAY);
 
   await storage(pkg);
+  await stepKeyboard(pkg);
 
   // ---- SAFE MODE: HOME held at the start point
   m = await new Machine().boot(pkg);

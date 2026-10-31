@@ -294,6 +294,7 @@ static void test_sequencer(void)
 	CHECK(!memcmp(base.cell[0], pocket_seq_pattern()->cell[0], sizeof base.cell[0]), "GENERATE leaves a locked track");
 
 	/* MIDI and keys sound over the sequence */
+	press(&panel, BUTTON(HOME));
 	press(&panel, BUTTON(PLAY));
 	const uint32_t hits_before = panel.hits;
 	hit_key(&panel);
@@ -447,12 +448,12 @@ static void test_recording(void)
 	struct pocket_panel panel;
 	start_engine(&panel);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
-	press(&panel, BUTTON(SEQ));
 	clear_pattern();
 
 	/* off: the keys record nothing */
 	tap_keys(&panel, KEY_KICK);
 	CHECK(!pocket_seq_pattern()->cell[0][0], "REC off records nothing");
+	press(&panel, BUTTON(SEQ));
 	/* a toggle, shown, with a light */
 	press(&panel, BUTTON(REC));
 	CHECK(panel.recording && !strcmp(panel.notice, "REC ON"), "REC on: %s", panel.notice);
@@ -1426,6 +1427,316 @@ static void test_variations(void)
 	CHECK(!POCKET_CELL_VARIATION(pocket_seq_pattern()->cell[POCKET_TRIG_DRUM2][0]), "and no variation");
 }
 
+/* The keyboard as the pattern. Keys are named by their notes here, worked out from the piano and not
+ * from the panel's table, so that the two have to agree. */
+#define NOTE_KEY(n) ((n) - POCKET_KEY_LOWEST)
+static int nth_key(int n, int black)
+{
+	static const uint8_t blackKeys[12] = { 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0 };
+	for (int k = 0; k < POCKET_KEYS; k++)
+		if (blackKeys[(POCKET_KEY_LOWEST + k) % 12] == black && n-- == 0) return k;
+	return -1;
+}
+#define WHITE(n) (1u << nth_key(n, 0))
+#define BLACK(n) (1u << nth_key(n, 1))
+#define HOLD(keys, k1, k2, k3, k4) poll(&panel, keys, 0, 0, k1, k2, k3, k4, NULL)
+#define OFF() poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL)
+#define pattern pocket_seq_pattern() /* which of the two is playing changes with every commit */
+
+static void test_step_keys(void)
+{
+	struct pocket_panel panel;
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	clear_pattern();
+	CHECK(nth_key(15, 0) == 26 && nth_key(16, 0) == -1, "16 white keys, the last G5");
+	CHECK(nth_key(0, 1) == NOTE_KEY(54) && nth_key(1, 1) == NOTE_KEY(56) && nth_key(2, 1) == NOTE_KEY(58) && nth_key(3, 1) == NOTE_KEY(61), "F#3 G#3 A#3 C#4");
+	CHECK(!pocket_panel_key_leds(&panel), "no key lamps on MAIN");
+	CHECK(!(pocket_panel_leds(&panel) & BUTTON(SEQ)), "nor SEQ's");
+
+	press(&panel, BUTTON(SEQ));
+	CHECK(pocket_panel_leds(&panel) & BUTTON(SEQ), "SEQ is lit on PATTERN");
+
+	/* every white key, its own step, and nothing sounds */
+	panel.key_velocity = 99;
+	const uint32_t hits = panel.hits, triggers = pocket_seq_triggers();
+	for (int s = 0; s < POCKET_SEQ_STEPS; s++)
+	{
+		tap_keys(&panel, WHITE(s));
+		for (int i = 0; i < POCKET_SEQ_STEPS; i++)
+			CHECK(pattern->cell[POCKET_TRIG_DRUM1][i] == (i <= s ? POCKET_CELL(99, 0) : 0u), "white key %d, step %d: %x", s + 1, i + 1, pattern->cell[POCKET_TRIG_DRUM1][i]);
+		CHECK(panel.step == s, "and it is selected");
+		CHECK(pocket_panel_key_leds(&panel) & WHITE(s), "and its lamp is lit");
+	}
+	CHECK(panel.hits == hits && pocket_seq_triggers() == triggers && !panel.flash_ms[0], "stepping is silent");
+	CHECK(pocket_lxr_get_param(POCKET_PAR_VELOD1) >= 0 && render_peak(200) == 0, "really: the output is silent");
+	for (int s = POCKET_SEQ_STEPS - 1; s >= 0; s--) tap_keys(&panel, WHITE(s));
+	for (int s = 0; s < POCKET_SEQ_STEPS; s++) CHECK(!pattern->cell[POCKET_TRIG_DRUM1][s], "tapped again: off");
+	CHECK(!(pocket_panel_key_leds(&panel) & WHITE(3)), "and unlit");
+
+	/* the keys that are neither do nothing */
+	const uint32_t others = BLACK(4) | BLACK(5) | BLACK(6) | BLACK(7) | BLACK(8) | BLACK(9) | BLACK(10);
+	const unsigned step = panel.step;
+	tap_keys(&panel, others);
+	CHECK(panel.step == step && panel.hits == hits, "the other black keys do nothing");
+
+	/* a tap and a hold: a slow press, and a knob, are not taps, however short the knob's turn */
+	HOLD(WHITE(2), 0, 0, 0, 0);
+	CHECK(!pattern->cell[POCKET_TRIG_DRUM1][2], "the press itself changes no step");
+	CHECK(pocket_panel_key_leds(&panel) & WHITE(2), "but its lamp shows what the tap will do, at once");
+	pocket_panel_tick(&panel, POCKET_STEP_HOLD_MS - 1);
+	OFF();
+	CHECK(pattern->cell[POCKET_TRIG_DRUM1][2] == POCKET_CELL(99, 0), "a quick release is a tap");
+	HOLD(WHITE(2), 0, 0, 0, 0);
+	pocket_panel_tick(&panel, POCKET_STEP_HOLD_MS);
+	HOLD(WHITE(2), 0, 0, 0, 0);
+	CHECK(pocket_panel_key_leds(&panel) & WHITE(2), "a hold: the lamp is the step again");
+	OFF();
+	CHECK(pattern->cell[POCKET_TRIG_DRUM1][2] == POCKET_CELL(99, 0), "a hold does not toggle");
+
+	/* overlapping taps, as fast playing makes them: each is its own */
+	HOLD(WHITE(5), 0, 0, 0, 0);
+	pocket_panel_tick(&panel, 200);
+	HOLD(WHITE(5) | WHITE(6), 0, 0, 0, 0);
+	pocket_panel_tick(&panel, 90);
+	HOLD(WHITE(6), 0, 0, 0, 0);
+	pocket_panel_tick(&panel, 200);
+	OFF();
+	CHECK(pattern->cell[POCKET_TRIG_DRUM1][5] && pattern->cell[POCKET_TRIG_DRUM1][6], "overlapping taps both land");
+	tap_keys(&panel, WHITE(5));
+	tap_keys(&panel, WHITE(6));
+
+	/* held: the four knobs, on that step, all of them one undo, whichever way and however slowly */
+	HOLD(WHITE(2), 0, 0, 0, 0);
+	HOLD(WHITE(2), -2, 0, 0, 0);
+	CHECK(POCKET_CELL_VELOCITY(pattern->cell[POCKET_TRIG_DRUM1][2]) == 91, "KNOB1: velocity");
+	pocket_panel_tick(&panel, POCKET_MERGE_MS + 1);
+	HOLD(WHITE(2), 0, 3, 0, 0);
+	CHECK(POCKET_CELL_NOTE(pattern->cell[POCKET_TRIG_DRUM1][2]) == 63, "KNOB2: pitch");
+	HOLD(WHITE(2), 0, 0, 1, 0);
+	CHECK(POCKET_CELL_CONDITION(pattern->cell[POCKET_TRIG_DRUM1][2]) == POCKET_CONDITION_1_2, "KNOB3: condition");
+	HOLD(WHITE(2), 0, 0, 3, 0);
+	CHECK(POCKET_CELL_CONDITION(pattern->cell[POCKET_TRIG_DRUM1][2]) == POCKET_CONDITION_2_3, "the conditions in their order");
+	HOLD(WHITE(2), 0, 0, 0, 1);
+	CHECK(POCKET_CELL_VARIATION(pattern->cell[POCKET_TRIG_DRUM1][2]) == POCKET_VARIATION_A && !POCKET_CELL_NOTE(pattern->cell[POCKET_TRIG_DRUM1][2]), "KNOB4: a variation, in place of the note");
+	HOLD(WHITE(2), 0, 0, 0, 40);
+	CHECK(POCKET_CELL_VARIATION(pattern->cell[POCKET_TRIG_DRUM1][2]) == POCKET_VARIATION_LAST(POCKET_TRIG_DRUM1), "as far as the track has them");
+	HOLD(WHITE(2), 0, -1, 0, 0);
+	CHECK(POCKET_CELL_NOTE(pattern->cell[POCKET_TRIG_DRUM1][2]) == 59 && !POCKET_CELL_VARIATION(pattern->cell[POCKET_TRIG_DRUM1][2]), "a note in place of the variation");
+	HOLD(WHITE(2), 0, 1, 0, 0);
+	CHECK(!POCKET_CELL_TONE(pattern->cell[POCKET_TRIG_DRUM1][2]), "and at C4, the programmed pitch again");
+	HOLD(WHITE(2), -200, 0, 200, 0);
+	CHECK(POCKET_CELL_VELOCITY(pattern->cell[POCKET_TRIG_DRUM1][2]) == 1 && POCKET_CELL_CONDITION(pattern->cell[POCKET_TRIG_DRUM1][2]) == POCKET_CONDITIONS - 1, "velocity stops at 1: a knob never turns a step off");
+	OFF();
+	CHECK(pattern->cell[POCKET_TRIG_DRUM1][2], "released, it stays on");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+	CHECK(pattern->cell[POCKET_TRIG_DRUM1][2] == POCKET_CELL(99, 0), "one undo takes the whole hold back: %x", pattern->cell[POCKET_TRIG_DRUM1][2]);
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_UP));
+	CHECK(POCKET_CELL_VELOCITY(pattern->cell[POCKET_TRIG_DRUM1][2]) == 1, "one redo brings it all");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+
+	/* held again: that is a new edit, and a step that is off stays off */
+	HOLD(WHITE(2), 1, 0, 0, 0);
+	OFF();
+	HOLD(WHITE(2), 1, 0, 0, 0);
+	OFF();
+	CHECK(POCKET_CELL_VELOCITY(pattern->cell[POCKET_TRIG_DRUM1][2]) == 107, "held twice");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+	CHECK(POCKET_CELL_VELOCITY(pattern->cell[POCKET_TRIG_DRUM1][2]) == 103, "two holds are two undos");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+	HOLD(WHITE(9), 0, 0, 0, 0);
+	HOLD(WHITE(9), 5, 5, 5, 5);
+	OFF();
+	CHECK(!pattern->cell[POCKET_TRIG_DRUM1][9], "a knob neither edits nor enables a step that is off");
+
+	/* each toggle is an undo of its own */
+	tap_keys(&panel, WHITE(10));
+	tap_keys(&panel, WHITE(11));
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+	CHECK(pattern->cell[POCKET_TRIG_DRUM1][10] && !pattern->cell[POCKET_TRIG_DRUM1][11], "undo: the last toggle");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+	CHECK(!pattern->cell[POCKET_TRIG_DRUM1][10], "undo: the one before");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_UP));
+	CHECK(pattern->cell[POCKET_TRIG_DRUM1][10], "redo");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+
+	/* the knobs are otherwise as they were */
+	const int tempo = pocket_seq_tempo();
+	turn(&panel, POCKET_ENC_KNOB2, 2);
+	CHECK(pocket_seq_tempo() == tempo + 2, "KNOB2 alone: the tempo");
+	HOLD(WHITE(2), 0, 1, 0, 0);
+	OFF();
+	CHECK(pocket_seq_tempo() == tempo + 2, "held, it is not");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+
+	/* tracks: SELECT, in place, and only that track's steps */
+	panel.step = 2;
+	turn(&panel, POCKET_ENC_SELECT, POCKET_TRIG_SNARE);
+	CHECK(panel.page == POCKET_PAGE_PATTERN && panel.step == 2, "SELECT stays on the step");
+	const uint32_t lit = pocket_panel_key_leds(&panel);
+	CHECK(!(lit & WHITE(2)), "the lamps are the snare's");
+	tap_keys(&panel, WHITE(4));
+	CHECK(pattern->cell[POCKET_TRIG_SNARE][4] && !pattern->cell[POCKET_TRIG_DRUM1][4], "the selected track's step and no other");
+	turn(&panel, POCKET_ENC_SELECT, -POCKET_TRIG_SNARE);
+	CHECK((pocket_panel_key_leds(&panel) & WHITE(2)) && !(pocket_panel_key_leds(&panel) & WHITE(4)), "and back: the kick's");
+	HOLD(WHITE(2), 0, 0, 0, 0);
+	poll(&panel, WHITE(2), 0, 1, 0, 0, 0, 0, NULL);
+	OFF();
+	CHECK(pattern->cell[POCKET_TRIG_DRUM1][2] && !pattern->cell[POCKET_TRIG_DRUM2][2], "SELECT during a press cancels its tap");
+	turn(&panel, POCKET_ENC_SELECT, -1);
+	clear_pattern();
+
+	/* pages, at every length: a page past the end cannot be reached, or the pattern lengthened */
+	for (int last = 0; last < POCKET_SEQ_PAGES; last++)
+	{
+		pocket_seq_set_last_page((unsigned)last);
+		panel.step = 0;
+		for (int p = 0; p < POCKET_SEQ_PAGES; p++)
+		{
+			panel.dirty = 0;
+			tap_keys(&panel, BLACK(p));
+			const int expected = p <= last ? p : last;
+			if (p > last)
+			{
+				CHECK(strstr(panel.notice, "PAST THE END") != NULL, "said so: %s", panel.notice);
+				CHECK(panel.step / POCKET_SEQ_STEPS == expected, "length %d: stays on page %d: %d", last + 1, expected, panel.step);
+				CHECK(pattern->last_page == last, "and is not lengthened");
+				continue;
+			}
+			CHECK(panel.step / POCKET_SEQ_STEPS == p, "black key %d: page %d", p + 1, panel.step / POCKET_SEQ_STEPS);
+			CHECK(panel.dirty & (1u << 4), "and the screen follows");
+			uint32_t leds = pocket_panel_key_leds(&panel);
+			CHECK(leds & BLACK(p), "its lamp");
+			for (int q = 0; q < POCKET_SEQ_PAGES; q++) CHECK(q == p || !(leds & BLACK(q)), "only its");
+			/* the first and last key of the page: the boundary */
+			tap_keys(&panel, WHITE(0));
+			tap_keys(&panel, WHITE(15));
+			CHECK(pattern->cell[0][p * POCKET_SEQ_STEPS] && pattern->cell[0][p * POCKET_SEQ_STEPS + 15], "page %d: steps %d and %d", p + 1, p * 16 + 1, p * 16 + 16);
+			CHECK((pocket_panel_key_leds(&panel) & (WHITE(0) | WHITE(15) | WHITE(1))) == (WHITE(0) | WHITE(15)), "their lamps");
+			tap_keys(&panel, WHITE(0));
+			tap_keys(&panel, WHITE(15));
+		}
+		for (int s = 0; s < POCKET_SEQ_MAX_STEPS; s++) CHECK(!pattern->cell[0][s], "nothing left behind");
+	}
+	/* OCT: the next page, round the pattern's own length, and the velocity is left alone */
+	pocket_seq_set_last_page(1);
+	panel.step = 3;
+	const int velocity = panel.key_velocity;
+	press(&panel, BUTTON(OCT_UP));
+	CHECK(panel.step == 19 && panel.key_velocity == velocity, "OCT+: the next page");
+	press(&panel, BUTTON(OCT_UP));
+	CHECK(panel.step == 3 && pattern->last_page == 1, "and round, not longer");
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(panel.step == 19, "OCT-");
+	/* a page turned with a key down: that key has done nothing */
+	HOLD(WHITE(4), 0, 0, 0, 0);
+	HOLD(WHITE(4) | BLACK(0), 0, 0, 0, 0);
+	HOLD(WHITE(4), 0, 0, 0, 0);
+	OFF();
+	CHECK(!pattern->cell[0][4] && !pattern->cell[0][20], "a press across a page change toggles nothing");
+	/* a pattern shortened under the keys: they come with it */
+	panel.step = 18;
+	poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, -1, 0, NULL);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	CHECK(pattern->last_page == 0 && panel.step == 2, "SAVE+KNOB3 shortens, the keys on the page left: %d", panel.step);
+	poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, 3, 0, NULL);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	CHECK(pattern->last_page == 3, "and it is how a pattern is lengthened");
+
+	/* the playhead, on the step: its lamp the other way round, every step, every page */
+	clear_pattern();
+	pocket_seq_set_last_page(1);
+	pocket_seq_set_tempo(240);
+	panel.step = 0;
+	tap_keys(&panel, WHITE(1));
+	press(&panel, BUTTON(PLAY));
+	int seen = 0, flashed = 0, shownPlayhead = 0;
+	for (int i = 0; i < 2500; i++)
+	{
+		render_peak(1);
+		const int position = pocket_seq_position();
+		if (position == POCKET_SEQ_NOT_PLAYING) continue;
+		const uint32_t leds = pocket_panel_key_leds(&panel);
+		for (int s = 0; s < POCKET_SEQ_STEPS; s++)
+		{
+			const int on = (s == 1) ^ (s == position);
+			CHECK(!!(leds & WHITE(s)) == on, "position %d, key %d: %x", position, s, leds);
+		}
+		seen |= 1 << (position / POCKET_SEQ_STEPS);
+		shownPlayhead += position < POCKET_SEQ_STEPS;
+		CHECK(leds & BLACK(0), "the selected page stays lit");
+		flashed |= position >= POCKET_SEQ_STEPS ? 1 << !!(leds & BLACK(1)) : 0;
+	}
+	CHECK(seen == 3 && shownPlayhead, "both pages played");
+	CHECK(flashed == 3, "the page playing, not the one on the keys, flashes");
+	/* a toggle while playing, and heard to change: no stopping */
+	tap_keys(&panel, WHITE(5));
+	CHECK(pattern->cell[0][5], "a toggle while it plays");
+	tap_keys(&panel, BLACK(1));
+	CHECK(panel.step / POCKET_SEQ_STEPS == 1 && (pocket_panel_key_leds(&panel) & BLACK(1)), "a page while it plays");
+	press(&panel, BUTTON(PLAY));
+	pocket_seq_set_tempo(tempo);
+	clear_pattern();
+	pocket_seq_set_last_page(0);
+	panel.step = 0;
+
+	/* REC gives the keys back: they play, record, and light nothing */
+	press(&panel, BUTTON(REC));
+	CHECK(!pocket_panel_key_leds(&panel), "with REC the lamps are off");
+	const uint32_t played = panel.hits;
+	tap_keys(&panel, KEY_KICK);
+	CHECK(panel.hits == played + 1 && pattern->cell[POCKET_TRIG_DRUM1][0], "with REC, a key plays and records");
+	tap_keys(&panel, BLACK(1));
+	CHECK(panel.step == 0, "and a black key is no page");
+	press(&panel, BUTTON(REC));
+	CHECK(pocket_panel_key_leds(&panel) & BLACK(0), "without it, the keys are steps again");
+	clear_pattern();
+
+	/* changing mode with keys down: nothing sticks, toggles or plays when they come up */
+	HOLD(WHITE(3), 0, 0, 0, 0);
+	poll(&panel, WHITE(3), BUTTON(HOME), 0, 0, 0, 0, 0, NULL);
+	const uint32_t before = panel.hits;
+	poll(&panel, WHITE(3), 0, 0, 0, 0, 0, 0, NULL);
+	CHECK(panel.hits == before, "a key held out of SEQ does not play");
+	OFF();
+	CHECK(!pattern->cell[0][3] && !panel.step_held, "nor toggle when it comes up");
+	CHECK(!pocket_panel_key_leds(&panel), "the lamps go out with SEQ");
+	/* and the other way */
+	poll(&panel, WHITE(3), 0, 0, 0, 0, 0, 0, NULL);
+	CHECK(panel.hits == before + 1, "a key on MAIN plays");
+	poll(&panel, WHITE(3), BUTTON(SEQ), 0, 0, 0, 0, 0, NULL);
+	poll(&panel, WHITE(3), 0, 0, 2, 0, 0, 0, NULL);
+	OFF();
+	CHECK(!pattern->cell[0][3] && !panel.step_held && panel.hits == before + 1, "held into SEQ it is no step");
+	press(&panel, BUTTON(SEQ));
+	CHECK(pocket_seq_tempo() == tempo, "");
+	/* a hold left by the page: its undo is over */
+	tap_keys(&panel, WHITE(7));
+	HOLD(WHITE(7), -1, 0, 0, 0);
+	poll(&panel, WHITE(7), BUTTON(EDIT), 0, 0, 0, 0, 0, NULL);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	CHECK(panel.page == POCKET_PAGE_SOUND && POCKET_CELL_VELOCITY(pattern->cell[panel.trigger][7]) == 95, "leaving during a hold keeps the edit");
+
+	/* outside SEQ, the keyboard is the instrument it was */
+	press(&panel, BUTTON(HOME));
+	const uint32_t hit = panel.hits;
+	tap_keys(&panel, WHITE(0));
+	tap_keys(&panel, BLACK(0));
+	CHECK(panel.hits == hit + 2, "both colours play");
+	CHECK(pattern->cell[0][0] == 0u, "and write no step");
+	press(&panel, BUTTON(SCL));
+	CHECK(panel.key_mode == POCKET_KEYS_PITCH, "SCL: PITCH");
+	const int octave = panel.octave;
+	press(&panel, BUTTON(OCT_UP));
+	CHECK(panel.octave == octave + 1, "OCT is the octave");
+	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(SEQ));
+	tap_keys(&panel, WHITE(8));
+	CHECK(pattern->cell[panel.trigger][8] && !POCKET_CELL_NOTE(pattern->cell[panel.trigger][8]), "in PITCH too the keys are steps on PATTERN");
+	press(&panel, BUTTON(SCL));
+}
+#undef pattern
+
 /* Long patterns by the panel's controls. */
 static void test_long_patterns(void)
 {
@@ -2057,6 +2368,7 @@ int main(int argc, char** argv)
 	test_old_saves();
 	test_variations();
 	test_long_patterns();
+	test_step_keys();
 	test_history();
 	test_save_chords();
 

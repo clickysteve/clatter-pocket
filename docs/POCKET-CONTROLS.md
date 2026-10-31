@@ -21,9 +21,11 @@ none, so use the mouse.
    selected voice, and OCT− `Z` and OCT+ `X` change the octave.
 5. **Record notes.** Press REC `R`. Playing, what you hit lands on the nearest step. Stopped, what
    you hit lands on the selected step, and hitting it again removes it.
-6. **Edit the pattern.** SEQ `0` opens PATTERN. KNOB 4 moves the selected step, KNOB 1 sets its
-   velocity, KNOB 2 the tempo, KNOB 3 the swing. Hold SAVE `8` and turn KNOB 3 for more pages, KNOB 1
-   for the step's condition.
+6. **Program steps on the keys.** SEQ `0` opens PATTERN, and the keyboard becomes the selected
+   track's pattern: tap a white key to turn its step on or off, tap one of the first four black keys for
+   a page, turn SELECT `← →` for another track. Hold a white key and turn a knob to edit that step. KNOB 2
+   is the tempo, KNOB 3 the swing. Hold SAVE `8` and turn KNOB 3 for more pages
+   ([step keys](#the-keyboard-on-seq-step-keys)).
 7. **Regenerate one instrument.** Turn SELECT `← →` to a voice, or hit its key. **Hold SAVE `8`** and
    press ENV `3` for a new sound, or ARP `9` for a new rhythm. The rest stays as it was.
 8. **Mutate the rhythm.** LFO `4` varies the pattern; hold SAVE and press LFO for one track only.
@@ -38,9 +40,9 @@ Every control below works on every page, unless it says otherwise.
 
 | Control | Action | Held SAVE + it |
 |---|---|---|
-| **Keys** | play: DRUM or PITCH, below | |
+| **Keys** | play: DRUM or PITCH, below. On PATTERN, the steps | |
 | **SCL** | KEYS: DRUM or KEYS: PITCH | |
-| **OCT− / OCT+** | PITCH: octave, −3 to +3. DRUM: how hard the keys hit, 40, 70, 100 or 127 | OCT−: undo. OCT+: redo. One history of kits and patterns |
+| **OCT− / OCT+** | PITCH: octave, −3 to +3. DRUM: how hard the keys hit, 40, 70, 100 or 127. On PATTERN: the previous or next page, round the pattern | OCT−: undo. OCT+: redo. One history of kits and patterns |
 | **PLAY** | start or stop | |
 | **REC** | recording on or off | |
 | **ENV** | a new kit, in the character PRESETS chose | a new sound for the selected voice |
@@ -56,14 +58,15 @@ Every control below works on every page, unless it says otherwise.
 | **MASTER** | output level | |
 | HOME held at 1.5 s after power-on | SAFE MODE, unchanged | |
 
-| Knob | PATTERN | PATTERN, SAVE held | SOUND | MIXER | GLOBAL | PROJECTS |
-|---|---|---|---|---|---|---|
-| KNOB 1 | selected step's velocity | its condition | pitch | level | row | slot |
-| KNOB 2 | tempo | | decay | pan | value | |
-| KNOB 3 | swing | length, a page at a time | filter | | | |
-| KNOB 4 | selected step, across pages | a page at a time | drive | | | |
+| Knob | PATTERN | PATTERN, step held | PATTERN, SAVE held | SOUND | MIXER | GLOBAL | PROJECTS |
+|---|---|---|---|---|---|---|---|
+| KNOB 1 | selected step's velocity | its velocity | its condition | pitch | level | row | slot |
+| KNOB 2 | tempo | its pitch | | decay | pan | value | |
+| KNOB 3 | swing | its condition | length, a page at a time | filter | | | |
+| KNOB 4 | selected step, across pages | its variation | a page at a time | drive | | | |
 
-Lights: PLAY playing, REC recording, SCL in PITCH, SAVE on a locked track.
+Lights: PLAY playing, REC recording, SCL in PITCH, SAVE on a locked track, SEQ on PATTERN, and on
+PATTERN the keys ([step keys](#the-keyboard-on-seq-step-keys)).
 
 ### The FM-1 is not what was asked for in one respect
 
@@ -82,13 +85,73 @@ set, with OCT in DRUM or KEY VEL on GLOBAL. MIDI notes keep their own velocity.
 | Was | Now |
 |---|---|
 | OCT− / OCT+ changed the page | the page buttons; every page has one |
-| REC toggled the selected step | keys, with REC on and stopped. There is no longer a way to turn a step off while playing: stop first, or use SAVE+ARP |
+| REC toggled the selected step | keys, with REC on and stopped; on PATTERN, a white key, stopped or playing |
 | ALGORITHM moved the step | KNOB 4 |
 | SCL put the knobs on the generator | GLOBAL has DENSITY, COMPLEX, SEED and MUTATE. The style is on ALGORITHM |
 | KNOB 4 set the mutation strength | GLOBAL's MUTATE |
 | ENV undid the pattern | SAVE+OCT− |
 | The buttons acted on PATTERN only | on every page: you can generate from SOUND. Each change has its undo |
 | Keys played the selected voice; the 13th key (F4) was the programmed pitch | DRUM at start-up. In PITCH, **C4** is the programmed pitch, which is what the engine calls note 60 |
+
+## The keyboard on SEQ: step keys
+
+SEQ opens PATTERN, and until you leave it the keyboard is the selected track's pattern, as on an x0x:
+the keys are not an instrument here, and nothing sounds until the pattern plays it. The SEQ button is
+lit. The status line says `KEYS: STEPS`. DRUM and PITCH are as they were on every other page.
+
+| Key | Note | Does |
+|---|---|---|
+| White 1 to 16 | F3 G3 A3 B3 C4 D4 E4 F4 G4 A4 B4 C5 D5 E5 F5 G5 | steps 1 to 16 of the page |
+| Black 1 to 4 | F#3 G#3 A#3 C#4 | pages 1 to 4: steps 1–16, 17–32, 33–48, 49–64 |
+| The other seven black keys | D#4 F#4 G#4 A#4 C#5 D#5 F#5 | nothing |
+
+| Do | Result |
+|---|---|
+| **Tap a white key** | selects the step and, when the key comes up, turns it on or off, at KEY VEL. Stopped or playing |
+| **Hold a white key 0.3 s** | shows the step (`STEP 23 VEL 111 N65 COND 1:2`, or `STEP 23 OFF`) and the knobs; no toggle |
+| **Hold + KNOB 1** | velocity, 1 to 127 |
+| **Hold + KNOB 2** | pitch. C4 is the programmed pitch |
+| **Hold + KNOB 3** | condition: always, 1:2, 2:2, 1:3, 2:3, 3:3, 1:4 to 4:4, 25 %, 50 %, 75 % |
+| **Hold + KNOB 4** | variation. A step has one tone, so a variation replaces a note and a note a variation |
+| **Tap black key 1 to 4** | that page, at the same place. A page past the end of the pattern says `PAST THE END: SAVE+K3 LEN`: only SAVE+KNOB 3 lengthens a pattern |
+| **OCT− / OCT+** | the previous or next page, round the pattern's own length |
+| **SELECT** | another track, on the same page and step: the lamps change with it |
+| **SAVE+OCT− / SAVE+OCT+** | undo, redo. Each toggle is one, and everything done during one hold is one, however long it took |
+| **REC** | gives the keys back to play and record while it is on: step entry with a note or a variation needs them. Leave it and they are steps again |
+
+A knob turned at any moment during a press makes it a hold, however short. A knob can neither turn a
+step on nor off: on a step that is off it does nothing, and velocity stops at 1. Each key is timed
+alone, so overlapping taps both land. KNOB 1 to 4 without a key do what they did, and SAVE+KNOB 1 and
+SAVE+KNOB 4 still set a condition and move a page.
+
+A tap has to change the step when the key comes up, not when it goes down, because until then it could
+still be a hold. So that this is not felt, **the lamp shows the result as the key goes down**. It takes
+the time the key is down, typically under 100 ms, and the scanner adds about 2 ms down and 9 ms up.
+
+**Lamps.** The FM-1's key LEDs are on or off. `fm1_led_set` sets a bit that a 10 kHz multiplexed scan
+reads, so there is no brightness to set and no bus traffic. Inactive steps are therefore unlit, not dim.
+
+| Lamp | Means |
+|---|---|
+| White key lit | the step is on |
+| White key the other way round from that | the playhead is on it: a dark blink on a step that is on, a lit one on a step that is off |
+| Black key lit | the page on the keys |
+| Black key flashing eighths | the page the pattern is playing, if another |
+| Other keys, and every key off PATTERN or with REC | off |
+| SEQ button | PATTERN |
+
+Dim steps are possible: Hortator modulates the LEDs from a hook in the 10 kHz scan interrupt. That is
+hardware timing and code in an interrupt that this firmware's Flash has no room to spare for and that nothing
+here can verify, so it is not done. Which page holds a pattern's end is not on the lamps; `PAGE 2/4` and
+`STEP 23/64` are on the screen.
+
+**Changing mode with a key down** does nothing when the key comes up: leaving PATTERN or pressing REC ends
+what the keys were doing, and a key already down on arrival is ignored until it is pressed again. Voices are
+one-shot and the engine has no note-off, so nothing can stick.
+
+The interaction is Hortator's (<https://deadactive.github.io/hortator/>, GPL-3.0): the white keys, and a
+hold of 0.3 s with no toggle. Its white-key table agrees with the one here, which the host tests also
+derive from the piano. No code is taken from it. Unlike it, a held step that is off stays off.
 
 ## The keyboard
 
@@ -364,19 +427,33 @@ has not been seen**.
 
 ## Size
 
-`tools/flash-map.py` breaks it down; the figures below are for this firmware, 0.6.0.
+`tools/flash-map.py` breaks it down; the figures below are for 0.6.0, and for what step keys cost after them.
 [POCKET-STORAGE.md](POCKET-STORAGE.md) has what a project costs. Both builds `--replace --single-precision`:
 
 | | 0.5.0 (4d8e2f4) | 0.6.0 | Change |
 |---|---|---|---|
 | App image | 433,628 | **437,436** | +3,808 |
 | Headroom under 453,921 | 20,293 | **16,485** | −3,808 |
-| Over the 16,384 hardware-fix margin | 3,909 | **101** | |
+| Over the 16,384 hardware-fix margin | 3,909 | 101 | |
 | `.ram0_data` (SRAM code and data) | 105,564 | 103,740 | −1,824 |
 | `.ram0_bss` | 289,292 | 309,964 | +20,672 |
 | Runtime heap (SDK minimum 49,152) | 128,684 | **109,836** | −18,848 |
 
-**The margin is kept by 101 bytes.** The next feature needs flash found for it first.
+**0.7.0, step keys: 437,500 bytes, 16,421 free, the margin kept by 37 bytes.** Heap 110,092. The next
+feature needs flash found for it first.
+
+| 0.7.0 flash | Bytes |
+|---|---|
+| Panel and adapter: step keys, hold, lamps, screen | +1,216 |
+| The table unpacker: an adaptive filter | +126 |
+| **Recovered** | |
+| The LXR's tables: a four-tap sign-sign LMS filter ahead of the range coder, and tighter contexts (17,650 to 16,488) | −1,162 |
+| `lxr_params.c`, the parameter switch, at `-Oz` in SRAM, net of alignment | −116 |
+| | **+64** |
+
+The tables unpack byte-identical, as `make test` and the CRC at every start check. The seven voices'
+output in the emulator hashes the same as 0.6.0's (`tools/emu-golden.mjs`), so neither change altered the
+sound. Start-up takes about 35 ms longer. Each lamp is one bit of RAM, written only when it changes.
 
 | RAM | Bytes |
 |---|---|
@@ -416,13 +493,13 @@ There is no division on the audio path.
 
 **CPU**, in the emulator at 240 MHz:
 
-| | 0.5.0 | 0.6.0 |
-|---|---|---|
-| Stopped | 28.1 % | 28.1 % |
-| Playing, mean | 28.6 % | 27.9 % |
-| Playing, peak | 29.4 % | 29.2 % |
-| While a kit loads, peak | 29.5 % | 30.3 % |
-| 64 dense steps with hits on every variation, 300 BPM: mean, peak | | 28.7 %, 30.6 % |
+| | 0.5.0 | 0.6.0 | 0.7.0 |
+|---|---|---|---|
+| Stopped | 28.1 % | 28.1 % | 28.1 % |
+| Playing, mean | 28.6 % | 27.9 % | 27.8 % |
+| Playing, peak | 29.4 % | 29.2 % | 29.7 % |
+| While a kit loads, peak | 29.5 % | 30.3 % | 30.3 % |
+| 64 dense steps with hits on every variation, 300 BPM: mean, peak | | 28.7 %, 30.6 % | 28.6 %, 30.7 % |
 
 0 overruns and 0 dropped events through all of it. **Not a device measurement**: the emulator counts
 about one instruction per cycle and models no cache or Flash wait states.

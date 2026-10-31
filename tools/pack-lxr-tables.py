@@ -6,8 +6,9 @@
 
 Input: the tables as compiled (host/dump_tables.c). Output: engine/lxr_tables_packed.c,
 which engine/lxr_tables_unpack.c decodes into RAM at start-up. Format: see
-lxr_tables_unpack.c. For each table the predictor order (0, 1 or 2) giving the smallest
-output is chosen, and the residuals go through an adaptive binary range coder. The sawtooth is
+lxr_tables_unpack.c. For each table the fixed predictor order (1 or 2) and the rate of a small
+adaptive filter after it giving the smallest output are chosen, and the residuals go through an
+adaptive binary range coder. The sawtooth is
 exactly odd in every row, so only its first 513 values of each are packed. The tool decodes its
 own output and stops unless every value round-trips.
 
@@ -19,8 +20,10 @@ import zlib
 
 PROB_BITS, RATE = 12, 4
 LENGTHS = 19        # bit lengths of a zigzag value, 0..18
-SIZES = 12          # contexts from the size of the last two residuals
+SIZES = 8           # contexts from the size of the last two residuals
 SAW_ROWS, SAW_ROW, SAW_KEPT = 11, 1024, 513
+FILTER = 4          # taps of the adaptive filter
+SHIFTS = (5, 6, 7, 8, 9, 10, 12)  # what its weights are scaled by, tried for each table
 
 TABLES = [  # name, count, width
     ('sine_table', 4097, 2),
@@ -35,12 +38,29 @@ def zig(v):
     return (v << 1) ^ (v >> 63) if v < 0 else v << 1
 
 
-def residuals(values, order):
-    out, x1, x2 = [], 0, 0
+class Predictor:
+    """A fixed predictor, then a sign-sign LMS filter of what it leaves: both ends run this."""
+
+    def __init__(self, order, shift):
+        self.order, self.shift, self.x1, self.x2 = order, shift, 0, 0
+        self.weights, self.history = [0] * FILTER, [0] * FILTER
+
+    def next(self):
+        self.fixed = 2 * self.x1 - self.x2 if self.order == 2 else self.x1 if self.order == 1 else 0
+        return self.fixed + (sum(w * h for w, h in zip(self.weights, self.history)) >> self.shift)
+
+    def update(self, x, residual):
+        sign = (residual > 0) - (residual < 0)
+        self.weights = [w + sign * ((h > 0) - (h < 0)) for w, h in zip(self.weights, self.history)]
+        self.history = [x - self.fixed] + self.history[:-1]
+        self.x2, self.x1 = self.x1, x
+
+
+def residuals(values, order, shift):
+    out, predictor = [], Predictor(order, shift)
     for x in values:
-        p = 2 * x1 - x2 if order == 2 else x1 if order == 1 else 0
-        out.append(x - p)
-        x2, x1 = x1, x
+        out.append(x - predictor.next())
+        predictor.update(x, out[-1])
     return out
 
 
@@ -135,8 +155,8 @@ def new_probs():
     return [1 << (PROB_BITS - 1)] * (SIZES * LENGTHS + LENGTHS)
 
 
-def encode(values, order):
-    res = [zig(r) for r in residuals(values, order)]
+def encode(values, order, shift):
+    res = [zig(r) for r in residuals(values, order, shift)]
     if max(res) >= 1 << (LENGTHS - 1):
         raise SystemExit('residual too large')
     e, probs, z1, z2 = Encoder(), new_probs(), 0, 0
@@ -154,8 +174,9 @@ def encode(values, order):
     return e.done()
 
 
-def decode(data, count, order, width):
-    d, probs, out, x1, x2, z1, z2 = Decoder(data + bytes(8)), new_probs(), [], 0, 0, 0, 0
+def decode(data, count, order, shift, width):
+    d, probs, out, z1, z2 = Decoder(data + bytes(8)), new_probs(), [], 0, 0
+    predictor = Predictor(order, shift)
     for _ in range(count):
         n, c = 0, min(SIZES - 1, bit_length(2 * z1 + z2))
         while n < LENGTHS - 1 and d.bit(probs, c * LENGTHS + n):
@@ -167,11 +188,9 @@ def decode(data, count, order, width):
                 z |= d.raw() << j
         z2, z1 = z1, z
         r = (z >> 1) ^ -(z & 1)
-        p = 2 * x1 - x2 if order == 2 else x1 if order == 1 else 0
-        x = p + r
-        x = ((x + 32768) & 0xffff) - 32768 if width == 2 else ((x + 128) & 0xff) - 128
-        out.append(x)
-        x2, x1 = x1, x
+        x = predictor.next() + r
+        predictor.update(x, r)
+        out.append(((x + 32768) & 0xffff) - 32768 if width == 2 else ((x + 128) & 0xff) - 128)
     return out, d.pos
 
 
@@ -196,17 +215,17 @@ def main():
                     raise SystemExit(f'sawTable row {r} is not odd: the unpacker relies on it')
             values = [v for r in range(SAW_ROWS) for v in values[r * SAW_ROW:r * SAW_ROW + SAW_KEPT]]
             count = len(values)
-        packed, order = min(((encode(values, o), o) for o in (0, 1, 2)), key=lambda t: len(t[0]))
-        check, used = decode(packed, count, order, width)
+        packed, order, shift = min(((encode(values, o, f), o, f) for o in (1, 2) for f in SHIFTS), key=lambda t: len(t[0]))
+        check, used = decode(packed, count, order, shift, width)
         packed = packed[:used]  # what a flush leaves over the end is never read
-        if check != values or decode(packed, count, order, width)[0] != values:
+        if check != values or decode(packed, count, order, shift, width)[0] != values:
             raise SystemExit(f'{name}: round trip failed')
         total_in += size
         total_out += len(packed)
-        print(f'{name:14} {size:6d} -> {len(packed):6d} bytes (order {order})')
+        print(f'{name:14} {size:6d} -> {len(packed):6d} bytes (order {order}, shift {shift})')
         body = ',\n'.join(','.join(str(b) for b in packed[i:i + 24]) for i in range(0, len(packed), 24))
         lines += [f'static const uint8_t {name}_data[{len(packed)}] = {{', body, '};',
-                  f'const struct lxr_packed_table lxr_packed_{name} = {{{name}_data, {len(packed)}u, {count}u, {width}u, {order}u}};', '']
+                  f'const struct lxr_packed_table lxr_packed_{name} = {{{name}_data, {len(packed)}u, {count}u, {width}u, {order}u, {shift}u}};', '']
     vol = struct.unpack('<69I', blob[pos:pos + 276])
     pos += 276
     if pos != len(blob):

@@ -13,7 +13,8 @@
 #define LXR_PACK_PROB_BITS 12u
 #define LXR_PACK_RATE 4u
 #define LXR_PACK_LENGTHS 19u   /* bit lengths of a zigzag value, 0..18 */
-#define LXR_PACK_SIZES 12u     /* contexts from the size of the last two values */
+#define LXR_PACK_SIZES 8u      /* contexts from the size of the last two values */
+#define LXR_PACK_FILTER 4u     /* taps of the adaptive filter */
 
 struct lxr_packed_table
 {
@@ -21,7 +22,8 @@ struct lxr_packed_table
 	uint32_t bytes;   /* packed size */
 	uint32_t count;   /* values */
 	uint8_t width;    /* bytes per value: 2 int16, 1 int8 */
-	uint8_t order;    /* predictor order */
+	uint8_t order;    /* fixed predictor's order */
+	uint8_t shift;    /* the adaptive filter's weights are in 1 / 2^shift */
 };
 
 extern const struct lxr_packed_table lxr_packed_sine_table, lxr_packed_triTable, lxr_packed_sawTable,

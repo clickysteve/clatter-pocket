@@ -98,7 +98,7 @@ PLAY: the machine stays deterministic.
 
 An open hat its condition leaves out does not choke the closed hat on that step.
 
-SAVE+KNOB 1 sets it on PATTERN. The step must hold something. Mutation moves a step whole, condition
+A held step and KNOB 3 sets it on PATTERN, or SAVE+KNOB 1 ([step keys](POCKET-CONTROLS.md#the-keyboard-on-seq-step-keys)). The step must hold something. Mutation moves a step whole, condition
 and all, and generators write none.
 
 ## Tracks and voices

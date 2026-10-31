@@ -5,6 +5,9 @@
  * Copyright (C) 2026 The CLATTER contributors
  * SPDX-License-Identifier: GPL-3.0-only
  *
+ * On PATTERN the keyboard is the pattern (the keys as steps, below): the white keys a page of the
+ * selected track, the first four black keys the pages, REC handing it back to play and record.
+ *
  * Only what the firmware can do is on screen: every knob moves an engine parameter that the
  * host tests hear change, or the sequencer. The STORE page is the one way to Flash
  * (pocket_store.h). Everything else that changes the music can be taken back: SAVE+OCT- and
@@ -62,6 +65,10 @@ static const uint8_t bankTracks[POCKET_BANK_KEYS] = {
 };
 static const char bankNames[POCKET_BANK_KEYS][8] = { "KICK", "SNARE", "CL HAT", "OP HAT", "LOW TOM", "HI TOM", "CYMBAL", "PERC", "CLAP" };
 #define BANK_ALT 7 /* the positions from here are their voice's second sound */
+/* The keyboard as the pattern: the keys of F3..G5 from the left, a page of steps on the white ones,
+ * then the first four black ones, a key a page. Key numbers are semitones, so the white keys are not
+ * every other number. */
+static const uint8_t stepKeys[POCKET_SEQ_STEPS + POCKET_SEQ_PAGES] = { 0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26, 1, 3, 5, 8 };
 /* DRUM has no octaves to change, so OCT sets how hard the keys hit: they report no velocity. */
 static const uint8_t keyVelocities[4] = { 40, 70, 100, 127 };
 
@@ -73,6 +80,8 @@ enum { B_TITLE = 0, B_STATE = 1, B_VOICE = 2, B_MIDI = 3, B_BODY = 4, B_ACTIVITY
 enum { L_TRANSPORT = 0, L_RULER = 1, L_GRID = 2, L_GRID_LAST = 6, L_LEGEND = 7, L_MAIN_HITS = 4, L_MAIN_RULER = 6, L_MAIN_KIT = 7 };
 #define GRID_BANDS ((uint16_t)(((2u << (B_BODY + L_GRID_LAST)) - 1) & ~((1u << (B_BODY + L_GRID)) - 1)))
 #define PATTERN_CHANGED ((uint16_t)(GRID_BANDS | (1u << (B_BODY + L_RULER)) | (1u << (B_BODY + L_MAIN_RULER)) | (1u << (B_BODY + L_LEGEND))))
+/* What differs while a step is held. */
+#define HELD_BANDS ((uint16_t)((1u << B_FOOTER) | (1u << (B_BODY + L_LEGEND))))
 #define BTN(name) (1u << POCKET_BTN_##name)
 
 /* A kit is applied a little at a time, from here, while everything else keeps running. */
@@ -163,6 +172,27 @@ static void say(struct pocket_panel* panel, const char* a, const char* b)
 static void announce(struct pocket_panel* panel, const char* what)
 {
 	say(panel, what, "");
+}
+
+/* PATTERN's keyboard is the steps, until REC gives it back to play and record. */
+static int keys_are_steps(const struct pocket_panel* panel)
+{
+	return panel->page == POCKET_PAGE_PATTERN && !panel->recording;
+}
+
+/* Keys down now do nothing when they come up. */
+static void taps_cancel(struct pocket_panel* panel)
+{
+	for (int s = 0; s < POCKET_SEQ_STEPS; s++) panel->step_tap_ms[s] = 0;
+	panel->dirty |= HELD_BANDS;
+}
+
+/* The keyboard or the page changed under the keys: what they were doing is over. */
+static void steps_forget(struct pocket_panel* panel)
+{
+	taps_cancel(panel);
+	if (panel->step_held) pocket_history_close();
+	panel->step_held = 0;
 }
 
 /* ------------------------------------------------------------------ the one history */
@@ -385,7 +415,25 @@ uint32_t pocket_panel_leds(const struct pocket_panel* panel)
 {
 	return (pocket_seq_playing() ? BTN(PLAY) : 0u) | (panel->recording ? BTN(REC) : 0u)
 		| (panel->key_mode == POCKET_KEYS_PITCH ? BTN(SCL) : 0u)
+		| (panel->page == POCKET_PAGE_PATTERN ? BTN(SEQ) : 0u)
 		| (panel->locks >> panel->trigger & 1u ? BTN(SAVE) : 0u);
+}
+
+/* The lamps are on or off, so everything is told with that. A step that is on is lit, and the
+ * playhead turns its step's lamp the other way. A key going down shows what its tap will do at once,
+ * though the step changes when it comes up, as it must not if it turns out to be a hold. The page on
+ * the keys is lit; the page playing, if another, flashes eighths. */
+uint32_t pocket_panel_key_leds(const struct pocket_panel* panel)
+{
+	if (!keys_are_steps(panel)) return 0;
+	const uint32_t* cells = pocket_seq_pattern()->cell[panel->trigger];
+	const int position = pocket_seq_position(), page = panel->step / POCKET_SEQ_STEPS, first = page * POCKET_SEQ_STEPS;
+	uint32_t leds = 0;
+	for (int s = 0; s < POCKET_SEQ_STEPS; s++)
+		if ((cells[first + s] != 0) ^ (first + s == position) ^ (panel->step_tap_ms[s] != 0)) leds |= 1u << stepKeys[s];
+	for (int p = 0; p < POCKET_SEQ_PAGES; p++)
+		if (p == page || (p == position / POCKET_SEQ_STEPS && position >> 1 & 1)) leds |= 1u << stepKeys[POCKET_SEQ_STEPS + p];
+	return leds;
 }
 
 /* ------------------------------------------------------------------ kits */
@@ -789,6 +837,12 @@ void pocket_panel_tick(struct pocket_panel* panel, uint32_t elapsed_ms)
 			say_kit(panel);
 		}
 	}
+	for (int s = 0; s < POCKET_SEQ_STEPS; s++)
+	{
+		if (!panel->step_tap_ms[s]) continue;
+		panel->step_tap_ms[s] = less(panel->step_tap_ms[s], elapsed_ms);
+		if (!panel->step_tap_ms[s]) panel->dirty |= HELD_BANDS;
+	}
 	if (panel->merge_ms)
 	{
 		panel->merge_ms = less(panel->merge_ms, elapsed_ms);
@@ -823,6 +877,7 @@ static void go(struct pocket_panel* panel, unsigned page)
 {
 	if (page == panel->page) return;
 	panel->page = (uint8_t)page;
+	steps_forget(panel);
 	panel->dirty = ALL_BANDS;
 }
 
@@ -946,7 +1001,29 @@ static void step_edit(struct pocket_panel* panel, uint32_t cell)
 	pocket_history_begin(MERGE_CELL + ((unsigned)panel->trigger << 6 | panel->step));
 	set_cell(panel, panel->trigger, panel->step, cell);
 	pocket_history_end();
-	panel->merge_ms = POCKET_MERGE_MS;
+	panel->merge_ms = panel->step_held ? 0 : POCKET_MERGE_MS; /* a hold is one undo: its key says when it ends */
+}
+
+/* The knobs with a step held. A step that is off has nothing to edit, and this never turns one off:
+ * a note and a variation replace each other, as a step has one tone. */
+static void step_knobs(struct pocket_panel* panel, const int16_t* knob)
+{
+	const uint32_t c = pocket_seq_pattern()->cell[panel->trigger][panel->step];
+	if (!c) return;
+	const int note = (int)POCKET_CELL_NOTE(c), variation = (int)POCKET_CELL_VARIATION(c);
+	int tone = (int)POCKET_CELL_TONE(c);
+	if (knob[1])
+	{
+		tone = limited((note ? note : POCKET_SEQ_NOTE_PROGRAMMED) + knob[1], 1, 127);
+		if (tone == POCKET_SEQ_NOTE_PROGRAMMED) tone = 0;
+	}
+	if (knob[3])
+	{
+		const int next = limited(variation + knob[3], 0, POCKET_VARIATION_LAST(panel->trigger));
+		if (next != variation) tone = next ? (int)POCKET_TONE_VARIATION(next) : 0;
+	}
+	step_edit(panel, POCKET_CELL_WITH_CONDITION(POCKET_CELL(limited((int)POCKET_CELL_VELOCITY(c) + 4 * knob[0], 1, 127), tone),
+		limited((int)POCKET_CELL_CONDITION(c) + knob[2], 0, POCKET_CONDITIONS - 1)));
 }
 
 /* The knobs of PATTERN: the selected step's velocity, the tempo and swing, the selected step.
@@ -954,6 +1031,11 @@ static void step_edit(struct pocket_panel* panel, uint32_t cell)
 static void pattern_knobs(struct pocket_panel* panel, const int16_t* knob, int save)
 {
 	if (!(knob[0] | knob[1] | knob[2] | knob[3])) return;
+	if (panel->step_held)
+	{
+		step_knobs(panel, knob);
+		return;
+	}
 	const uint32_t c = pocket_seq_pattern()->cell[panel->trigger][panel->step];
 	if (save)
 	{
@@ -1060,6 +1142,12 @@ static void octave_button(struct pocket_panel* panel, int by, int held)
 		history_move(panel, by > 0);
 		return;
 	}
+	if (keys_are_steps(panel))
+	{
+		steps_forget(panel);
+		move_step(panel, by * POCKET_SEQ_STEPS);
+		return;
+	}
 	if (panel->key_mode == POCKET_KEYS_PITCH)
 		panel->octave = (int8_t)limited(panel->octave + by, POCKET_OCTAVE_MIN, POCKET_OCTAVE_MAX);
 	else
@@ -1109,6 +1197,7 @@ static void buttons(struct pocket_panel* panel, uint32_t pressed, uint32_t relea
 	if (pressed & BTN(REC))
 	{
 		panel->recording = !panel->recording;
+		steps_forget(panel);
 		pocket_history_close();
 		say(panel, "REC ", offOn[panel->recording]);
 	}
@@ -1124,11 +1213,59 @@ static void buttons(struct pocket_panel* panel, uint32_t pressed, uint32_t relea
 	if (pressed & BTN(LFO)) mutate_button(panel, save);
 }
 
+/* A white key selects its step at once. Coming up soon after, with no knob turned, it was a tap and
+ * toggles it; otherwise it was a hold. Nothing sounds: this is the pattern, not an instrument. */
+static void step_keys(struct pocket_panel* panel, uint32_t pressed, uint32_t released)
+{
+	const int page = panel->step / POCKET_SEQ_STEPS;
+	for (int s = 0; s < POCKET_SEQ_STEPS; s++)
+	{
+		const uint32_t key = 1u << stepKeys[s];
+		if (released & key)
+		{
+			if (panel->step_held == s + 1)
+			{
+				panel->step_held = 0;
+				pocket_history_close();
+				panel->dirty |= HELD_BANDS;
+			}
+			if (panel->step_tap_ms[s])
+			{
+				const int step = page * POCKET_SEQ_STEPS + s;
+				panel->step_tap_ms[s] = 0;
+				pocket_history_begin(MERGE_NONE);
+				set_cell(panel, panel->trigger, step, pocket_seq_pattern()->cell[panel->trigger][step] ? 0 : POCKET_CELL(panel->key_velocity, 0));
+				pocket_history_end();
+			}
+		}
+		if (pressed & key)
+		{
+			pocket_history_close();
+			panel->step_held = (uint8_t)(s + 1);
+			panel->step_tap_ms[s] = POCKET_STEP_HOLD_MS;
+			panel->step = (uint8_t)(page * POCKET_SEQ_STEPS + s);
+			panel->dirty |= (1u << B_VOICE) | GRID_BANDS | (1u << (B_BODY + L_RULER)) | HELD_BANDS;
+		}
+	}
+	/* a page: the same place on it. A page past the end is not one: only K3 with SAVE lengthens */
+	for (int p = 0; p < POCKET_SEQ_PAGES; p++)
+		if (pressed & (1u << stepKeys[POCKET_SEQ_STEPS + p]))
+		{
+			if (p > pocket_seq_pattern()->last_page) announce(panel, "PAST THE END: SAVE+K3 LEN");
+			else
+			{
+				steps_forget(panel);
+				move_step(panel, (p - page) * POCKET_SEQ_STEPS);
+			}
+		}
+}
+
 int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_input* in)
 {
 	const uint32_t pressedButtons = in->buttons & ~panel->previous_buttons;
 	const uint32_t releasedButtons = panel->previous_buttons & ~in->buttons;
 	const uint32_t pressedKeys = in->keys & ~panel->previous_keys;
+	const uint32_t releasedKeys = panel->previous_keys & ~in->keys;
 	const int exit = POCKET_PANEL_TOGGLE(panel->previous_buttons, in->buttons);
 	panel->previous_buttons = in->buttons;
 	panel->previous_keys = in->keys;
@@ -1140,6 +1277,8 @@ int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_inp
 	navigate(panel, pressedButtons, save);
 	buttons(panel, pressedButtons, releasedButtons, in->buttons);
 	if (turned || pressedKeys) panel->save_chorded |= (uint8_t)save;
+	if (keys_are_steps(panel)) step_keys(panel, pressedKeys, releasedKeys);
+	if (panel->step_held && turned) taps_cancel(panel);
 	if (in->encoders[POCKET_ENC_SELECT])
 	{
 		if (panel->page == POCKET_PAGE_STORE) move_slot(panel, in->encoders[POCKET_ENC_SELECT]);
@@ -1154,8 +1293,9 @@ int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_inp
 	}
 	if (in->encoders[POCKET_ENC_PRESETS]) kit_browse(panel, in->encoders[POCKET_ENC_PRESETS]);
 	page_knobs(panel, &in->encoders[POCKET_ENC_KNOB1], save);
-	for (int k = 0; k < POCKET_KEYS; k++)
-		if (pressedKeys & (1u << k)) key_hit(panel, k);
+	if (!keys_are_steps(panel))
+		for (int k = 0; k < POCKET_KEYS; k++)
+			if (pressedKeys & (1u << k)) key_hit(panel, k);
 	if (pressedKeys && !pocket_seq_playing()) pocket_history_close(); /* a chord is one entry */
 	if (panel->entered)
 	{
@@ -1368,22 +1508,48 @@ static void draw_transport(const struct pocket_panel* panel, uint16_t* px)
 		fill(px, 204 + p * 7, 5, 5, 6, position != POCKET_SEQ_NOT_PLAYING && position / POCKET_SEQ_STEPS == p ? ACCENT : p == shown ? INK : p < pages ? DIM : FAINT);
 }
 
-/* The four knobs' fields, in knob order. */
+static const char conditionNames[POCKET_CONDITIONS][4] = { "", "1:2", "2:2", "1:3", "2:3", "3:3", "1:4", "2:4", "3:4", "4:4", "25%", "50%", "75%" };
+static const char variationNames[POCKET_VARIATIONS][3] = { "", "A", "B", "X", "XA", "XB" };
+
+/* A step's tone and condition, whichever it has. */
+static char* step_text(char* d, uint32_t c, const char* condition)
+{
+	const unsigned note = POCKET_CELL_NOTE(c), variation = POCKET_CELL_VARIATION(c);
+	if (note) d = append_number(append(d, " N"), note);
+	if (variation) d = append(append(d, " "), variationNames[variation]);
+	if (POCKET_CELL_CONDITION(c)) d = append(append(d, condition), conditionNames[POCKET_CELL_CONDITION(c)]);
+	return d;
+}
+
+/* A held step's knobs show once it is a hold, so that tapping does not flicker the line. */
+static int step_holding(const struct pocket_panel* panel)
+{
+	return panel->step_held && !panel->step_tap_ms[panel->step_held - 1];
+}
+
+/* The four knobs' fields, in knob order; a held step, all of it. */
 static void draw_legend(const struct pocket_panel* panel, uint16_t* px)
 {
 	char b[40], *d = b;
-	const unsigned v = POCKET_CELL_VELOCITY(pocket_seq_pattern()->cell[panel->trigger][panel->step]);
+	const uint32_t c = pocket_seq_pattern()->cell[panel->trigger][panel->step];
+	const unsigned v = POCKET_CELL_VELOCITY(c);
+	if (step_holding(panel))
+	{
+		d = append_number(append(d, "STEP "), panel->step + 1u);
+		if (v) step_text(append_number(append(d, " VEL "), v), c, " COND ");
+		else append(d, " OFF");
+		line_text(px, b, ACCENT);
+		return;
+	}
 	d = append(d, "VEL");
 	d = v ? append_number(d, v) : append(d, "--");
 	d = append_number(append(d, " BPM"), (uint32_t)pocket_seq_tempo());
 	d = append_number(append(d, " SWG"), (uint32_t)pocket_seq_swing());
-	append_number(append(d, " STEP"), panel->step + 1u);
+	append_number(append(append_number(append(d, " STEP"), panel->step + 1u), "/"), POCKET_PATTERN_STEPS(pocket_seq_pattern()));
 	line_text(px, b, DIM);
 }
 
 static const char knobNames[4][7] = { "KNOB 1", "KNOB 2", "KNOB 3", "KNOB 4" };
-static const char conditionNames[POCKET_CONDITIONS][4] = { "", "1:2", "2:2", "1:3", "2:3", "3:3", "1:4", "2:4", "3:4", "4:4", "25%", "50%", "75%" };
-static const char variationNames[POCKET_VARIATIONS][3] = { "", "A", "B", "X", "XA", "XB" };
 
 /* What a DRUM key plays, by name: there are nine, and it is not the voice's. */
 static void bank_text(char* d, int key)
@@ -1580,8 +1746,9 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 		const char* footer = pageFooters[panel->page];
 		if (panel->save_down && panel->page != POCKET_PAGE_STORE)
 			footer = panel->page == POCKET_PAGE_PATTERN ? "K1 COND K3 LEN K4 PAGE" : "OCT- UNDO OCT+ REDO FX LOCK";
+		if (step_holding(panel)) footer = "K1 VEL K2 NOTE K3 COND K4 VAR";
 		fill(px, 0, 0, POCKET_SCREEN_W, 1, FAINT);
-		line_text(px, footer, panel->save_down ? ACCENT : DIM);
+		line_text(px, footer, panel->save_down || step_holding(panel) ? ACCENT : DIM);
 		return;
 	}
 	if (band == B_STATE)
@@ -1595,8 +1762,9 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 			line_text(px, panel->notice, ACCENT);
 		else
 		{
-			char* d = append(append(b, "KEYS: "), keyModes[panel->key_mode]);
-			if (panel->key_mode == POCKET_KEYS_PITCH)
+			const int steps = keys_are_steps(panel);
+			char* d = append(append(b, "KEYS: "), steps ? "STEPS" : keyModes[panel->key_mode]);
+			if (panel->key_mode == POCKET_KEYS_PITCH && !steps)
 			{
 				d = append(d, panel->octave < 0 ? " OCT -" : " OCT ");
 				append_number(d, (uint32_t)(panel->octave < 0 ? -panel->octave : panel->octave));
@@ -1615,11 +1783,7 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 		if (panel->page == POCKET_PAGE_PATTERN)
 		{
 			const uint32_t c = pocket_seq_pattern()->cell[panel->trigger][panel->step];
-			const unsigned note = POCKET_CELL_NOTE(c), variation = POCKET_CELL_VARIATION(c), condition = POCKET_CELL_CONDITION(c);
-			char* d = append_number(append(b, note || variation || condition ? "S" : "STEP "), panel->step + 1u);
-			if (note) d = append_number(append(d, " N"), note);
-			if (variation) d = append(append(d, " "), variationNames[variation]);
-			if (condition) append(append(d, " "), conditionNames[condition]);
+			step_text(append_number(append(b, POCKET_CELL_TONE(c) || POCKET_CELL_CONDITION(c) ? "S" : "STEP "), panel->step + 1u), c, " ");
 			text(px, 128, TEXT_Y, b, INK);
 			if (panel->locks & (1u << panel->trigger)) fill(px, 122, 2, 2, POCKET_BAND_ROWS - 4, ACCENT);
 		}
