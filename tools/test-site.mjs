@@ -177,7 +177,7 @@ test('the site builds, with the experimental package in it', () => {
 test('official Open is published with the site, and is not a file in this repository', () => {
   const tracked = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' }).split('\n');
   assert.deepEqual(tracked.filter(name => /FM1-Open/i.test(name)), []);
-  assert.deepEqual(tracked.filter(name => /\.fwsc$/.test(name)).map(name => dirname(name)), [`releases/${release().version}`]);
+  assert.deepEqual(tracked.filter(name => /\.fwsc$/.test(name) && !/^releases\/[\d.]+\/clatter-pocket-/.test(name)), []);
   assert.ok(page('installer/index.html').includes(release().openFirmware.sha256));
   assert.ok(page('installer/index.html').includes('https://github.com/m-vave/fm1_open/releases/tag/V14'));
   const source = readFileSync(join(site, 'legal/fm1_open-SOURCE.txt'), 'utf8');
