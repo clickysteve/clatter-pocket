@@ -63,18 +63,24 @@
       <p class="tags">MACHINE ELECTRO BREAKS JUNGLE HALFTIME BROKEN GARAGE INDUSTRIAL GLITCH POLYMETER DUB</p>
     </article>
     <article class="window">
+      <h3 class="tab">The keyboard is the sequencer</h3>
+      <p><b>Press SEQ</b> and the 16 white keys are a page of the selected track's steps, lit where a step is on. Tap to add or remove, as on a classic x0x. The first four black keys are the pages.</p>
+      <p>Hold a step and turn a knob for its velocity, pitch, condition or variation. Tap and hold are told apart, so a hold never toggles.</p>
+      <p class="dim">The key lamps are on or off, so unlit steps are dark rather than dim.</p>
+    </article>
+    <article class="window">
       <h3 class="tab">Two keyboard modes</h3>
-      <p><b>DRUM:</b> each key plays an instrument, the same at every octave.</p>
+      <p><b>DRUM:</b> three banks of the same nine sounds, each a variation of the last.</p>
       <p><b>PITCH:</b> the selected instrument chromatically. The patch does not change, so it returns exactly.</p>
     </article>
     <article class="window">
       <h3 class="tab">Live recording</h3>
       <p>Record drum performances and pitched percussion straight into the sequencer. Playing, hits overdub onto the nearest step. Stopped, enter and remove steps one at a time.</p>
-      <p>16 steps, seven tracks, a note per track on each step.</p>
+      <p>Up to 64 steps on four pages, seven tracks, a note or a variation and a condition on each step. One undo and redo for everything.</p>
     </article>
     <article class="window">
       <h3 class="tab">Saved on the device</h3>
-      <p><b>12 user kits</b> and <b>12 user patterns</b> in user Flash, surviving a restart.</p>
+      <p><b>9 projects</b> in user Flash, surviving a restart. A project is the kit and the pattern together.</p>
       <p>A save is checked before it counts, and writes only to sectors found blank or already its own.</p>
     </article>
     <article class="window">
@@ -108,7 +114,7 @@
     <div class="shots" aria-hidden="true">
       <img src="assets/screens/1-start.png" alt="" width="240" height="240" loading="lazy">
       <img src="assets/screens/page-sound.png" alt="" width="240" height="240" loading="lazy">
-      <img src="assets/screens/page-saved-kits.png" alt="" width="240" height="240" loading="lazy">
+      <img src="assets/screens/page-projects.png" alt="" width="240" height="240" loading="lazy">
     </div>
     <div>
       <p>The firmware itself, running on an emulated FM-1 in your browser. Keyboard, mouse or touch, with sound, and no hardware.</p>
@@ -127,9 +133,10 @@
     <li><b>Start playback.</b> Press PLAY <kbd>Space</kbd>. Everything below works while it plays.</li>
     <li><b>Generate new sounds.</b> Press ENV <kbd>3</kbd> for a kit. Hold SAVE <kbd>8</kbd> and press ENV for the selected voice only.</li>
     <li><b>Switch keyboard modes.</b> Press SCL <kbd>2</kbd>: KEYS: DRUM becomes KEYS: PITCH. OCT− <kbd>Z</kbd> and OCT+ <kbd>X</kbd> then change the octave.</li>
-    <li><b>Record a pattern.</b> Press REC <kbd>R</kbd>. Playing, what you hit lands on the nearest step. Stopped, it lands on the selected step, and hitting it again removes it.</li>
-    <li><b>Save a kit.</b> Stop first. Hold SAVE and press EDIT <kbd>8</kbd>+<kbd>5</kbd>, choose a slot with KNOB 1, then tap SAVE. On a used slot, tap again while it says OVERWRITE. OCT− loads.</li>
-    <li><b>Save a pattern.</b> The same with SAVE and SEQ <kbd>8</kbd>+<kbd>0</kbd>. A pattern keeps its tempo and swing, and plays with any kit.</li>
+    <li><b>Program steps on the keys.</b> Press SEQ <kbd>0</kbd>. Tap a white key to turn a step on or off, tap one of the first four black keys for a page, and turn SELECT <kbd>← →</kbd> for another track. Hold a step and turn a knob to edit it.</li>
+    <li><b>Record a pattern.</b> Press REC <kbd>R</kbd>. Playing, what you hit lands on the nearest step. Stopped, it lands on the selected step, and hitting it again removes it. On SEQ, REC gives the keys back to play.</li>
+    <li><b>Take it back.</b> Hold SAVE and press OCT− <kbd>8</kbd>+<kbd>Z</kbd> to undo, kit or pattern. OCT+ <kbd>8</kbd>+<kbd>X</kbd> redoes it.</li>
+    <li><b>Save a project.</b> Stop first. Tap SAVE <kbd>8</kbd>, choose a slot with SELECT, then tap SAVE again. On a used slot, tap again while it says OVERWRITE. OCT− loads. A project keeps the kit, the pattern, the tempo and the swing.</li>
   </ol>
   <p class="source-note">The full guide is <a href="https://github.com/clickysteve/clatter-pocket/blob/main/docs/POCKET-CONTROLS.md">POCKET-CONTROLS.md</a>.</p>
 </section>
@@ -203,7 +210,7 @@
     <details><summary>Can I control it with MIDI?</summary>
       <p>Note input, yes: notes over DIN, USB and Bluetooth take the same path as the keys. Only DIN has been exercised, in the emulator. There is no MIDI output, no thru and no external clock.</p></details>
     <details><summary>Can I save patterns and kits?</summary>
-      <p>Yes: 12 of each, in the FM-1's user Flash. Tested on a model of the chip and in the emulator, not on a device. Back up anything you cannot afford to lose; there is no export. GLOBAL settings are not saved.</p></details>
+      <p>Yes: 9 projects, each a kit and a pattern together, in the FM-1's user Flash. Tested on a model of the chip and in the emulator, not on a device. Back up anything you cannot afford to lose; there is no export. GLOBAL settings are not saved.</p></details>
     <details><summary>Can I try it without hardware?</summary>
       <p>Yes. <a href="demo/">The demo</a> runs the firmware in the FM-1 emulator, in your browser.</p></details>
     <details><summary>Is installation currently safe?</summary>

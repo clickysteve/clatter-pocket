@@ -7,7 +7,7 @@ const still = matchMedia('(prefers-reduced-motion: reduce)');
 
 // ---------------------------------------------------------------- the hero's screen
 // Real screens read from the emulated LCD, changing as they would while someone plays.
-const SCREENS = ['seq-2-playing', 'page-sound', 'perf-1-kit', 'page-mixer', 'page-saved-kits'];
+const SCREENS = ['seq-2-playing', 'steps-hold', 'page-sound', 'perf-1-kit', 'page-mixer', 'page-projects'];
 const heroScreen = document.querySelector('#hero-fm1 image');
 if (heroScreen) {
   for (const name of SCREENS) new Image().src = `assets/screens/${name}.png`;
@@ -89,7 +89,7 @@ if (list && readout) {
     if (held && !c.save && c.id !== 'save') readout.append(row('SAVE:', 'no second action.'));
     if (chord) readout.append(row('Alone:', c.does));
     else if (c.save) readout.append(row(`${c.chord}:`, c.save));
-    if (c.savePage) readout.append(row('Save pages:', c.savePage.replace(/^On a saved-kits or saved-patterns page[:,]? ?/, '')));
+    if (c.savePage) readout.append(row('Save pages:', c.savePage.replace(/^On PROJECTS[:,]? ?/, '')));
     if (c.boot) readout.append(row('At start-up:', c.boot));
     if (c.light) readout.append(row('Light:', c.light));
     readout.append(row('In the demo:', chord ? `8 + ${c.key}` : c.key));

@@ -57,6 +57,9 @@ node tools/promote-emulator-build.mjs build/fm1-replace/clatter-pocket-fm1-repla
 ```
 
 Nothing does this automatically. CI cannot build firmware, and the site never reads `build/`.
+fm1-emu keeps the package a browser first ran, with its saves, so a returning visitor stays on the old
+build until they press its Check for firmware updates. The demo page says so; new visitors get this one.
+
 The package is stored as `clatter-pocket-emulator-only.bin`: the bytes are a real package, which a
 determined visitor could rename, and the name is there to stop an accident rather than a person.
 

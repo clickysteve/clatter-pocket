@@ -613,8 +613,8 @@ test('every control is one the documents name', () => {
 
 test('every chord is one the documents name', () => {
   const chords = CONTROLS.filter(c => c.chord).map(c => c.chord);
-  assert.deepEqual(chords.sort(), ['SAVE + ARP', 'SAVE + EDIT', 'SAVE + ENV', 'SAVE + LFO', 'SAVE + OCT+', 'SAVE + OCT−', 'SAVE + SEQ']);
-  for (const chord of ['SAVE+ENV', 'SAVE+ARP', 'SAVE+LFO', 'SAVE+OCT−', 'SAVE+OCT+', 'SAVE+EDIT', 'SAVE+SEQ']) assert.ok(docs.includes(chord), chord);
+  assert.deepEqual(chords.sort(), ['SAVE + ARP', 'SAVE + ENV', 'SAVE + FX', 'SAVE + LFO', 'SAVE + OCT+', 'SAVE + OCT−']);
+  for (const chord of ['SAVE+ENV', 'SAVE+ARP', 'SAVE+LFO', 'SAVE+OCT−', 'SAVE+OCT+']) assert.ok(docs.includes(chord), chord);
 });
 
 test('the brief\'s assignments hold', () => {
@@ -627,8 +627,9 @@ test('the brief\'s assignments hold', () => {
   assert.match(does('arp').save, /selected track/);
   assert.match(does('lfo').does, /Mutate the pattern/);
   assert.match(does('lfo').save, /selected track/);
-  assert.match(does('edit').save, /Saved kits/);
-  assert.match(does('seq').save, /Saved patterns/);
+  assert.match(does('fx').save, /Lock or unlock/);
+  assert.match(does('save').does, /PROJECTS/);
+  assert.match(does('seq').does, /keyboard becomes the selected track's steps/);
   assert.match(does('glo').does, /SYSTEM/);
   assert.match(does('select').kind, /no push switch/);
   assert.equal(does('select').save, undefined);
