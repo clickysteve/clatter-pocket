@@ -10,7 +10,8 @@
       "license": "GPL-3.0-only",
       "about": "A generative drum machine on the LXR sound engine. An emulator build: it has never run on a physical FM-1.",
       "repo": "https://github.com/clickysteve/clatter-pocket",
-      "package": "clatter-pocket-emulator-only.bin"
+      "package": "clatter-pocket-emulator-only.bin",
+      "sha256": "8e77bef666c0aeaecd6fcba95cc13b80ec0b44b0afc4f7ee68c79aa4f66bbfe7"
     }
   ]
 }

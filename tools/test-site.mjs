@@ -858,6 +858,42 @@ test('the demo package is the promoted build, and the emulator reads it', async 
   assert.ok(appFromPackage(got.bytes).length > 400000);
 });
 
+test('a returning visitor gets the promoted build, not the one their browser kept', () => {
+  const build = JSON.parse(readFileSync(join(root, 'site/demo/emulator-build.json'), 'utf8'));
+  const catalog = JSON.parse(readFileSync(join(root, 'site/demo/emu/firmwares.json'), 'utf8'));
+  assert.equal(catalog.firmwares[0].sha256, build.sha256);
+  assert.match(readFileSync(join(root, 'site/demo/emu/main.js'), 'utf8'), /kept && \(!f\.sha256 \|\| kept\.hash === f\.sha256\)/);
+  assert.match(readFileSync(join(root, 'tools/promote-emulator-build.mjs'), 'utf8'), /sha256: build\.sha256/);
+});
+
+test('the emulator draws the main page\'s panel, and each drawn control is the emulator\'s', async () => {
+  const html = readFileSync(join(root, 'site/demo/emu/index.html'), 'utf8');
+  assert.match(html, /href="\.\.\/\.\.\/assets\/fm1\.css"/);
+  assert.match(html, /<div class="skin"><canvas id="panel"/);
+  assert.match(page('index.html'), /href="assets\/fm1\.css"/);
+  const main = readFileSync(join(root, 'site/demo/emu/main.js'), 'utf8');
+  assert.match(main, /paintPanel\(frame\?\.leds, down, encClicks, pot, turning\)/);
+  assert.match(main, /const lcd = ui\.panel_lcd\(\), leds = ui\.panel_leds\(\);/, 'a pointer is taken before the buffer: the call can grow it');
+
+  const wasm = readFileSync(join(root, 'site/demo/emu/fm1_web.wasm'));
+  const { exports: ui } = (await WebAssembly.instantiate(wasm, { env: { fm1_jit_compile: () => 0 } })).instance;
+  ui.panel_board(0);
+  assert.deepEqual([ui.panel_width(), ui.panel_height()], [1280, 820]);
+  const svg = panelSvg({ interactive: true });
+  const attr = (tag, name) => Number(new RegExp(`\\b${name}="([^"]+)"`).exec(tag)[1]);
+  const pressable = [...svg.matchAll(/<rect class="(?:btn|key(?: blk)?)"[^>]*>/g)]
+    .map(([tag]) => ui.panel_hit(attr(tag, 'x') + attr(tag, 'width') / 2, attr(tag, 'y') + attr(tag, 'height') / 2) - 100);
+  assert.deepEqual(pressable.sort((a, b) => a - b), [...Array(41).keys()]);
+  const knobs = [...svg.matchAll(/<circle class="knob"[^>]*>/g)].map(([tag]) => ui.panel_hit(attr(tag, 'cx'), attr(tag, 'cy')));
+  assert.deepEqual(knobs.sort((a, b) => a - b), [...Array(8).keys()]);
+});
+
+test('the demo sends visitors only to controls the embedded emulator shows', () => {
+  const css = readFileSync(join(root, 'site/demo/emu/style.css'), 'utf8');
+  assert.match(css, /\[data-embed\] \.save-box/);
+  assert.doesNotMatch(page('demo/index.html'), /under the emulator/);
+});
+
 test('the demo opens CLATTER Pocket, at the FM-1\'s clock, embedded', () => {
   assert.match(page('demo/index.html'), /src="emu\/\?fw=clatter-pocket&amp;mhz=240&amp;embed=1"/);
 });

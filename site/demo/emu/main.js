@@ -5,6 +5,7 @@
 // computer (M-VAVE's own: their server does not let other pages fetch it).
 import { fetchPackage } from "./fwsc.js";
 import { SaveStore, packageHash, changedSectors, packSectors, exportSave, importSave } from "./persistence.js";
+import { clatterPanel } from "./clatter-panel.js";
 
 const CLOCKS = [60, 80, 100, 120, 160, 200, 240];
 // The device this page is for: the FM-1 (index.html) or the SMK-37 (smk37/index.html, <html
@@ -91,6 +92,7 @@ function setBoard(b) {
   encClicks.fill(0);
 }
 setBoard(DEV.board);
+const paintPanel = clatterPanel(ui, document.querySelector(".skin"));
 
 // ---------------------------------------------------------------- firmware and clock
 for (const f of catalog.firmwares) fwSel.add(new Option(`${f.name} ${f.version}`, f.id));
@@ -170,7 +172,7 @@ async function packageOf(f) {
   if (f.id === "local") return { bytes: f.bytes, url: null };
   if (packages.has(f.id)) return packages.get(f.id);
   const kept = await keptEntry(f.id);
-  if (kept) {
+  if (kept && (!f.sha256 || kept.hash === f.sha256)) {   // a catalogue's sha256 pins the build
     const got = { bytes: kept.package, url: kept.url };
     packages.set(f.id, got);
     return got;
@@ -338,11 +340,13 @@ stage.addEventListener("drop", (e) => {
 function draw() {
   const mem = () => ui.memory.buffer;
   if (frame) {
+    // (the first of these calls can grow the memory: ask before taking its buffer)
+    const lcd = ui.panel_lcd(), leds = ui.panel_leds();
     if (frame.lcd) {
-      new Uint16Array(mem(), ui.panel_lcd(), 240 * 240).set(frame.lcd);
+      new Uint16Array(mem(), lcd, 240 * 240).set(frame.lcd);
       frame.lcd = null;
     }
-    new Float32Array(mem(), ui.panel_leds(), 41).set(frame.leds);
+    new Float32Array(mem(), leds, 41).set(frame.leds);
     if (frame.pads) for (let p = 0; p < 16; p++) ui.panel_set(5, p, frame.pads[p]);
   }
   for (let i = 0; i < 64; i++) ui.panel_set(0, i, down[i]);
@@ -356,6 +360,7 @@ function draw() {
   const p = ui.panel_draw();
   const img = new ImageData(new Uint8ClampedArray(mem(), p, W * H * 4), W, H);
   ctx.putImageData(img, 0, 0);
+  paintPanel(frame?.leds, down, encClicks, pot, turning);
   requestAnimationFrame(draw);
 }
 requestAnimationFrame(draw);

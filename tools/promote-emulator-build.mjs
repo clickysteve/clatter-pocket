@@ -45,7 +45,7 @@ writeFileSync(join(emu, 'firmwares.json'), JSON.stringify({
     id: 'clatter-pocket', name: 'CLATTER Pocket', version: `${version} UNVERIFIED`, author: 'The CLATTER contributors',
     license: 'GPL-3.0-only',
     about: 'A generative drum machine on the LXR sound engine. An emulator build: it has never run on a physical FM-1.',
-    repo: 'https://github.com/clickysteve/clatter-pocket', package: NAME,
+    repo: 'https://github.com/clickysteve/clatter-pocket', package: NAME, sha256: build.sha256,
   }],
 }, null, 2) + '\n');
 console.log(`demo now runs ${version} from ${commit}: ${data.length} bytes, SHA-256 ${build.sha256}`);

@@ -1,0 +1,15 @@
+/* The FM-1 as line art: the main page and the demo's emulator draw the same panel. It needs
+   --ink, --line, --amber and --pixel from the page. */
+.fm1 { display: block; width: 100%; height: auto; font: 400 14px var(--pixel); user-select: none; -webkit-user-select: none; }
+.fm1 text { fill: var(--ink); pointer-events: none; }
+.fm1 .body { fill: #000; stroke: var(--ink); stroke-width: 4; }
+.fm1 .tray { fill: url(#none); fill: #0a0a0a; stroke: var(--line); stroke-width: 2; }
+.fm1 .knob { fill: #000; stroke: var(--ink); stroke-width: 3; }
+.fm1 .cap { fill: #1c1c1c; stroke: var(--line); stroke-width: 2; }
+.fm1 .ptr { stroke: var(--ink); stroke-width: 4; stroke-linecap: square; }
+.fm1 .btn { fill: #161616; stroke: var(--ink); stroke-width: 2.5; }
+.fm1 .key { fill: #1b1b1b; stroke: var(--ink); stroke-width: 2.5; }
+.fm1 .key.blk { fill: #000; }
+.fm1 .lcd { fill: #000; stroke: var(--ink); stroke-width: 3; }
+.fm1 .screen { image-rendering: pixelated; }
+.fm1 .hit { fill: transparent; }

@@ -1,0 +1,55 @@
+/* CLATTER Pocket's look on fm1-emu: the site's black desktop, heavy frames and pixel type, over
+   the emulator's own style.css. Its colours are the site's tokens under the emulator's names. */
+
+@font-face { font-family: 'Silkscreen'; src: url('../../assets/fonts/silkscreen-latin-400-normal.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 400; src: url('../../assets/fonts/ibm-plex-sans-latin-400-normal.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 600; src: url('../../assets/fonts/ibm-plex-sans-latin-600-normal.woff2') format('woff2'); font-display: swap; }
+
+:root {
+  --room: #000; --bar: #000; --well: #000; --card: #0c0c0c;
+  --ink: #f4f4f0; --text: #f4f4f0; --dim: #b4b4ae; --faint: #5c5c58; --line: #5c5c58; --rule: #5c5c58;
+  --amber: #ff9a1f; --amber-hi: #ffb65c;
+  --pixel: 'Silkscreen', ui-monospace, Menlo, Consolas, monospace;
+}
+*, *::before, *::after { border-radius: 0 !important; }
+html, body { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+a { text-underline-offset: 3px; }
+h1, .eyebrow, #status, .box > label, .sel, select, button, .file, .embed-only { font-family: var(--pixel); font-weight: 400; }
+#status { font-size: 12px; }
+.box > label { color: var(--ink); font-size: 13px; }
+select, .box button, #perfwarn button, .file { border: 2px solid var(--ink); font-size: 13px; }
+.box { border: 2px solid var(--ink); background: #000; }
+#perfwarn { border-width: 3px; background: #1d1000; }
+.embed-only { color: var(--ink); }
+
+/* the panel: the site's drawing, with the emulator's canvas on top, showing only its LCD */
+.stage { padding: 0; border: 0; background: none; }
+.skin { position: relative; width: 100%; margin: 0 auto; max-width: max(560px, calc((100svh - var(--above, 140px) - 84px) * var(--aspect, 1.56))); }
+.skin .fm1 { position: absolute; inset: 0; height: 100%; font-size: 15px; }
+.skin canvas { position: relative; max-width: none; width: 100%; height: auto; }
+/* a mask, not a clip: the whole canvas still takes the pointer. 480 x 480 at 370, 42 of 1280 x 820 */
+[data-board="fm1"] .skin canvas {
+  -webkit-mask: linear-gradient(#000 0 0) 46.25% 12.353% / 37.5% 58.537% no-repeat;
+  mask: linear-gradient(#000 0 0) 46.25% 12.353% / 37.5% 58.537% no-repeat;
+}
+[data-board="smk37"] .skin .fm1 { display: none; }
+[data-embed] .skin { max-width: none; }
+
+.fm1 .lit, .fm1 .key.blk.lit { fill: var(--amber); stroke: var(--amber); }
+.fm1 .held, .fm1 .key.blk.held { fill: var(--ink); stroke: var(--ink); }
+.fm1 .held ~ text, .fm1 .lit ~ text { fill: #000; }
+.fm1 .turning .knob, .fm1 .turning .cap { stroke: var(--amber); }
+.fm1 .turning .ptr { stroke: var(--amber); }
+
+/* over the LCD, as the site's primary button */
+#start { inset: auto; left: 47.66%; top: 34.4%; transform: translate(-50%, -50%); margin: 0; width: auto; height: auto;
+         padding: .75em 1.2em; border: 3px solid var(--amber); background: var(--amber); color: #000;
+         font-size: clamp(11px, 2.4vw, 16px); line-height: 1.2; box-shadow: 4px 4px 0 #8a4f00; }
+#start:hover { background: var(--ink); border-color: var(--ink); }
+
+/* a phone upright or small window: say "sideways" only where that means something */
+@media (hover: hover) { .rotate { display: none !important; } }
+/* a phone on its side: the panel fits the screen's height */
+@media (orientation: landscape) and (max-height: 560px) {
+  .skin { width: calc((100svh - 12px) * var(--aspect, 1.56)); max-width: 100%; }
+}

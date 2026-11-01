@@ -17,7 +17,7 @@ make site-serve  # http://127.0.0.1:8770/clatter-pocket/, a base path, to catch 
 | Path | |
 |---|---|
 | `site/index.html`, `styles.css`, `app.js` | the page. `<!-- @name -->` and `{{name}}` are filled by the build |
-| `site/assets/controls.mjs` | the control guide's data and the panel drawing, used by the build and the browser |
+| `site/assets/controls.mjs`, `fm1.css` | the control guide's data and the panel drawing, used by the build, the main page and the demo's emulator |
 | `site/release.json` | **the public release**: the only thing that says what may be installed |
 | `releases/<version>/` | the installable packages. Copied to the site only if `site/release.json` names one |
 | `site/installer/gate.mjs` | the rule, used by the build and the browser |
@@ -26,7 +26,7 @@ make site-serve  # http://127.0.0.1:8770/clatter-pocket/, a base path, to catch 
 | `tools/promote-release.mjs` | name a package as the installable release, after checking it |
 | `tools/fetch-open-firmware.mjs` | get official Open from M-VAVE's release at deployment, by hash. Never committed |
 | `tools/fm1-update-sim.mjs` | a simulated FM-1 at the Web MIDI level, for the installer's tests |
-| `site/demo/` | the demo page; `emu/` is the vendored emulator; `emulator-build.json` pins what it runs |
+| `site/demo/` | the demo page; `emu/` is the vendored emulator, lightly patched; `emulator-build.json` pins what it runs |
 | `tools/build-site.mjs`, `test-site.mjs`, `serve-site.mjs` | build, tests, a server with the base path |
 | `tools/promote-emulator-build.mjs` | put a package on the demo, by hand |
 | `.github/workflows/deploy-pages.yml` | test and publish `site/` from `main` |
@@ -37,19 +37,34 @@ The research behind it is in [FM1-COMMUNITY.md](FM1-COMMUNITY.md).
 
 The deployed emulator cannot load a package that is not in its catalogue, and CLATTER Pocket cannot be
 in its catalogue yet ([why](FM1-COMMUNITY.md#the-firmware-hubs-rules-and-clatter-pocket)). So the site
-carries its own copy, **with no change to the emulator's code**:
+carries its own copy, with a small patch to give it the site's panel and to pin its firmware:
 
 - `site/demo/emu/` holds fm1-emu's page files at commit `93cb7ee` and the matching `fm1_web.wasm`, from
   the deployed site, which was built from that commit: on 2026-10-30 the deployed `main.js` equalled
   the commit's, and the wasm is from the same deployment. Its `LICENSE` is kept beside them.
-- Only `firmwares.json` is ours: one entry, using the catalogue format fm1-emu already has.
+- `firmwares.json`, `clatter-panel.js` and `clatter.css` are ours. The catalogue has one entry, in the
+  format fm1-emu already has, plus a `sha256`.
 - The demo page frames `emu/?fw=clatter-pocket&mhz=240&embed=1`, three parameters fm1-emu documents.
   240 MHz because the page's default of 100 is not the FM-1's clock.
 
-The emulator was not changed, so there is no fork to maintain. To update it: copy `index.html`,
-`style.css`, `main.js`, `persistence.js`, `worklet.js`, `jit.js`, `fwsc.js` and `LICENSE` from a commit
-of fm1-emu, its wasm from the same deployment, change the commit in
-`tools/promote-emulator-build.mjs`, promote, and run the tests.
+The patch to fm1-emu's own files, which `make site-test` checks is there:
+
+| File | Change |
+|---|---|
+| `index.html` | links `assets/fm1.css` and `clatter.css`; wraps the canvas in `<div class="skin">` |
+| `main.js` | `packageOf` keeps a stored package only if it matches the catalogue's `sha256` |
+| `main.js` | `draw` calls `paintPanel`, from `clatter-panel.js`, after each frame |
+| `main.js` | `draw` takes the LCD and LED pointers before the memory's buffer: the first call can grow it, which detaches the buffer, and the render loop dies with a blank screen if the first frame comes after Start |
+
+**The panel** is `panelSvg`, the drawing on the main page. The emulator's canvas stays on top of it,
+masked to its LCD, so it still shows the screen and takes every press and drag. `clatter-panel.js`
+asks `panel_hit` what each drawn control is, which works because the drawing uses the emulator's panel
+map, and shows the emulator's state on it. LED numbers are the same as the keys' matrix ids. LEDs are
+averaged PWM: a lit one reads about 0.09, an unlit one 0.
+
+To update the emulator: copy `index.html`, `style.css`, `main.js`, `persistence.js`, `worklet.js`,
+`jit.js`, `fwsc.js` and `LICENSE` from a commit of fm1-emu, its wasm from the same deployment, apply the
+patch above, change the commit in `tools/promote-emulator-build.mjs`, promote, and run the tests.
 
 To change the firmware the demo runs:
 
@@ -58,8 +73,10 @@ node tools/promote-emulator-build.mjs build/fm1-replace/clatter-pocket-fm1-repla
 ```
 
 Nothing does this automatically. CI cannot build firmware, and the site never reads `build/`.
-fm1-emu keeps the package a browser first ran, with its saves, so a returning visitor stays on the old
-build until they press its Check for firmware updates. The demo page says so; new visitors get this one.
+fm1-emu keeps the package a browser first ran, with its saves, and on its own never replaces it, which
+left returning visitors on old firmware. The catalogue's `sha256` overrides that: the demo always starts
+the promoted build. Saves stay with the version that made them, and the full page's Browse saved
+firmwares reopens them.
 
 The package is stored as `clatter-pocket-emulator-only.bin`: the bytes are a real package, which a
 determined visitor could rename, and the name is there to stop an accident rather than a person.
