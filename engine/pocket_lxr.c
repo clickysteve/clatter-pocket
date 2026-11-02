@@ -509,7 +509,11 @@ POCKET_CONTROL_CODE int pocket_lxr_init(uint32_t seed)
 }
 
 /* ------------------------------------------------------------------ audio context */
-static int16_t voiceData[POCKET_LXR_VOICES][POCKET_LXR_BLOCK];
+/* Aligned: the LXR's block code reads and writes these through int32_t* (BufferTools.h, HiHat.c,
+   CymbalVoice.c), which the Cortex-M7 allows at any address. On the FM-1's core a misaligned access
+   is a fault that cannot be masked and it resets the chip, and int16_t alone leaves this array where
+   the linker puts it (the first device test: a reset at the first block, tools/check-firmware.py). */
+static int16_t voiceData[POCKET_LXR_VOICES][POCKET_LXR_BLOCK] __attribute__((aligned(4)));
 static float voicePanL[POCKET_LXR_VOICES], voicePanR[POCKET_LXR_VOICES];
 static int32_t mixL[POCKET_LXR_BLOCK], mixR[POCKET_LXR_BLOCK];
 

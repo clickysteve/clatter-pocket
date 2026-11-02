@@ -1,0 +1,62 @@
+diff --git a/crates/fm1-emu/src/main.rs b/crates/fm1-emu/src/main.rs
+index 7f1136e..d54e21e 100644
+--- a/crates/fm1-emu/src/main.rs
++++ b/crates/fm1-emu/src/main.rs
+@@ -385,6 +385,7 @@ fn main() -> ExitCode {
+     // FM1_LCD_TIMED (or FM1_STRICT): the LCD's transfers take their time, as on an FM-1
+     soc.lcd_timed = fm1_soc::lcd_timed_from_env();
+     soc.cpu1_survives = args.cpu1_survives;
++    soc.strict_align = std::env::var_os("FM1_ALIGN").is_some();
+     soc.flaky_core1 = args.flaky_core1.map(|rate| fm1_soc::flaky::FlakyCore1::new(rate, args.seed.unwrap_or(1)));
+     if let Some(f) = &flash_image {
+         soc.flash.load(f);
+@@ -489,6 +490,7 @@ fn main() -> ExitCode {
+     let mut stop = false;
+     let mut park = false; // (core 1 stopped on a fault this step: dropped below)
+     soc.take_boot(&cpus[0]);
++    let mut mis_seen = std::collections::HashSet::new();
+     for _ in 0..args.steps {
+         // a chip reset (the watchdog, PR_PWR): cpu0 from its start, core 1 held again
+         if soc.reset_due() {
+@@ -634,6 +636,14 @@ fn main() -> ExitCode {
+             } else {
+                 cpu.step(&mut soc)
+             };
++            if soc.emu_cause & 1 != 0 {
++                let a = fm1_soc::MIS_ADDR.load(std::sync::atomic::Ordering::Relaxed);
++                let z = fm1_soc::MIS_SIZE.load(std::sync::atomic::Ordering::Relaxed);
++                if mis_seen.insert(last_pc) {
++                    println!("MISALIGNED c{} pc={last_pc:#010x} addr={a:#010x} size={z} ms={} sp={:#010x} rets={:#010x} irq_levels={:?}", cpu.core_id, soc.periph.ms(), cpu.sp, cpu.rets, cpu.irq_levels);
++                }
++                if std::env::var_os("FM1_ALIGN_SURVEY").is_some() { soc.emu_cause &= !1; }
++            }
+             match stepped {
+                 Ok(()) => {
+                     if let (Some(a), Some(old)) = (args.watch, watch_val) {
+diff --git a/crates/fm1-soc/src/lib.rs b/crates/fm1-soc/src/lib.rs
+index 9c4cc00..423f6d2 100644
+--- a/crates/fm1-soc/src/lib.rs
++++ b/crates/fm1-soc/src/lib.rs
+@@ -23,6 +23,8 @@
+ //! never silently swallowed. The access log is the reverse-engineering
+ //! roadmap.
+ 
++pub static MIS_ADDR: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
++pub static MIS_SIZE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+ use fm1_core::Bus;
+ 
+ pub mod script;
+@@ -875,8 +877,12 @@ impl Soc {
+         if std::env::var_os("FM1_STRICT_LOG").is_some() {
+             eprintln!("misaligned {size}-byte access at {addr:#010x}");
+         }
++        MIS_ADDR.store(addr, std::sync::atomic::Ordering::Relaxed);
++        MIS_SIZE.store(size, std::sync::atomic::Ordering::Relaxed);
+         self.emu_cause |= 1;
+-        self.raise_exception();
++        if std::env::var_os("FM1_ALIGN_SURVEY").is_none() {
++            self.raise_exception();
++        }
+     }
+ 
+     /// A bus-invalid access (DBG_EN's bits 4 / 5: AXI read / write): a guard trip once armed

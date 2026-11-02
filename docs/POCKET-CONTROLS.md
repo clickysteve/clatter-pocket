@@ -474,6 +474,10 @@ has not been seen**.
 **0.7.1, length on SEQ+KNOB 3: 437,532 bytes, 16,389 free, the margin kept by 5 bytes.** Heap 110,092.
 The next feature needs flash found for it first.
 
+**0.8.2, the voice buffer aligned: 436,412 bytes, 17,509 free, the margin kept by 1,125 bytes.** The
+first device test of 0.8.1 reset in a loop at the first audio block (HARDWARE.md, Faults). The fix adds
+no code.
+
 **0.8.1, the logo on the start-up screen: 436,412 bytes, 17,509 free, the margin kept by 1,125 bytes.**
 The logo is 11 rectangles drawn with the panel's `fill`, about 110 bytes. The LCD driver's unit
 (`app/board/panel.c`, 3,204 bytes at `-O2`) is now built at `-Oz`, 1,688, which paid for it and left

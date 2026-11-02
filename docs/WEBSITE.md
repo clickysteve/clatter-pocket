@@ -205,8 +205,10 @@ the identity of whichever package it was sent. Nobody here has seen a real V15 d
 
 1. Commit the firmware. Build from that commit, on a clean tree:
    `firmware/fm1/build.sh --replace --single-precision`.
-2. Run `python3 tools/check-firmware.py`, disassemble for `tools/check-audio-path.py`, and
-   `make emu-test`, into a log that also has the package's `shasum -a 256`.
+2. Run `python3 tools/check-firmware.py`, disassemble for `tools/check-audio-path.py`, `make emu-test`
+   and `make emu-strict`, into a log that also has the package's `shasum -a 256`. The last is the only
+   one that holds a package to the chip's alignment rule: 0.8.1 passed everything else, and reset in a
+   loop on the first device.
 3. `node tools/promote-emulator-build.mjs <package> <commit>`, so that the demo runs the same bytes.
 4. `node tools/promote-release.mjs <that log>`. It repeats the checks, refuses an outdated or changed
    build, copies the package to `releases/` and writes `site/release.json`.
