@@ -1574,7 +1574,7 @@ async function main() {
   systemPage(m);
   m.run(800);
   const first = m.text();
-  shows(m, "0.7.0 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
+  shows(m, "0.7.1 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
   const heap = /HEAP +(\d+) LINKED/.exec(first);
   check(heap && Number(heap[1]) >= 49152, `SYSTEM shows the heap (${heap?.[1]})`, first);
   const cpu = /CPU MEAN +([\d.]+)%/.exec(first), peak = /CPU PEAK +([\d.]+)%/.exec(first);
