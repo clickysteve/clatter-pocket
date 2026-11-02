@@ -49,7 +49,8 @@ The first report gave 479,232: that figure left out the boot area, BTIF and the 
 | The same with flash recovered and saving (docs/POCKET-STORAGE.md) | 433,628 | 20,293 free |
 | 0.6.0: 64 steps, conditions, projects, variations, one undo, dark interface | 437,436 | 16,485 free |
 | 0.7.0: the keyboard as the pattern on SEQ | 437,500 | 16,421 free |
-| **0.7.1: the pattern's length on SEQ+KNOB 3** | **437,532** | **16,389 free** |
+| 0.7.1: the pattern's length on SEQ+KNOB 3 | 437,532 | 16,389 free |
+| **0.8.0: copying a page, SYSTEM cut to what is read** | **437,372** | **16,549 free** |
 
 The SDK's binary library (`libfm1_engine.a`) is a single pre-linked object. `--gc-sections`
 removes what nothing references any more, but the library still references its own
