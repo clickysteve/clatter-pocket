@@ -5,12 +5,12 @@ PRE-FLASH-AUDIT.md) on one M-VAVE FM-1. **Nothing here has been done yet.** Step
 **UNVERIFIED** follow from the SDK's source and build, not from a device. The owner decides
 whether to start, and every step can be the point to stop.
 
-Candidate: firmware 0.8.0, commit `24e37e4`, SHA-256
-`be5c69942f34dabe5f729dd288d3eb67b05ff50bea96f33e8ccbb02b38a1ae6d`.
+Candidate: firmware 0.8.1, commit `10a2755`, SHA-256
+`900c77480270ee047adc420d9f51ca918c1e783b4e33d53cb4066fd67096d7e7`.
 
 **Install it from <https://clatter-pocket.allmyfriendsaresynths.com/installer/>**, which runs the steps
 below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-`fc47f1de0776f45c8002841b7cc086265797e6a15154cf956c16063a884de90a`.
+`c925f358cee223a64cd53ac0f348842775fd9e90135fe4b95f05d9ea1eded789`.
 
 Both packages are produced by:
 

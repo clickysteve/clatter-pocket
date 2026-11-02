@@ -474,6 +474,11 @@ has not been seen**.
 **0.7.1, length on SEQ+KNOB 3: 437,532 bytes, 16,389 free, the margin kept by 5 bytes.** Heap 110,092.
 The next feature needs flash found for it first.
 
+**0.8.1, the logo on the start-up screen: 436,412 bytes, 17,509 free, the margin kept by 1,125 bytes.**
+The logo is 11 rectangles drawn with the panel's `fill`, about 110 bytes. The LCD driver's unit
+(`app/board/panel.c`, 3,204 bytes at `-O2`) is now built at `-Oz`, 1,688, which paid for it and left
+flash over. CPU in the emulator is unchanged (28.1 % mean, as 0.8.0).
+
 **0.8.0, copying a page: 437,372 bytes, 16,549 free, the margin kept by 165 bytes.** 0.7.1 was 437,532
 and 16,389. Heap 109,580, down 512: the 448-byte clipboard, and a zeroed status moved out of Flash. Conditions
 needed no flash: the sequencer, screen, undo and saves already had them, and the only change is the

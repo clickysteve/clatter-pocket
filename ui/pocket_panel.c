@@ -1711,14 +1711,26 @@ static void draw_system(const struct pocket_panel_status* status, unsigned line,
 	label_value(px, labels[line], value);
 }
 
+/* The emblem on the start-up screen, 40x40: a bearded face in glasses on an orange disc, as
+ * rectangles packed as x, y, w, h (6 bits each) and a colour (orange, black, pink, white). */
+static const uint32_t emblem[] = {
+	0x0a1000c, 0x091c086, 0x0724182, 0x0428300, 0x18940ca, 0x151a247, 0x234e2cd, 0x3198388, 0x11083ca, 0x11083d6, 0x0086651
+};
+
 /* The start-up, SAFE MODE and error screen: unmistakably not the stock instrument. */
 static void draw_identity(const struct pocket_panel* panel, const struct pocket_panel_status* status,
                           unsigned band, uint16_t* px)
 {
+	static const uint16_t colours[] = { ACCENT, PAPER, 0xf59eu, INK };
 	static const char* const states[] = { "STARTING", "LXR ENGINE READY", "SAFE MODE - ENGINE OFF",
 		"ENGINE ERROR - TABLES" };
 	const int top = -(int)band * POCKET_BAND_ROWS;
 	fill(px, 0, 0, POCKET_SCREEN_W, POCKET_BAND_ROWS, PAPER);
+	for (int i = 0; i < 11; i++)
+	{
+		const uint32_t r = emblem[i];
+		fill(px, 100 + (int)(r & 63), top + 8 + (int)(r >> 6 & 63), (int)(r >> 12 & 63), (int)(r >> 18 & 63), colours[r >> 24]);
+	}
 	text_scaled(px, 36, top + 56, "CLATTER POCKET", INK, 3);
 	text(px, 56, top + 84, "LXR DRUM MACHINE", ACCENT);
 	text(px, MARGIN, top + 136, states[status->state < 4 ? status->state : 3], INK);

@@ -465,7 +465,8 @@ try {
         if ($source -in @('app/screen.c','app/transfer.c','app/midi_router.c','app/clatter_pocket/clatter_pocket_app.c')) {
             $options += '-fno-lto'
         }
-        if ($source -eq 'app/board/panel.c') { $options += @('-fno-lto','-fno-pic') }
+        # -Oz: the panel unit holds the LCD driver (lcd.inc), 3,204 bytes at -O2 and 1,688 at -Oz
+        if ($source -eq 'app/board/panel.c') { $options += @('-fno-lto','-fno-pic','-Oz') }
         $options += @('-fwrapv','-fno-fast-math','-ffp-contract=off')
         # Storage and screen run only from control; keep audio DSP on O2.
         if ($source -in @('app/project.c','app/transfer.c','app/samples.c','app/screen.c','app/presets.c','app/midi_router.c','app/fm_factory.c','app/fm_library.c')) { $options += '-Oz' }
