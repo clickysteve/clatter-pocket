@@ -9,7 +9,7 @@
 // the playhead from the LCD's pixels, and a generated pattern is compared with the host's.
 // --wasm is the emulator's WebAssembly core (web/build.sh, or fm1_web.wasm from its site).
 // --stock is a negative control: a stock package must fail the identity check.
-// --only steps runs the keyboard as the pattern alone.
+// --only steps runs the keyboard as the pattern alone, --only pages copying pages and conditions.
 // Writes a PNG of each screen to --out. Exit status 0 only if every check passed.
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -399,7 +399,7 @@ async function performance(m) {
   }
   check(worst > 0 && worst < 60, `a kit loading while the pattern plays: CPU peak ${worst} %`, m.text());
   let sys = m.text();
-  check(/OVERRUNS +0\b/.test(sys) && /DROPPED +0\b/.test(sys), "no overruns or dropped events through kits and patterns while playing", sys);
+  check(/FAULTS +0\b/.test(sys), "no overruns or dropped events through kits and patterns while playing", sys);
   m.tap(BUTTON.SEQ, 90);
   m.tap(BUTTON.PLAY);
   m.run(1800);
@@ -514,7 +514,7 @@ async function performance(m) {
   systemPage(m);
   m.run(800);
   sys = m.text();
-  check(/OVERRUNS +0\b/.test(sys) && /DROPPED +0\b/.test(sys), "no overruns or dropped events through recording", sys);
+  check(/FAULTS +0\b/.test(sys), "no overruns or dropped events through recording", sys);
   m.tap(BUTTON.SEQ, 90);
   m.tap(BUTTON.PLAY);
   m.run(1800);
@@ -903,7 +903,7 @@ async function longPatterns(m) {
     m.run(1800);
     return o.map((v) => Math.floor(v / bar));
   };
-  for (const [clicks, name, every, turn] of [[1, "1:2", 2, 0], [1, "2:2", 2, 1], [1, "1:3", 3, 0], [1, "2:3", 3, 1], [2, "1:4", 4, 0], [3, "4:4", 4, 3]]) {
+  for (const [clicks, name, every, turn] of [[1, "1:2", 2, 0], [1, "2:2", 2, 1], [1, "1:3", 3, 0], [1, "2:3", 3, 1], [1, "3:3", 3, 2], [1, "1:4", 4, 0], [1, "2:4", 4, 1], [1, "3:4", 4, 2], [1, "4:4", 4, 3]]) {
     m.chordTurn(ENC.KNOB1, clicks);
     shows(m, name, `SAVE+KNOB1: ${name}`);
     const want = Array.from({ length: 3 }, (_, n) => turn + n * every);
@@ -985,7 +985,7 @@ async function longPatterns(m) {
   const mean = /CPU MEAN +([\d.]+)%/.exec(sys), peak = /CPU PEAK +([\d.]+)%/.exec(sys);
   console.log(`     dense variations: CPU mean ${mean?.[1]} %, peak ${peak?.[1]} %`);
   check(Number(peak?.[1]) < 60, `dense variations with hits over them: peak ${peak?.[1]} %`, sys);
-  check(/OVERRUNS +0\b/.test(sys) && /DROPPED +0\b/.test(sys), "no overruns or dropped events", sys);
+  check(/FAULTS +0\b/.test(sys), "no overruns or dropped events", sys);
   m.tap(BUTTON.REC, 60);
   m.tap(BUTTON.PLAY);
   m.run(1800);
@@ -1022,8 +1022,12 @@ async function sequencer(m) {
   const heard = m.listen(4500);
   const period = heard.filter((v) => v - heard[0] < loop - 300);
   const again = period.filter((v) => heard.some((w) => near(w, v + loop, 140)));
-  // overlapping voices can hide an onset from this detector, so most, not all
-  check(period.length >= 3 && again.length >= period.length * 0.85, `the pattern repeats every ${loop} samples (${again.length} of ${period.length} onsets recur a loop later)`, heard.join());
+  // Overlapping voices hide onsets from this detector, and which ones moves with the noise's phase,
+  // so most, not all: the same package can give 10 of 10 or 9 of 11 by when PLAY lands. Timing is
+  // what cannot move, so that is held exactly: every onset is on a sixteenth, to the output block.
+  check(period.length >= 3 && again.length >= period.length * 0.75, `the pattern repeats every ${loop} samples (${again.length} of ${period.length} onsets recur a loop later)`, heard.join());
+  const sixteenth = (RATE * 15) / 120, offGrid = Math.max(...heard.map((v) => { const k = (v - heard[0]) / sixteenth; return Math.abs(k - Math.round(k)) * sixteenth; }));
+  check(offGrid <= 128, `every onset on a sixteenth, ${offGrid.toFixed(0)} samples at most from it`, heard.join());
 
   // ---- STOP
   m.tap(BUTTON.PLAY);
@@ -1164,7 +1168,7 @@ async function sequencer(m) {
   systemPage(m);
   m.run(800);
   const sys = m.text();
-  check(/OVERRUNS +0\b/.test(sys) && /DROPPED +0\b/.test(sys), "SYSTEM: no overruns or dropped events with the sequence", sys);
+  check(/FAULTS +0\b/.test(sys), "SYSTEM: no overruns or dropped events with the sequence", sys);
   m.tap(BUTTON.PLAY);
   m.run(1800);
   m.tap(BUTTON.HOME, 90);
@@ -1307,8 +1311,7 @@ async function stepKeyboard(pkg) {
   m.chord(BUTTON.SAVE, BUTTON.OCTDN); m.run(300);
   shows(m, "UNDO");
   hold(m, KEY(WHITE[6]));
-  shows(m, "STEP 23 VEL 127", "one undo takes the whole hold back");
-  check(!/STEP 23 VEL 127 /.test(m.text()), "note, variation and condition with it", m.text());
+  shows(m, "STEP 23 VEL 127 COND ALWAYS", "one undo takes the whole hold back: note, variation and condition with it");
   release(m, KEY(WHITE[6]));
   check(m.grid()[0][6] === "1", "and the step is on");
   redo(m);
@@ -1478,18 +1481,211 @@ async function stepKeyboard(pkg) {
   systemPage(m);
   m.run(800);
   const sys = m.text();
-  check(/OVERRUNS +0\b/.test(sys) && /DROPPED +0\b/.test(sys), "no overruns or dropped events through the step keys", sys);
+  check(/FAULTS +0\b/.test(sys), "no overruns or dropped events through the step keys", sys);
   console.log(`     step keys: CPU mean ${/CPU MEAN +([\d.]+)%/.exec(sys)?.[1]} %, peak ${/CPU PEAK +([\d.]+)%/.exec(sys)?.[1]} %`);
   m.tap(BUTTON.SEQ, 90);
   m.run(300);
   m.png(`${out}/steps-page.png`);
 }
 
+// A page copied, edited and saved, and conditions counted by the pattern's length.
+async function pageCopy(pkg) {
+  let m = await new Machine().boot(pkg);
+  m.x.fm1_pot(1023);
+  m.run(3000);
+  const OFF = "0".repeat(STEPS), rows = () => m.grid().join("\n");
+  const page = (p) => { m.tap(KEY(BLACK[p]), 60); m.run(200); };
+  const copy = () => { m.chord(BUTTON.SEQ, BUTTON.OCTDN); m.run(200); };
+  const paste = () => { m.chord(BUTTON.SEQ, BUTTON.OCTUP); m.run(200); };
+  const held = (s) => { hold(m, KEY(WHITE[s])); const t = m.text(); release(m, KEY(WHITE[s])); return t; };
+  m.tap(BUTTON.SEQ, 90);
+  m.run(300);
+  selectVoice(m, 0);
+
+  // ---- a page of 16 with everything on a step, lengthened, copied, pasted
+  shows(m, "PAGE 1/1", "16 steps");
+  if (m.grid()[0][0] === "0") { m.tap(KEY(WHITE[0]), 40); m.run(200); }
+  hold(m, KEY(WHITE[0]));
+  m.turn(ENC.KNOB1, -2); m.turn(ENC.KNOB2, 5); m.turn(ENC.KNOB3, 3);
+  m.run(150);
+  const line = /STEP 1 VEL \d+ N\d+ COND 1:3/.exec(m.text())?.[0];
+  check(line, `a step with a velocity, a note and a condition: ${line}`, m.text());
+  release(m, KEY(WHITE[0]));
+  const page1 = rows();
+  m.x.fm1_key(BUTTON.SEQ, 1);
+  m.run(100);
+  shows(m, "K3 LEN OCT- COPY OCT+ PASTE", "SEQ held says so");
+  m.x.fm1_key(BUTTON.SEQ, 0);
+  m.run(100);
+  m.chordTurn(ENC.KNOB3, 1, BUTTON.SEQ);
+  page(1);
+  shows(m, "PAGE 2/2", "32 steps");
+  check(m.grid().every((r) => r === OFF), "the new page is empty: lengthening copies nothing", rows());
+  page(0);
+  copy();
+  shows(m, "PAGE 1 COPIED");
+  shows(m, "PAGE 1/2", "and stays on the page");
+  page(1);
+  paste();
+  shows(m, "PASTED TO PAGE 2");
+  check(rows() === page1, "page 2 is page 1, every track", rows());
+  m.png(`${out}/pages-pasted.png`);
+  const pasted = line.replace("STEP 1 ", "STEP 17 ");
+  check(held(0).includes(pasted), `and what is on its steps: ${pasted}`, m.text());
+  undo(m);
+  shows(m, "UNDO");
+  check(m.grid().every((r) => r === OFF), "one undo: the page as it was", rows());
+  redo(m);
+  check(rows() === page1, "redo: pasted again", rows());
+
+  // ---- each is its own page now, and one copy goes to many, over what is there
+  m.tap(KEY(WHITE[2]), 40);
+  m.run(200);
+  const edited = rows();
+  check(edited !== page1, "a step of page 2 edited");
+  page(0);
+  check(rows() === page1, "page 1 stays as it was");
+  m.chordTurn(ENC.KNOB3, 2, BUTTON.SEQ);
+  for (const p of [2, 3]) {
+    page(p);
+    paste();
+    shows(m, `PASTED TO PAGE ${p + 1}`);
+    check(rows() === page1, `the same copy on page ${p + 1}`, rows());
+  }
+  page(1);
+  paste();
+  check(rows() === page1, "over a page with steps on it: replaced, not merged", rows());
+  undo(m);
+  check(rows() === edited, "and back, exactly", rows());
+  page(3);
+  m.tap(KEY(WHITE[15]), 40);
+  m.run(200);
+  const page4 = rows();
+  copy();
+  shows(m, "PAGE 4 COPIED", "a later page, copied");
+  page(0);
+  paste();
+  check(rows() === page4, "pasted to an earlier one", rows());
+  undo(m);
+  check(rows() === page1, "undone", rows());
+
+  // ---- saved, and a restart
+  m.chordTurn(ENC.KNOB3, -2, BUTTON.SEQ);
+  m.tap(BUTTON.SAVE, 60);
+  m.run(300);
+  m.tap(BUTTON.SAVE, 60);
+  m.run(600);
+  shows(m, "SAVED 1");
+  const f = m.flash(), sectors = [];
+  for (let at = USER; at < 0xff000; at += SECTOR) if (f.slice(at, at + SECTOR).some((b) => b !== 255)) sectors.push([at, f.slice(at, at + SECTOR)]);
+  m = await new Machine().boot(pkg);
+  m.restore(sectors);
+  m.x.fm1_pot(1023);
+  m.run(2500);
+  m.tap(BUTTON.SAVE, 60);
+  m.run(300);
+  m.tap(BUTTON.OCTDN, 60);
+  m.run(800);
+  m.tap(BUTTON.SEQ, 90);
+  m.run(300);
+  selectVoice(m, 0);
+  shows(m, "PAGE 1/2", "after a restart: 32 steps");
+  check(rows() === page1, "page 1", rows());
+  check(held(0).includes(line), "and its step", m.text());
+  page(1);
+  check(rows() === edited, "page 2, the edit and all", rows());
+  check(held(0).includes(pasted), "and its condition", m.text());
+
+  // ---- every condition, on the held step's line, and it never toggles
+  m.chordTurn(ENC.KNOB3, 2, BUTTON.SEQ); // pages past the end keep their steps: all four are cleared
+  for (let t = 0; t < TRACKS; t++) {
+    selectVoice(m, t);
+    for (const p of [3, 2, 1, 0]) {
+      page(p);
+      const row = m.grid()[t];
+      for (let s = 0; s < STEPS; s++) if (row[s] === "1") m.tap(KEY(WHITE[s]), 40);
+      m.run(200);
+    }
+  }
+  selectVoice(m, 0);
+  check(m.grid().every((r) => r === OFF), "the pattern cleared", rows());
+  m.chordTurn(ENC.KNOB3, -3, BUTTON.SEQ);
+  m.tap(KEY(WHITE[0]), 40);
+  m.run(200);
+  hold(m, KEY(WHITE[0]));
+  shows(m, "COND ALWAYS", "a step always plays, and says so");
+  for (const name of ["1:2", "2:2", "1:3", "2:3", "3:3", "1:4", "2:4", "3:4", "4:4", "25%", "50%", "75%"]) {
+    m.turn(ENC.KNOB3, 1);
+    m.run(100);
+    shows(m, `COND ${name}`, `KNOB3: ${name}`);
+  }
+  m.turn(ENC.KNOB3, -12);
+  m.run(200);
+  shows(m, "COND ALWAYS", "and back");
+  m.turn(ENC.KNOB3, 1);
+  m.run(100);
+  release(m, KEY(WHITE[0]));
+  check(m.grid()[0][0] === "1", "held and turned, it is still on", m.grid()[0]);
+
+  // ---- passes are the pattern's: 1:2 on its first step, 2:2 eight from its end, at every length
+  m.turn(ENC.KNOB2, 120); // 240 BPM
+  m.run(200);
+  const sixteenth = (RATE * 15) / 240;
+  for (let pages = 1; pages <= 4; pages++) {
+    if (pages > 1) m.chordTurn(ENC.KNOB3, 1, BUTTON.SEQ);
+    page(pages - 1);
+    m.tap(KEY(WHITE[8]), 40);
+    m.run(100);
+    hold(m, KEY(WHITE[8]), 100);
+    m.turn(ENC.KNOB3, 2);
+    release(m, KEY(WHITE[8]));
+    const length = 16 * pages, late = length - 8;
+    for (const [count, want] of [[4, [0, length + late, 2 * length, 3 * length + late]], [2, [0, length + late]]]) { // the second: from the top, after STOP
+      const o = m.listenTo(() => m.x.fm1_key(BUTTON.PLAY, 1), ((length * count * 15000) / 240) - 200);
+      stop(m);
+      m.run(700);
+      const first = o[0] ?? 0;
+      check(o.length === want.length && o.every((v, i) => near(v - first, want[i] * sixteenth, 250)), `${length} steps: ${count} passes, each counted at its end, conditions on the right ones`, `${o.map((v) => Math.round((v - first) / sixteenth))}`);
+    }
+    m.tap(KEY(WHITE[8]), 40);
+    m.run(200);
+    page(0);
+    check(m.grid()[0] === "1" + "0".repeat(STEPS - 1), "cleared", m.grid()[0]);
+  }
+
+  // ---- a page with a condition pasted while it plays
+  m.chordTurn(ENC.KNOB3, -2, BUTTON.SEQ); // 32 steps
+  copy();
+  page(1);
+  m.tap(BUTTON.PLAY);
+  m.run(300);
+  paste();
+  shows(m, "PASTED TO PAGE 2", "while it plays");
+  m.run(4300);
+  stop(m);
+  m.run(700);
+  check(m.grid()[0] === "1" + "0".repeat(STEPS - 1), "and it is on the page", m.grid()[0]);
+  const o = m.listenTo(() => m.x.fm1_key(BUTTON.PLAY, 1), ((32 * 4 * 15000) / 240) - 200);
+  stop(m);
+  m.run(700);
+  const first = o[0] ?? 0, want = [0, 16, 64, 80];
+  check(o.length === 4 && o.every((v, i) => near(v - first, want[i] * sixteenth, 250)), "a condition pasted is heard on its own page, on the same passes", `${o.map((v) => Math.round((v - first) / sixteenth))}`);
+
+  // ---- the machine under it, and SYSTEM down to what is read
+  systemPage(m);
+  m.run(800);
+  const sys = m.text();
+  check(/FAULTS +0\b/.test(sys), "no overruns or dropped events through copying and conditions", sys);
+  check(!/HEAP|CLIPPED/.test(sys), "SYSTEM: version, build, CPU, faults", sys);
+  console.log(`     pages: CPU mean ${/CPU MEAN +([\d.]+)%/.exec(sys)?.[1]} %, peak ${/CPU PEAK +([\d.]+)%/.exec(sys)?.[1]} %`);
+  m.png(`${out}/page-system.png`);
+}
+
 async function main() {
   const pkg = readFileSync(fwsc);
   console.log(`${fwsc} at ${MHZ} MHz, emulated`);
-  if (arg("--only") === "steps") {
-    await stepKeyboard(pkg);
+  if (arg("--only")) {
+    await (arg("--only") === "pages" ? pageCopy : stepKeyboard)(pkg);
     console.log(`emulator: ${checks} checks, ${failures} failed`);
     process.exit(failures ? 1 : 0);
   }
@@ -1575,13 +1771,10 @@ async function main() {
   m.run(800);
   const first = m.text();
   shows(m, "0.7.1 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
-  const heap = /HEAP +(\d+) LINKED/.exec(first);
-  check(heap && Number(heap[1]) >= 49152, `SYSTEM shows the heap (${heap?.[1]})`, first);
   const cpu = /CPU MEAN +([\d.]+)%/.exec(first), peak = /CPU PEAK +([\d.]+)%/.exec(first);
   check(cpu && Number(cpu[1]) > 0, `CPU mean is measured (${cpu?.[1]} %)`, first);
   check(peak && Number(peak[1]) >= Number(cpu?.[1]), `CPU peak (${peak?.[1]} %)`, first);
-  shows(m, "OVERRUNS", "SYSTEM shows overruns");
-  check(/OVERRUNS +0\b/.test(first) && /DROPPED +0\b/.test(first), "no overruns or dropped events at 240 MHz", first);
+  check(/FAULTS +0\b/.test(first), "no overruns or dropped events at 240 MHz", first);
   m.png(`${out}/page-system-live.png`);
 
   await sequencer(m);
@@ -1603,13 +1796,14 @@ async function main() {
   systemPage(m);
   m.run(700);
   const longRun = m.text();
-  check(/OVERRUNS +0\b/.test(longRun) && /DROPPED +0\b/.test(longRun), "no overruns or dropped events in the long run", longRun);
+  check(/FAULTS +0\b/.test(longRun), "no overruns or dropped events in the long run", longRun);
   const cpuPlaying = /CPU MEAN +([\d.]+)%/.exec(longRun), peakPlaying = /CPU PEAK +([\d.]+)%/.exec(longRun);
   console.log(`     playing: CPU mean ${cpuPlaying?.[1]} %, peak ${peakPlaying?.[1]} %`);
   m.tap(BUTTON.PLAY);
 
   await storage(pkg);
   await stepKeyboard(pkg);
+  await pageCopy(pkg);
 
   // ---- SAFE MODE: HOME held at the start point
   m = await new Machine().boot(pkg);

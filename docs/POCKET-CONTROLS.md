@@ -42,7 +42,7 @@ Every control below works on every page, unless it says otherwise.
 |---|---|---|
 | **Keys** | play: DRUM or PITCH, below. On PATTERN, the steps | |
 | **SCL** | KEYS: DRUM or KEYS: PITCH | |
-| **OCT− / OCT+** | PITCH: octave, −3 to +3. DRUM: how hard the keys hit, 40, 70, 100 or 127. On PATTERN: the previous or next page, round the pattern | OCT−: undo. OCT+: redo. One history of kits and patterns |
+| **OCT− / OCT+** | PITCH: octave, −3 to +3. DRUM: how hard the keys hit, 40, 70, 100 or 127. On PATTERN: the previous or next page, round the pattern. With SEQ held: [copy and paste a page](#copying-a-page) | OCT−: undo. OCT+: redo. One history of kits and patterns |
 | **PLAY** | start or stop | |
 | **REC** | recording on or off | |
 | **ENV** | a new kit, in the character PRESETS chose | a new sound for the selected voice |
@@ -109,7 +109,7 @@ lit. The status line says `KEYS: STEPS`. DRUM and PITCH are as they were on ever
 | Do | Result |
 |---|---|
 | **Tap a white key** | selects the step and, when the key comes up, turns it on or off, at KEY VEL. Stopped or playing |
-| **Hold a white key 0.3 s** | shows the step (`STEP 23 VEL 111 N65 COND 1:2`, or `STEP 23 OFF`) and the knobs; no toggle |
+| **Hold a white key 0.3 s** | shows the step (`STEP 23 VEL 111 N65 COND 1:2`, `STEP 23 VEL 111 COND ALWAYS`, or `STEP 23 OFF`) and the knobs; no toggle |
 | **Hold + KNOB 1** | velocity, 1 to 127 |
 | **Hold + KNOB 2** | pitch. C4 is the programmed pitch |
 | **Hold + KNOB 3** | condition: always, 1:2, 2:2, 1:3, 2:3, 3:3, 1:4 to 4:4, 25 %, 50 %, 75 % |
@@ -118,6 +118,7 @@ lit. The status line says `KEYS: STEPS`. DRUM and PITCH are as they were on ever
 | **OCT− / OCT+** | the previous or next page, round the pattern's own length |
 | **SELECT** | another track, on the same page and step: the lamps change with it |
 | **SAVE+OCT− / SAVE+OCT+** | undo, redo. Each toggle is one, and everything done during one hold is one, however long it took |
+| **SEQ+OCT− / SEQ+OCT+** | copy the page on screen, paste over the page on screen ([below](#copying-a-page)) |
 | **REC** | gives the keys back to play and record while it is on: step entry with a note or a variation needs them. Leave it and they are steps again |
 
 A knob turned at any moment during a press makes it a hold, however short. A knob can neither turn a
@@ -128,6 +129,35 @@ SAVE+KNOB 4 still set a condition and move a page.
 A tap has to change the step when the key comes up, not when it goes down, because until then it could
 still be a hold. So that this is not felt, **the lamp shows the result as the key goes down**. It takes
 the time the key is down, typically under 100 ms, and the scanner adds about 2 ms down and 9 ms up.
+
+### Copying a page
+
+| Do | Screen says |
+|---|---|
+| Choose a page with its black key, hold **SEQ**, press **OCT−** | `PAGE 1 COPIED` |
+| Choose another page, hold **SEQ**, press **OCT+** | `PASTED TO PAGE 2` |
+
+Held SEQ's footer says it: `K3 LEN OCT- COPY OCT+ PASTE`. To double a pattern from 16 steps: SEQ+KNOB 3,
+SEQ+OCT−, black key 2, SEQ+OCT+.
+
+- A page is all seven tracks, each step whole: velocity, note or variation, condition. Tempo, swing and
+  the kit are not part of it.
+- A paste replaces the page, rests included. It does not merge. Locks do not apply: they are about what
+  ARP and LFO may change.
+- The copy stays until the next one or a restart, however the page it came from changes, so it can go to
+  as many pages as you like. It lives in RAM (448 bytes), and nothing reaches Flash.
+- A paste is one undo, restoring the page as it was, and redo brings it back. One that changes nothing
+  leaves nothing to undo. A copy changes nothing, so it has no undo. With nothing copied, `NOTHING COPIED`.
+- It works while the pattern plays, heard from the next step, as a whole: a step sees all of the old
+  page or all of the new one.
+- With REC on, the page is the one on screen, which is where the music is if it is playing.
+- Only pages inside the pattern can be chosen, so lengthen first. **Lengthening never copies.** A new
+  pattern's later pages are empty, and pages left out by shortening keep their steps and come back with
+  the length, as they always have.
+
+SEQ, not SAVE: SAVE+black key would have to mean copy on one page and paste on the others, so the second
+step of copying would depend on which page you had reached. SEQ already holds PATTERN's whole-page chord,
+and OCT− and OCT+ are the pair undo and redo use.
 
 **Lamps.** The FM-1's key LEDs are on or off. `fm1_led_set` sets a bit that a 10 kHz multiplexed scan
 reads, so there is no brightness to set and no bus traffic. Inactive steps are therefore unlit, not dim.
@@ -366,6 +396,7 @@ on the status line, NOTHING TO UNDO and NOTHING TO REDO at the ends.
 | A knob on SOUND or MIXER | one action per turn: within 1.5 s on one parameter |
 | A step's velocity or condition | the same, per step |
 | Length | the same |
+| Pasting a page | one action, however many steps it changed |
 | A step entered stopped | one action; a chord is one |
 | A live take | one action: hits less than 2 s apart, until PLAY or REC |
 | Loading a project or an old save | one action, kit, pattern and settings |
@@ -442,6 +473,22 @@ has not been seen**.
 
 **0.7.1, length on SEQ+KNOB 3: 437,532 bytes, 16,389 free, the margin kept by 5 bytes.** Heap 110,092.
 The next feature needs flash found for it first.
+
+**After 0.7.1, copying a page: 437,372 bytes, 16,549 free, the margin kept by 165 bytes.** 0.7.1 was 437,532
+and 16,389. Heap 109,580, down 512: the 448-byte clipboard, and a zeroed status moved out of Flash. Conditions
+needed no flash: the sequencer, screen, undo and saves already had them, and the only change is the
+held step's `COND ALWAYS`.
+
+| Since 0.7.1, the panel's object | Bytes |
+|---|---|
+| Copy and paste, its footer and messages, `COND ALWAYS` | +337 |
+| `rows` with its names inline and one table of words, the mixer on `controlParams` and `cellNames`, one `ended()` for six countdowns, a zeroed status in RAM | −241 |
+| One `record()` path, the font's marks as a table | −41 |
+| `page_clip`'s loops as one, `cell_moved()`, SYSTEM as a table | −74 |
+| SYSTEM down to version, build, CPU and faults | −141 |
+| **The panel** | **−160** |
+
+The adapter loses 14 more with the same rows. The image falls by 160: what is left goes to alignment.
 
 | 0.7.0 flash | Bytes |
 |---|---|

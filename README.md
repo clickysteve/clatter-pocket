@@ -43,7 +43,7 @@ the stock instrument; it does not fit the flash.)
 | SAVE+FX | lock the selected track |
 | SELECT | select DRUM 1-3, SNARE, CYMBAL, CL HAT, OP HAT |
 | HOME, SEQ, EDIT, FX, GLO | pages: MAIN, PATTERN, SOUND, MIXER, GLOBAL then SYSTEM |
-| KNOB 1-4 | PATTERN: velocity, tempo, swing, step; held SAVE: condition, length, page. SOUND: pitch, decay, filter, drive. MIXER: level, pan. GLOBAL: row, value |
+| KNOB 1-4 | PATTERN: velocity, tempo, swing, step; held SAVE: condition, page; held SEQ: length. SOUND: pitch, decay, filter, drive. MIXER: level, pan. GLOBAL: row, value |
 | MASTER | master volume (stock) |
 | HOME + ARP | (overlay build only) back to the stock instrument |
 

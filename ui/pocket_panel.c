@@ -29,6 +29,9 @@ static const char triggerNames[POCKET_LXR_TRIGGERS][7] = {
 	"DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "CL HAT", "OP HAT"
 };
 static const char cellNames[POCKET_LXR_TRIGGERS][3] = { "D1", "D2", "D3", "SN", "CY", "CH", "OH" };
+/* The words a setting can show, and what also says them. */
+enum { WORD_OFF, WORD_DRUM = 2, WORD_BEHIND = 4, WORD_GM = 6, WORD_LOW = 8, NO_WORDS = 0xff };
+static const char words[][8] = { "OFF", "ON", "DRUM", "PITCH", "BEHIND", "NEAREST", "GM", "KEYS", "LOW", "MED", "BIG" };
 static const char pageNames[POCKET_PAGES][9] = { "MAIN", "PATTERN", "SOUND", "MIXER", "GLOBAL", "SYSTEM", "PROJECTS" };
 static const char pageFooters[POCKET_PAGES - 1][30] = { /* SOUND's serves MIXER too */
 	"ENV KIT ARP GEN LFO MUTATE",
@@ -38,7 +41,6 @@ static const char pageFooters[POCKET_PAGES - 1][30] = { /* SOUND's serves MIXER 
 	"GLO BACK  BOOT+HOME SAFE",
 	"SAVE STORE OCT- LOAD SEL SLOT"
 };
-static const char mutateNames[POCKET_MUTATE_STRENGTHS][4] = { "LOW", "MED", "BIG" };
 static const uint8_t controlParams[POCKET_CTLS][POCKET_LXR_TRIGGERS] = {
 	{ POCKET_PAR_COARSE1, POCKET_PAR_COARSE2, POCKET_PAR_COARSE3, POCKET_PAR_COARSE4,
 	  POCKET_PAR_COARSE5, POCKET_PAR_COARSE6, POCKET_PAR_COARSE6 },
@@ -241,7 +243,7 @@ static void pattern_changed(struct pocket_panel* panel)
 	for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
 		for (unsigned i = 0; i < POCKET_SEQ_MAX_STEPS; i++)
 			if (was->cell[t][i] != now->cell[t][i]) pocket_history_cell(t << 6 | i, was->cell[t][i] ^ now->cell[t][i]);
-	panel->dirty |= PATTERN_CHANGED;
+	panel->dirty |= PATTERN_CHANGED | (1u << B_VOICE);
 }
 
 /* One step, as the history will see it. */
@@ -335,25 +337,17 @@ static void go(struct pocket_panel* panel, unsigned page);
 static void record(struct pocket_panel* panel, int track, int tone, int velocity)
 {
 	if (tone == POCKET_SEQ_NOTE_PROGRAMMED) tone = 0;
-	if (pocket_seq_playing())
-	{
-		int ahead;
-		const int step = pocket_seq_quantise(panel->quantise == POCKET_QUANTISE_NEAREST, &ahead);
-		pocket_history_begin(MERGE_TAKE);
-		set_cell(panel, track, step, POCKET_CELL_WITH_CONDITION(POCKET_CELL(velocity, tone), POCKET_CELL_CONDITION(pocket_seq_pattern()->cell[track][step])));
-		pocket_history_end();
-		panel->merge_ms = POCKET_TAKE_MS;
-		if (ahead) pocket_seq_skip(track, step);
-	}
-	else
-	{
-		const uint32_t was = pocket_seq_pattern()->cell[track][panel->step];
-		const int same = was && POCKET_CELL_TONE(was) == (unsigned)tone;
-		pocket_history_begin(MERGE_ENTRY);
-		set_cell(panel, track, panel->step, same ? 0 : POCKET_CELL_WITH_CONDITION(POCKET_CELL(velocity, tone), POCKET_CELL_CONDITION(was)));
-		pocket_history_end();
-		panel->entered |= !same;
-	}
+	const int playing = pocket_seq_playing();
+	int ahead = 0;
+	const int step = playing ? pocket_seq_quantise(panel->quantise == POCKET_QUANTISE_NEAREST, &ahead) : panel->step;
+	const uint32_t was = pocket_seq_pattern()->cell[track][step];
+	const int same = !playing && was && POCKET_CELL_TONE(was) == (unsigned)tone;
+	pocket_history_begin(playing ? MERGE_TAKE : MERGE_ENTRY);
+	set_cell(panel, track, step, same ? 0 : POCKET_CELL_WITH_CONDITION(POCKET_CELL(velocity, tone), POCKET_CELL_CONDITION(was)));
+	pocket_history_end();
+	if (playing) panel->merge_ms = POCKET_TAKE_MS;
+	else panel->entered |= !same;
+	if (ahead) pocket_seq_skip(track, step);
 }
 
 /* A hit from a key or from MIDI. Its tone is as a step's: 0 the programmed pitch, a note, a variation. */
@@ -771,9 +765,12 @@ static void store_load(struct pocket_panel* panel)
 }
 
 /* ------------------------------------------------------------------ time */
-static uint16_t less(uint16_t left, uint32_t elapsed)
+/* A count of milliseconds left, going down. Returns 1 as it reaches zero. */
+static int ended(uint16_t* left, uint32_t elapsed)
 {
-	return left > elapsed ? (uint16_t)(left - elapsed) : 0;
+	if (!*left) return 0;
+	*left = *left > elapsed ? (uint16_t)(*left - elapsed) : 0;
+	return !*left;
 }
 
 /* The page of steps on screen: the selected step's, or while playing where a hit would land if
@@ -811,42 +808,21 @@ static void follow_sequencer(struct pocket_panel* panel)
 void pocket_panel_tick(struct pocket_panel* panel, uint32_t elapsed_ms)
 {
 	for (int t = 0; t < POCKET_LXR_TRIGGERS; t++)
+		if (ended(&panel->flash_ms[t], elapsed_ms)) panel->dirty |= 1u << B_ACTIVITY;
+	if (ended(&panel->midi_flash_ms, elapsed_ms)) panel->dirty |= 1u << B_MIDI;
+	if (ended(&panel->alert_ms, elapsed_ms)) panel->dirty |= 1u << B_STATE;
+	if (ended(&panel->notice_ms, elapsed_ms))
 	{
-		if (!panel->flash_ms[t]) continue;
-		panel->flash_ms[t] = less(panel->flash_ms[t], elapsed_ms);
-		if (!panel->flash_ms[t]) panel->dirty |= 1u << B_ACTIVITY;
-	}
-	if (panel->midi_flash_ms)
-	{
-		panel->midi_flash_ms = less(panel->midi_flash_ms, elapsed_ms);
-		if (!panel->midi_flash_ms) panel->dirty |= 1u << B_MIDI;
-	}
-	if (panel->alert_ms)
-	{
-		panel->alert_ms = less(panel->alert_ms, elapsed_ms);
-		if (!panel->alert_ms) panel->dirty |= 1u << B_STATE;
-	}
-	if (panel->notice_ms)
-	{
-		panel->notice_ms = less(panel->notice_ms, elapsed_ms);
-		if (!panel->notice_ms) panel->dirty |= 1u << B_STATE;
-		if (!panel->notice_ms && panel->kit_announce)
+		panel->dirty |= 1u << B_STATE;
+		if (panel->kit_announce)
 		{
 			panel->kit_announce = 0;
 			say_kit(panel);
 		}
 	}
 	for (int s = 0; s < POCKET_SEQ_STEPS; s++)
-	{
-		if (!panel->step_tap_ms[s]) continue;
-		panel->step_tap_ms[s] = less(panel->step_tap_ms[s], elapsed_ms);
-		if (!panel->step_tap_ms[s]) panel->dirty |= HELD_BANDS;
-	}
-	if (panel->merge_ms)
-	{
-		panel->merge_ms = less(panel->merge_ms, elapsed_ms);
-		if (!panel->merge_ms) pocket_history_close();
-	}
+		if (ended(&panel->step_tap_ms[s], elapsed_ms)) panel->dirty |= HELD_BANDS;
+	if (ended(&panel->merge_ms, elapsed_ms)) pocket_history_close();
 	kit_pump(panel);
 	follow_sequencer(panel);
 }
@@ -865,7 +841,7 @@ void pocket_panel_update_status(struct pocket_panel* panel, struct pocket_panel_
 	if (next->level != status->level) panel->dirty |= 1u << B_LEVEL;
 	if (panel->page == POCKET_PAGE_SYSTEM && (next->cpu_permille != status->cpu_permille
 		|| next->cpu_peak_permille != status->cpu_peak_permille || next->overruns != status->overruns
-		|| next->clipped != status->clipped || next->dropped != status->dropped))
+		|| next->dropped != status->dropped))
 		panel->dirty |= BODY_BANDS;
 	if (panel->page == POCKET_PAGE_MIXER && next->master != status->master) panel->dirty |= BODY_BANDS;
 	*status = *next;
@@ -922,35 +898,30 @@ static void set_length(struct pocket_panel* panel, int last_page)
 enum { ROW_KEYS, ROW_OCTAVE, ROW_KEY_VEL, ROW_FOLLOW, ROW_QUANTISE, ROW_AUTO_STEP, ROW_TEMPO, ROW_SWING, ROW_LENGTH, ROW_STYLE, ROW_DENSITY,
 	ROW_COMPLEXITY, ROW_SEED, ROW_MUTATE, ROW_KIT_SEED, ROW_WILD, ROW_MIDI_CHANNEL, ROW_MIDI_MAP, ROWS };
 #define NO_FIELD 0xff
-static const char offOn[2][4] = { "OFF", "ON" };
-static const char keyModes[2][6] = { "DRUM", "PITCH" };
-static const char quantises[2][8] = { "BEHIND", "NEAREST" };
-static const char midiMaps[2][5] = { "GM", "KEYS" };
 static const struct row {
-	const char* name;
+	char name[10];
 	uint8_t field;     /* offset in the panel, or NO_FIELD */
 	int8_t lo, hi;
-	const char* words;   /* the values' names, every `size` bytes */
-	uint8_t size;
+	uint8_t words;     /* the first of the values' names, or NO_WORDS */
 } rows[ROWS] = {
-	[ROW_KEYS] = { "KEYS", offsetof(struct pocket_panel, key_mode), 0, 1, *keyModes, 6 },
-	[ROW_OCTAVE] = { "OCTAVE", offsetof(struct pocket_panel, octave), POCKET_OCTAVE_MIN, POCKET_OCTAVE_MAX, 0 },
-	[ROW_KEY_VEL] = { "KEY VEL", offsetof(struct pocket_panel, key_velocity), 1, 127, 0 },
-	[ROW_FOLLOW] = { "FOLLOW", offsetof(struct pocket_panel, follow), 0, 1, *offOn, 4 },
-	[ROW_QUANTISE] = { "QUANTISE", offsetof(struct pocket_panel, quantise), 0, 1, *quantises, 8 },
-	[ROW_AUTO_STEP] = { "AUTO STEP", offsetof(struct pocket_panel, auto_step), 0, 4, 0 },
-	[ROW_TEMPO] = { "TEMPO", NO_FIELD, 0, 0, 0 },
-	[ROW_SWING] = { "SWING", NO_FIELD, 0, 0, 0 },
-	[ROW_LENGTH] = { "LENGTH", NO_FIELD, 0, 0, 0 },
-	[ROW_STYLE] = { "STYLE", offsetof(struct pocket_panel, style), 0, POCKET_GEN_STYLES - 1, 0 },
-	[ROW_DENSITY] = { "DENSITY", offsetof(struct pocket_panel, density), 0, 100, 0 },
-	[ROW_COMPLEXITY] = { "COMPLEX", offsetof(struct pocket_panel, complexity), 0, 100, 0 },
-	[ROW_SEED] = { "SEED", NO_FIELD, 0, 0, 0 },
-	[ROW_MUTATE] = { "MUTATE", offsetof(struct pocket_panel, mutate_strength), 0, POCKET_MUTATE_STRENGTHS - 1, *mutateNames, 4 },
-	[ROW_KIT_SEED] = { "KIT SEED", NO_FIELD, 0, 0, 0 },
-	[ROW_WILD] = { "WILD", offsetof(struct pocket_panel, kit_wild), 0, 100, 0 },
-	[ROW_MIDI_CHANNEL] = { "MIDI CH", offsetof(struct pocket_panel, midi_channel), 0, 16, 0 },
-	[ROW_MIDI_MAP] = { "MIDI MAP", offsetof(struct pocket_panel, midi_map), 0, 1, *midiMaps, 5 },
+	[ROW_KEYS] = { "KEYS", offsetof(struct pocket_panel, key_mode), 0, 1, WORD_DRUM },
+	[ROW_OCTAVE] = { "OCTAVE", offsetof(struct pocket_panel, octave), POCKET_OCTAVE_MIN, POCKET_OCTAVE_MAX, NO_WORDS },
+	[ROW_KEY_VEL] = { "KEY VEL", offsetof(struct pocket_panel, key_velocity), 1, 127, NO_WORDS },
+	[ROW_FOLLOW] = { "FOLLOW", offsetof(struct pocket_panel, follow), 0, 1, WORD_OFF },
+	[ROW_QUANTISE] = { "QUANTISE", offsetof(struct pocket_panel, quantise), 0, 1, WORD_BEHIND },
+	[ROW_AUTO_STEP] = { "AUTO STEP", offsetof(struct pocket_panel, auto_step), 0, 4, NO_WORDS },
+	[ROW_TEMPO] = { "TEMPO", NO_FIELD, 0, 0, NO_WORDS },
+	[ROW_SWING] = { "SWING", NO_FIELD, 0, 0, NO_WORDS },
+	[ROW_LENGTH] = { "LENGTH", NO_FIELD, 0, 0, NO_WORDS },
+	[ROW_STYLE] = { "STYLE", offsetof(struct pocket_panel, style), 0, POCKET_GEN_STYLES - 1, NO_WORDS },
+	[ROW_DENSITY] = { "DENSITY", offsetof(struct pocket_panel, density), 0, 100, NO_WORDS },
+	[ROW_COMPLEXITY] = { "COMPLEX", offsetof(struct pocket_panel, complexity), 0, 100, NO_WORDS },
+	[ROW_SEED] = { "SEED", NO_FIELD, 0, 0, NO_WORDS },
+	[ROW_MUTATE] = { "MUTATE", offsetof(struct pocket_panel, mutate_strength), 0, POCKET_MUTATE_STRENGTHS - 1, WORD_LOW },
+	[ROW_KIT_SEED] = { "KIT SEED", NO_FIELD, 0, 0, NO_WORDS },
+	[ROW_WILD] = { "WILD", offsetof(struct pocket_panel, kit_wild), 0, 100, NO_WORDS },
+	[ROW_MIDI_CHANNEL] = { "MIDI CH", offsetof(struct pocket_panel, midi_channel), 0, 16, NO_WORDS },
+	[ROW_MIDI_MAP] = { "MIDI MAP", offsetof(struct pocket_panel, midi_map), 0, 1, WORD_GM },
 };
 
 static void row_move(struct pocket_panel* panel, int row, int by)
@@ -982,7 +953,7 @@ static void row_text(const struct pocket_panel* panel, int row, char* b)
 		: row == ROW_TEMPO ? pocket_seq_tempo() : row == ROW_SWING ? pocket_seq_swing()
 		: row == ROW_LENGTH ? (int)POCKET_PATTERN_STEPS(pocket_seq_pattern()) : row == ROW_SEED ? panel->seed : panel->kit_seed;
 	if (row == ROW_STYLE) append(b, pocket_gen_style_name((unsigned)v));
-	else if (r->words) append(b, r->words + v * r->size);
+	else if (r->words != NO_WORDS) append(b, words[r->words + v]);
 	else if (row == ROW_MIDI_CHANNEL && !v) append(b, "ALL");
 	else if (v < 0) append_number(append(b, "-"), (uint32_t)-v);
 	else append_number(b, (uint32_t)v);
@@ -1003,6 +974,13 @@ static void step_edit(struct pocket_panel* panel, uint32_t cell)
 	panel->merge_ms = panel->step_held ? 0 : POCKET_MERGE_MS; /* a hold is one undo: its key says when it ends */
 }
 
+/* A step with its velocity and condition moved: a knob never turns one off. */
+static uint32_t cell_moved(uint32_t c, int velocity, int condition)
+{
+	return POCKET_CELL_WITH_CONDITION((c & 0xff00u) | (uint32_t)limited((int)POCKET_CELL_VELOCITY(c) + 4 * velocity, 1, 127),
+		limited((int)POCKET_CELL_CONDITION(c) + condition, 0, POCKET_CONDITIONS - 1));
+}
+
 /* The knobs with a step held. A step that is off has nothing to edit, and this never turns one off:
  * a note and a variation replace each other, as a step has one tone. */
 static void step_knobs(struct pocket_panel* panel, const int16_t* knob)
@@ -1021,8 +999,7 @@ static void step_knobs(struct pocket_panel* panel, const int16_t* knob)
 		const int next = limited(variation + knob[3], 0, POCKET_VARIATION_LAST(panel->trigger));
 		if (next != variation) tone = next ? (int)POCKET_TONE_VARIATION(next) : 0;
 	}
-	step_edit(panel, POCKET_CELL_WITH_CONDITION(POCKET_CELL(limited((int)POCKET_CELL_VELOCITY(c) + 4 * knob[0], 1, 127), tone),
-		limited((int)POCKET_CELL_CONDITION(c) + knob[2], 0, POCKET_CONDITIONS - 1)));
+	step_edit(panel, cell_moved((c & ~0xff00u) | (uint32_t)tone << 8, knob[0], knob[2]));
 }
 
 /* The knobs of PATTERN: the selected step's velocity, the tempo and swing, the selected step.
@@ -1043,11 +1020,11 @@ static void pattern_knobs(struct pocket_panel* panel, const int16_t* knob, int s
 	const uint32_t c = pocket_seq_pattern()->cell[panel->trigger][panel->step];
 	if (save)
 	{
-		if (knob[0] && c) step_edit(panel, POCKET_CELL_WITH_CONDITION(c, limited((int)POCKET_CELL_CONDITION(c) + knob[0], 0, POCKET_CONDITIONS - 1)));
+		if (knob[0] && c) step_edit(panel, cell_moved(c, 0, knob[0]));
 		if (knob[3]) move_step(panel, POCKET_SEQ_STEPS * knob[3]);
 		return;
 	}
-	if (knob[0] && c) step_edit(panel, (c & ~0xffu) | (uint32_t)limited((int)POCKET_CELL_VELOCITY(c) + 4 * knob[0], 1, 127));
+	if (knob[0] && c) step_edit(panel, cell_moved(c, knob[0], 0));
 	if (knob[1]) row_move(panel, ROW_TEMPO, knob[1]);
 	if (knob[2]) row_move(panel, ROW_SWING, knob[2]);
 	if (knob[3]) move_step(panel, knob[3]);
@@ -1134,15 +1111,58 @@ static void mutate_button(struct pocket_panel* panel, int one_track)
 	pocket_seq_edit_commit();
 	pattern_changed(panel);
 	action_end(panel);
-	say(panel, "MUTATED ", one_track ? triggerNames[panel->trigger] : mutateNames[panel->mutate_strength]);
+	say(panel, "MUTATED ", one_track ? triggerNames[panel->trigger] : words[WORD_LOW + panel->mutate_strength]);
 }
 
-/* OCT-/OCT+. In PITCH, the octave; in DRUM, how hard the keys hit. Under SAVE, undo and redo. */
+/* SEQ+OCT- and SEQ+OCT+. A copy is the page on screen, every track, and it stays until the next
+ * copy, whatever becomes of the page it came from. A paste replaces the page on screen, as one
+ * change: its undo is what was there. */
+static void page_clip(struct pocket_panel* panel, int paste)
+{
+	const unsigned page = shown_page(panel), first = page * POCKET_SEQ_STEPS;
+	char b[12];
+	steps_forget(panel);
+	if (paste && !panel->copied)
+	{
+		announce(panel, "NOTHING COPIED");
+		return;
+	}
+	struct pocket_pattern* next = pocket_seq_edit_begin();
+	if (paste) action_begin(panel, MERGE_NONE);
+	for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
+		for (unsigned s = 0; s < POCKET_SEQ_STEPS; s++)
+		{
+			uint32_t* cell = &next->cell[t][first + s], * clip = &panel->clipboard[t][s];
+			if (paste) *cell = *clip;
+			else *clip = *cell;
+		}
+	number(b, page + 1u, 0);
+	if (paste)
+	{
+		pocket_seq_edit_commit();
+		pattern_changed(panel);
+		action_end(panel);
+	}
+	else
+	{
+		panel->copied = 1;
+		append(b + 1, " COPIED");
+	}
+	say(panel, paste ? "PASTED TO PAGE " : "PAGE ", b);
+}
+
+/* OCT-/OCT+. In PITCH, the octave; in DRUM, how hard the keys hit. Under SAVE, undo and redo; under
+ * SEQ, copy and paste a page. */
 static void octave_button(struct pocket_panel* panel, int by, int held)
 {
 	if (held)
 	{
 		history_move(panel, by > 0);
+		return;
+	}
+	if (panel->page == POCKET_PAGE_PATTERN && (panel->previous_buttons & BTN(SEQ)))
+	{
+		page_clip(panel, by > 0);
 		return;
 	}
 	if (keys_are_steps(panel))
@@ -1194,14 +1214,14 @@ static void buttons(struct pocket_panel* panel, uint32_t pressed, uint32_t relea
 	if (pressed & BTN(SCL))
 	{
 		panel->key_mode = !panel->key_mode;
-		say(panel, "KEYS: ", keyModes[panel->key_mode]);
+		say(panel, "KEYS: ", words[WORD_DRUM + panel->key_mode]);
 	}
 	if (pressed & BTN(REC))
 	{
 		panel->recording = !panel->recording;
 		steps_forget(panel);
 		pocket_history_close();
-		say(panel, "REC ", offOn[panel->recording]);
+		say(panel, "REC ", words[WORD_OFF + panel->recording]);
 	}
 	if ((pressed & BTN(OCT_DOWN)) && !save && panel->page == POCKET_PAGE_STORE) store_load(panel);
 	else if (pressed & BTN(OCT_DOWN)) octave_button(panel, -1, save);
@@ -1323,19 +1343,13 @@ static uint16_t glyph(char c)
 	/* generated from 3x5 row bitmaps (tools/gen-font.py) */
 	static const uint16_t letters[26] = { 0x2bed, 0x6bae, 0x3923, 0x6b6e, 0x79a7, 0x79a4, 0x396b, 0x5bed, 0x7497, 0x126a, 0x5bad, 0x4927, 0x5fed, 0x6b6d, 0x2b6a, 0x6ba4, 0x2b73, 0x6bad, 0x388e, 0x7492, 0x5b6f, 0x5b6a, 0x5bfd, 0x5aad, 0x5a92, 0x72a7 };
 	static const uint16_t digits[10] = { 0x7b6f, 0x2c97, 0x62a7, 0x628e, 0x5bc9, 0x798e, 0x39ef, 0x7292, 0x7bef, 0x7bce };
+	static const char marks[7] = { '%', '.', ':', '-', '/', '+', ',' };
+	static const uint16_t markGlyphs[7] = { 0x52a5, 0x0002, 0x0410, 0x01c0, 0x12a4, 0x05d0, 0x0014 };
 	if (c >= 'A' && c <= 'Z') return letters[c - 'A'];
 	if (c >= '0' && c <= '9') return digits[c - '0'];
-	switch (c)
-	{
-	case '%': return 0x52a5;
-	case '.': return 0x0002;
-	case ':': return 0x0410;
-	case '-': return 0x01c0;
-	case '/': return 0x12a4;
-	case '+': return 0x05d0;
-	case ',': return 0x0014;
-	default: return 0;
-	}
+	for (unsigned i = 0; i < sizeof marks; i++)
+		if (c == marks[i]) return markGlyphs[i];
+	return 0;
 }
 
 static void fill(uint16_t* px, int x, int y, int w, int h, uint16_t color)
@@ -1538,7 +1552,11 @@ static void draw_legend(const struct pocket_panel* panel, uint16_t* px)
 	if (step_holding(panel))
 	{
 		d = append_number(append(d, "STEP "), panel->step + 1u);
-		if (v) step_text(append_number(append(d, " VEL "), v), c, " COND ");
+		if (v)
+		{
+			d = step_text(append_number(append(d, " VEL "), v), c, " COND ");
+			if (!POCKET_CELL_CONDITION(c)) append(d, " COND ALWAYS");
+		}
 		else append(d, " OFF");
 		line_text(px, b, ACCENT);
 		return;
@@ -1594,16 +1612,13 @@ static void draw_sound(const struct pocket_panel* panel, unsigned line, uint16_t
 /* A level bar per voice (the hats share theirs), selected voice underlined. */
 static void draw_channels(const struct pocket_panel* panel, unsigned line, uint16_t* px)
 {
-	static const uint8_t volumes[6] = { POCKET_PAR_VOL1, POCKET_PAR_VOL2, POCKET_PAR_VOL3, POCKET_PAR_VOL4,
-		POCKET_PAR_VOL5, POCKET_PAR_VOL6 };
-	static const char* const names[6] = { "D1", "D2", "D3", "SN", "CY", "HH" };
 	const int top = -(int)line * POCKET_BAND_ROWS, height = 2 * POCKET_BAND_ROWS - 2;
 	const int selected = panel->trigger > 5 ? 5 : panel->trigger;
 	for (int v = 0; v < 6; v++)
 	{
-		const int x = MARGIN + v * 38, h = height * pocket_lxr_get_param(volumes[v]) / 127;
+		const int x = MARGIN + v * 38, h = height * pocket_lxr_get_param(controlParams[POCKET_CTL_LEVEL][v]) / 127;
 		fill(px, x, top + height - h, 20, h, v == selected ? ACCENT : INK);
-		text(px, x + 2, top + height + 2, names[v], v == selected ? ACCENT : DIM);
+		text(px, x + 2, top + height + 2, v == 5 ? "HH" : cellNames[v], v == selected ? ACCENT : DIM);
 	}
 }
 
@@ -1685,24 +1700,15 @@ static void draw_global(const struct pocket_panel* panel, unsigned line, uint16_
 
 static void draw_system(const struct pocket_panel_status* status, unsigned line, uint16_t* px)
 {
+	static const char labels[5][9] = { "VERSION", "BUILD", "CPU MEAN", "CPU PEAK", "FAULTS" };
 	char a[12];
-	if (line == 0) label_value(px, "VERSION", POCKET_FW_VERSION);
-	if (line == 1) label_value(px, "BUILD", status->build);
-	if (line == 2) label_value(px, "CPU MEAN", percent(a, status->cpu_permille));
-	if (line == 3) label_value(px, "CPU PEAK", percent(a, status->cpu_peak_permille));
-	if (line == 4) label_number(px, "OVERRUNS", status->overruns);
-	if (line == 5) label_number(px, "CLIPPED", status->clipped);
-	if (line == 6) label_number(px, "DROPPED", status->dropped);
-	if (line == 7)
-	{
-		if (status->heap_bytes)
-		{
-			char b[24];
-			label_value(px, "HEAP", concat(b, number(a, status->heap_bytes, 0), " LINKED"));
-		}
-		else
-			label_value(px, "HEAP", "UNKNOWN");
-	}
+	const char* value = a;
+	if (line > 4) return;
+	if (line == 0) value = POCKET_FW_VERSION;
+	else if (line == 1) value = status->build;
+	else if (line < 4) percent(a, line == 2 ? status->cpu_permille : status->cpu_peak_permille);
+	else number(a, status->overruns + status->dropped, 0); /* anything but 0 is worth looking into */
+	label_value(px, labels[line], value);
 }
 
 /* The start-up, SAFE MODE and error screen: unmistakably not the stock instrument. */
@@ -1724,7 +1730,7 @@ static void draw_identity(const struct pocket_panel* panel, const struct pocket_
 void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocket_panel_status* status,
                             unsigned band, uint16_t* px)
 {
-	static const struct pocket_panel_status none = { 0 };
+	static struct pocket_panel_status none; /* zeros, and not worth their bytes in Flash */
 	char a[24], b[48];
 	if (!status) status = &none;
 	if (status->state != POCKET_STATE_READY)
@@ -1749,7 +1755,7 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 		const char* footer = plain;
 		if (panel->save_down && panel->page != POCKET_PAGE_STORE)
 			footer = panel->page == POCKET_PAGE_PATTERN ? "K1 COND K4 PAGE" : "OCT- UNDO OCT+ REDO FX LOCK";
-		if (panel->page == POCKET_PAGE_PATTERN && (panel->previous_buttons & BTN(SEQ))) footer = "K3 LEN";
+		if (panel->page == POCKET_PAGE_PATTERN && (panel->previous_buttons & BTN(SEQ))) footer = "K3 LEN OCT- COPY OCT+ PASTE";
 		if (step_holding(panel)) footer = "K1 VEL K2 NOTE K3 COND K4 VAR";
 		fill(px, 0, 0, POCKET_SCREEN_W, 1, FAINT);
 		line_text(px, footer, footer != plain ? ACCENT : DIM);
@@ -1767,7 +1773,7 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 		else
 		{
 			const int steps = keys_are_steps(panel);
-			char* d = append(append(b, "KEYS: "), steps ? "STEPS" : keyModes[panel->key_mode]);
+			char* d = append(append(b, "KEYS: "), steps ? "STEPS" : words[WORD_DRUM + panel->key_mode]);
 			if (panel->key_mode == POCKET_KEYS_PITCH && !steps)
 			{
 				d = append(d, panel->octave < 0 ? " OCT -" : " OCT ");
