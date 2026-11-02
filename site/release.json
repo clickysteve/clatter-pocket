@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "version": "0.8.0",
+  "version": "0.8.1",
   "status": "experimental",
   "installEnabled": true,
   "releaseDate": "2026-11-02",
   "firmware": {
-    "filename": "clatter-pocket-0.8.0-be5c6994-UNVERIFIED.fwsc",
-    "sha256": "be5c69942f34dabe5f729dd288d3eb67b05ff50bea96f33e8ccbb02b38a1ae6d",
+    "filename": "clatter-pocket-0.8.1-900c7748-UNVERIFIED.fwsc",
+    "sha256": "900c77480270ee047adc420d9f51ca918c1e783b4e33d53cb4066fd67096d7e7",
     "bytes": 492084,
-    "buildId": "426aa9e86d0f43b62cbdf5db154ebfabf12f171e3f3bf1e82097127f92cd5884",
+    "buildId": "5177fcb98f578bc82bb1116e9ec10313b618fb07ee3e6ba2cb94285a249f668c",
     "loaderSha256": "ef1f2db89b011fa53e71df363f0122de0ea896618c53fb53e8da676322004541",
     "product": "FM-1_8000014",
     "family": 7,
     "checks": {
-      "commit": "24e37e4",
+      "commit": "10a2755",
       "singlePrecision": true,
       "firmwareChecks": true,
       "audioPath": true,
@@ -48,7 +48,7 @@
     ]
   },
   "notes": [
-    "Firmware 0.8.0: copy a page and paste it to any other with SEQ+OCT− and SEQ+OCT+, as one undo. SYSTEM is down to version, build, CPU and faults. 64 steps on four pages, the keyboard as the pattern on SEQ, conditions, projects saved in user Flash.",
+    "Firmware 0.8.1: the start-up screen carries the logo. Copy a page and paste it to any other with SEQ+OCT− and SEQ+OCT+, as one undo. SYSTEM is down to version, build, CPU and faults. 64 steps on four pages, the keyboard as the pattern on SEQ, conditions, projects saved in user Flash.",
     "Tested on the host and in the FM-1 emulator. Nothing has run on a device."
   ]
 }
