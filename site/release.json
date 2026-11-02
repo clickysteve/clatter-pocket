@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "version": "0.7.0",
+  "version": "0.7.1",
   "status": "experimental",
   "installEnabled": true,
-  "releaseDate": "2026-10-31",
+  "releaseDate": "2026-11-02",
   "firmware": {
-    "filename": "clatter-pocket-0.7.0-8e77bef6-UNVERIFIED.fwsc",
-    "sha256": "8e77bef666c0aeaecd6fcba95cc13b80ec0b44b0afc4f7ee68c79aa4f66bbfe7",
+    "filename": "clatter-pocket-0.7.1-796cd55b-UNVERIFIED.fwsc",
+    "sha256": "796cd55bf0922180d9f9ef9b24336f6ab9ac829d829510d1eeff827c9fcca3e0",
     "bytes": 492084,
-    "buildId": "b6cb30192d1e05507357206cd38c482b9aa33a532a142c6182ceaf9a5bd5cd01",
+    "buildId": "ef400918620e412b28b133034b3b5777dd24850c56f0203f058c72d673f51f17",
     "loaderSha256": "ef1f2db89b011fa53e71df363f0122de0ea896618c53fb53e8da676322004541",
     "product": "FM-1_8000014",
     "family": 7,
     "checks": {
-      "commit": "ba23893",
+      "commit": "b9ea0ab",
       "singlePrecision": true,
       "firmwareChecks": true,
       "audioPath": true,
@@ -48,7 +48,7 @@
     ]
   },
   "notes": [
-    "Firmware 0.5.0: 12 kits and 12 patterns saved in user Flash, DRUM and PITCH keyboards, live and step recording, on-device kit generation.",
+    "Firmware 0.7.1: 64 steps on four pages, the keyboard as the pattern on SEQ, conditions, projects saved in user Flash, one undo. Pattern length is now SEQ+KNOB 3.",
     "Tested on the host and in the FM-1 emulator. Nothing has run on a device."
   ]
 }

@@ -440,8 +440,8 @@ has not been seen**.
 | `.ram0_bss` | 289,292 | 309,964 | +20,672 |
 | Runtime heap (SDK minimum 49,152) | 128,684 | **109,836** | −18,848 |
 
-**0.7.0, step keys: 437,500 bytes, 16,421 free, the margin kept by 37 bytes.** Heap 110,092. The next
-feature needs flash found for it first.
+**0.7.1, length on SEQ+KNOB 3: 437,532 bytes, 16,389 free, the margin kept by 5 bytes.** Heap 110,092.
+The next feature needs flash found for it first.
 
 | 0.7.0 flash | Bytes |
 |---|---|
