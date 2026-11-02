@@ -1,16 +1,22 @@
 # First hardware test of CLATTER Pocket on the FM-1
 
 A procedure for the first installation of the replacement firmware (FM1-REPLACEMENT.md,
-PRE-FLASH-AUDIT.md) on one M-VAVE FM-1. **Nothing here has been done yet.** Steps marked
-**UNVERIFIED** follow from the SDK's source and build, not from a device. The owner decides
-whether to start, and every step can be the point to stop.
+PRE-FLASH-AUDIT.md) on one M-VAVE FM-1. Steps marked **UNVERIFIED** follow from the SDK's source
+and build, not from a device. The owner decides whether to start, and every step can be the point
+to stop.
 
-Candidate: firmware 0.8.1, commit `10a2755`, SHA-256
-`900c77480270ee047adc420d9f51ca918c1e783b4e33d53cb4066fd67096d7e7`.
+**Result so far.** On 2026-11-02 the owner installed 0.8.1, the first version on a device: it showed
+the start screen, then reset in a loop. `voiceData` was misaligned, and the first audio block faulted
+(HARDWARE.md, Faults). 0.8.2 fixes that in the emulator under the chip's alignment rule. It has not
+run on a device. **From a unit looping on 0.8.1:** power on holding HOME until SAFE MODE shows, then
+connect the installer. **UNVERIFIED**: record whether SAFE MODE holds and whether the update completes.
+
+Candidate: firmware 0.8.2, commit `ebfdadf`, SHA-256
+`4ce8a56af7171e4615f1564df0cace808e9a780df83752da05d809170ec137de`.
 
 **Install it from <https://clatter-pocket.allmyfriendsaresynths.com/installer/>**, which runs the steps
 below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-`c925f358cee223a64cd53ac0f348842775fd9e90135fe4b95f05d9ea1eded789`.
+`7414ffade8d5332e2236910aa42b128c2ae731b15eb6e8b31efc36c8f11fa28c`.
 
 Both packages are produced by:
 

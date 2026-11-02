@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "version": "0.8.1",
+  "version": "0.8.2",
   "status": "experimental",
   "installEnabled": true,
   "releaseDate": "2026-11-02",
   "firmware": {
-    "filename": "clatter-pocket-0.8.1-900c7748-UNVERIFIED.fwsc",
-    "sha256": "900c77480270ee047adc420d9f51ca918c1e783b4e33d53cb4066fd67096d7e7",
+    "filename": "clatter-pocket-0.8.2-4ce8a56a-UNVERIFIED.fwsc",
+    "sha256": "4ce8a56af7171e4615f1564df0cace808e9a780df83752da05d809170ec137de",
     "bytes": 492084,
-    "buildId": "5177fcb98f578bc82bb1116e9ec10313b618fb07ee3e6ba2cb94285a249f668c",
+    "buildId": "a8aa0d79a93214fac222e7d8ae988972fe062b68b5b797829d17807e7a736d84",
     "loaderSha256": "ef1f2db89b011fa53e71df363f0122de0ea896618c53fb53e8da676322004541",
     "product": "FM-1_8000014",
     "family": 7,
     "checks": {
-      "commit": "10a2755",
+      "commit": "ebfdadf",
       "singlePrecision": true,
       "firmwareChecks": true,
       "audioPath": true,
@@ -48,7 +48,9 @@
     ]
   },
   "notes": [
-    "Firmware 0.8.1: the start-up screen carries the logo. Copy a page and paste it to any other with SEQ+OCT− and SEQ+OCT+, as one undo. SYSTEM is down to version, build, CPU and faults. 64 steps on four pages, the keyboard as the pattern on SEQ, conditions, projects saved in user Flash.",
-    "Tested on the host and in the FM-1 emulator. Nothing has run on a device."
+    "Firmware 0.8.2 fixes the reset loop at the start-up screen that stopped the first test on a real FM-1: an audio buffer was misaligned, which the FM-1's chip treats as a fatal fault.",
+    "The start-up screen carries the logo. Copy a page and paste it to any other with SEQ+OCT− and SEQ+OCT+, as one undo. SYSTEM is down to version, build, CPU and faults. 64 steps on four pages, the keyboard as the pattern on SEQ, conditions, projects saved in user Flash.",
+    "Tested on the host and in the FM-1 emulator, now also under the chip's alignment rule. 0.8.2 itself has not run on a device, and the fix is not yet confirmed on one.",
+    "If 0.8.1 left your FM-1 restarting: power on holding HOME until SAFE MODE shows, then connect the installer. This should keep the engine off long enough to update; it has not been tried on a device."
   ]
 }

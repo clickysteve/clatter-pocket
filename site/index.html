@@ -18,7 +18,7 @@
 </head>
 <body>
 <a class="skip" href="#main">Skip to the content</a>
-<p class="strip" role="status"><b>{{status}}</b> <span>Firmware {{version}} has passed emulator testing. It has never run on a physical FM-1.</span> <a href="#install">Status</a></p>
+<p class="strip" role="status"><b>{{status}}</b> <span>Firmware {{version}} has passed emulator testing. It has not run on a physical FM-1, and the previous release reset in a loop on one.</span> <a href="#install">Status</a></p>
 
 <header class="top">
   <a class="brand" href="#main">CLATTER POCKET</a>
@@ -216,7 +216,7 @@
     <details><summary>Can I try it without hardware?</summary>
       <p>Yes. <a href="demo/">The demo</a> runs the firmware in the FM-1 emulator, in your browser.</p></details>
     <details><summary>Is installation currently safe?</summary>
-      <!-- @if experimental --><p><b>It is unproven.</b> The firmware has never run on a physical FM-1, so its safety is unknown. The installer keeps M-VAVE's compatibility and integrity checks, but those cannot show how the firmware behaves on a device. Install it only if you accept that a firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @else --><p><b>No, not yet.</b> The firmware has never run on a physical FM-1, so its safety is unknown, and this site will not install it. A firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @end --></details>
+      <!-- @if experimental --><p><b>It is unproven.</b> Firmware {{version}} has not run on a physical FM-1. The previous release reset in a loop at the start-up screen on the first one it was tried on. This release fixes the fault found there, but other problems may remain, so its safety is unknown. The installer keeps M-VAVE's compatibility and integrity checks, but those cannot show how the firmware behaves on a device. Install it only if you accept that a firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @else --><p><b>No, not yet.</b> The firmware is not proven on a physical FM-1, so its safety is unknown, and this site will not install it. A firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @end --></details>
   </div>
 </section>
 
