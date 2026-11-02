@@ -38,7 +38,6 @@
 #include "pocket_seq.h"
 
 /* The linker's runtime heap (the SDK has no call for the free heap). */
-extern char _HEAP_BEGIN[], _HEAP_END[];
 
 /* MIDI ring ordering, as the engine's event ring (pocket_fm1_config.h) */
 #ifndef POCKET_BARRIER
@@ -130,7 +129,6 @@ static void update_status(uint32_t now)
 	next.overruns = dma.overruns;
 	if (state == POCKET_STATE_READY)
 	{
-		next.clipped = engine.clipped_samples;
 		next.dropped = engine.events_dropped;
 		next.level = (uint8_t)((uint64_t)engine.peak_q23 * 100U / POCKET_Q23_MAX);
 	}
@@ -240,7 +238,6 @@ void groove_screen_init(void)
 		status.build[2 * i + 1] = hex[fm1_build_id[i] & 15];
 	}
 	status.build[8] = 0;
-	status.heap_bytes = (uint32_t)(_HEAP_END - _HEAP_BEGIN);
 	pocket_panel_init(&panel);
 	set_state(POCKET_STATE_STARTING, "HOLD HOME NOW FOR SAFE MODE");
 	paint(POCKET_BANDS);

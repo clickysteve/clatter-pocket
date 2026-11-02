@@ -117,11 +117,10 @@ act afterwards. So HOME's page function cannot reach SAFE MODE, or the reverse.
   per voice. The LXR's pan is taken at each trigger, so a move is heard on the next hit.
 - **GLOBAL**: the settings, 18 rows of which 8 show (POCKET-CONTROLS.md). GLO opens it.
 - **PROJECTS**: a tap of SAVE, 9 slots ([POCKET-STORAGE.md](POCKET-STORAGE.md)).
-- **SYSTEM**: GLO from GLOBAL. Version, build, CPU mean and peak, overruns, clipped samples, dropped events,
-  heap, and how to reach SAFE MODE.
+- **SYSTEM**: GLO from GLOBAL. Version, build, CPU mean and peak, FAULTS, and how to reach SAFE MODE.
 
-SYSTEM's heap is **the size given to the heap at link time** (`_HEAP_END − _HEAP_BEGIN`),
-labelled LINKED. The SDK has no call for what is free.
+FAULTS is audio overruns plus engine events dropped since start: 0 is the only good number. An overrun also
+raises `AUDIO OVERRUN n` over the status line. The heap is reported by `tools/check-firmware.py`.
 
 ## Audio and MIDI feedback
 
@@ -131,7 +130,7 @@ the start of each block (POCKET-SEQUENCER.md).
   the sequencer played. The screen follows the audio; it never drives it.
 - MIDI: the routing task queues channel, note and velocity; the control task plays it as the
   keys do and updates the screen at once.
-- The level meter, CPU, overruns, clipped and dropped are the existing diagnostics, read twice
+- The level meter, CPU and faults are the existing diagnostics, read twice
   a second with interrupts held.
 
 So there is no per-voice level measurement: the cells show triggers, the meter the sum.

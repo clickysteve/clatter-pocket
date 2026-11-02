@@ -143,6 +143,14 @@ static void clear_pattern(void)
 	pocket_seq_edit_commit();
 }
 
+/* What a step can hold, different on each track and page: off, a note, a variation, every condition. */
+static uint32_t sample_cell(unsigned t, unsigned s, unsigned page)
+{
+	if ((t + s + page) % 5u == 4u) return 0;
+	const unsigned tone = s % 3u == 0 ? 0 : s % 3u == 1 ? 36u + s + page : POCKET_TONE_VARIATION(1u + (t + page) % 2u);
+	return POCKET_CELL_WITH_CONDITION(POCKET_CELL(1u + (t * 17u + s * 5u + page * 31u) % 127u, tone), (t + s + page) % POCKET_CONDITIONS);
+}
+
 /* The sequencer through the panel, on the real engine: what is heard, not what is stored. */
 static void test_sequencer(void)
 {
@@ -2154,6 +2162,271 @@ static void test_save_chords(void)
 	CHECK(fresh.page == POCKET_PAGE_MAIN, "a button held at the start does not tap");
 }
 
+/* The keyboard's pages and steps: ui/pocket_panel.c's stepKeys, as bits of the keys. */
+static uint32_t page_key(unsigned page)
+{
+	static const uint8_t keys[POCKET_SEQ_PAGES] = { 1, 3, 5, 8 };
+	return 1u << keys[page];
+}
+
+static uint32_t white_key(unsigned step)
+{
+	static const uint8_t keys[POCKET_SEQ_STEPS] = { 0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26 };
+	return 1u << keys[step];
+}
+
+#define PAGE_COPY(p) press2((p), BUTTON(SEQ), BUTTON(OCT_DOWN))
+#define PAGE_PASTE(p) press2((p), BUTTON(SEQ), BUTTON(OCT_UP))
+
+static void pattern_of_pages(void)
+{
+	struct pocket_pattern* p = pocket_seq_edit_begin();
+	for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
+		for (unsigned s = 0; s < POCKET_SEQ_MAX_STEPS; s++) p->cell[t][s] = sample_cell(t, s % POCKET_SEQ_STEPS, s / POCKET_SEQ_STEPS);
+	p->last_page = POCKET_SEQ_PAGES - 1;
+	pocket_seq_edit_commit();
+	pocket_history_reset();
+}
+
+static void test_page_copy(void)
+{
+	struct pocket_panel panel;
+	static struct pocket_pattern before, expected;
+	char want[32];
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press(&panel, BUTTON(SEQ));
+
+	/* lengthening is not copying: a generated page 1, and nothing after it */
+	before = *pocket_seq_pattern();
+	CHECK(before.last_page == 0, "16 steps to begin with");
+	for (int pages = 2; pages <= POCKET_SEQ_PAGES; pages++)
+	{
+		poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, 1, 0, NULL);
+		poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+		CHECK((int)POCKET_PATTERN_STEPS(pocket_seq_pattern()) == pages * POCKET_SEQ_STEPS, "%d pages", pages);
+		CHECK(!memcmp(before.cell, pocket_seq_pattern()->cell, sizeof before.cell), "and the steps are as they were: new pages are empty");
+	}
+
+	/* nothing yet to paste: says so, changes nothing */
+	PAGE_PASTE(&panel);
+	CHECK(!strcmp(panel.notice, "NOTHING COPIED"), "%s", panel.notice);
+	CHECK(!memcmp(before.cell, pocket_seq_pattern()->cell, sizeof before.cell), "and pastes nothing");
+
+	/* every page to every page, every track and everything on a step, and each is one undo */
+	for (unsigned from = 0; from < POCKET_SEQ_PAGES; from++)
+		for (unsigned to = 0; to < POCKET_SEQ_PAGES; to++)
+		{
+			pattern_of_pages();
+			pocket_seq_set_tempo(133);
+			pocket_seq_set_swing(61);
+			const unsigned trigger = (from + to) % POCKET_SEQ_TRACKS;
+			panel.trigger = (uint8_t)trigger;
+			before = *pocket_seq_pattern();
+			tap_keys(&panel, page_key(from));
+			const unsigned step = panel.step;
+			PAGE_COPY(&panel);
+			snprintf(want, sizeof want, "PAGE %u COPIED", from + 1);
+			CHECK(!strcmp(panel.notice, want), "%s", panel.notice);
+			CHECK(!memcmp(&before, pocket_seq_pattern(), sizeof before), "a copy changes nothing");
+			CHECK(!pocket_history_used(), "and is no undo");
+			CHECK(panel.step == step, "and stays on the page");
+			tap_keys(&panel, page_key(to));
+			PAGE_PASTE(&panel);
+			snprintf(want, sizeof want, "PASTED TO PAGE %u", to + 1);
+			CHECK(!strcmp(panel.notice, want), "%s", panel.notice);
+			expected = before;
+			for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
+				memcpy(&expected.cell[t][to * POCKET_SEQ_STEPS], &before.cell[t][from * POCKET_SEQ_STEPS], POCKET_SEQ_STEPS * sizeof(uint32_t));
+			CHECK(!memcmp(&expected, pocket_seq_pattern(), sizeof expected), "page %u to %u: all of it, and no other page", from + 1, to + 1);
+			CHECK(panel.step / POCKET_SEQ_STEPS == to && panel.trigger == trigger, "still on the page and the track");
+			CHECK(pocket_seq_tempo() == 133 && pocket_seq_swing() == 61, "tempo and swing are left alone");
+			const unsigned used = pocket_history_used();
+			if (from == to) CHECK(!used, "a page onto itself leaves no undo");
+			else
+			{
+				CHECK(used >= 2 && used <= 1 + POCKET_SEQ_TRACKS * POCKET_SEQ_STEPS, "a word a step that differed, and a mark: %u", used);
+				press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+				CHECK(!memcmp(&before, pocket_seq_pattern(), sizeof before), "one undo: the page as it was, exactly");
+				press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+				CHECK(!strcmp(panel.notice, "NOTHING TO UNDO"), "one undo, not one a step: %s", panel.notice);
+				press2(&panel, BUTTON(SAVE), BUTTON(OCT_UP));
+				CHECK(!memcmp(&expected, pocket_seq_pattern(), sizeof expected), "redo: the page pasted");
+				press2(&panel, BUTTON(SAVE), BUTTON(OCT_UP));
+				CHECK(!strcmp(panel.notice, "NOTHING TO REDO"), "%s", panel.notice);
+			}
+		}
+
+	/* it overwrites: a page's rests are pasted too */
+	pattern_of_pages();
+	clear_pattern();
+	pocket_seq_set_last_page(POCKET_SEQ_PAGES - 1);
+	pocket_seq_set_cell(0, 0, POCKET_CELL(100, 0));
+	pocket_seq_set_cell(3, 16 + 5, POCKET_CELL(90, 0));
+	tap_keys(&panel, page_key(0));
+	PAGE_COPY(&panel);
+	tap_keys(&panel, page_key(1));
+	PAGE_PASTE(&panel);
+	CHECK(pocket_seq_pattern()->cell[0][16] && !pocket_seq_pattern()->cell[3][16 + 5], "a paste replaces, it does not merge");
+
+	/* one copy, many pastes, from what was copied: the page it came from can change */
+	pattern_of_pages();
+	before = *pocket_seq_pattern();
+	tap_keys(&panel, page_key(0));
+	PAGE_COPY(&panel);
+	pocket_seq_set_cell(2, 3, POCKET_CELL(11, 0));
+	for (unsigned to = 1; to < POCKET_SEQ_PAGES; to++)
+	{
+		tap_keys(&panel, page_key(to));
+		PAGE_PASTE(&panel);
+		for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
+			CHECK(!memcmp(&pocket_seq_pattern()->cell[t][to * POCKET_SEQ_STEPS], before.cell[t], POCKET_SEQ_STEPS * sizeof(uint32_t)), "page %u: what was copied", to + 1);
+	}
+	const unsigned words = pocket_history_used();
+	PAGE_PASTE(&panel);
+	CHECK(pocket_history_used() == words, "the same again changes nothing, and leaves nothing to undo");
+	/* until the next copy */
+	tap_keys(&panel, page_key(2));
+	pocket_seq_set_cell(1, 2 * POCKET_SEQ_STEPS + 1, POCKET_CELL(22, 0));
+	PAGE_COPY(&panel);
+	tap_keys(&panel, page_key(3));
+	PAGE_PASTE(&panel);
+	CHECK(pocket_seq_pattern()->cell[1][3 * POCKET_SEQ_STEPS + 1] == POCKET_CELL(22, 0), "a new copy replaces the old");
+
+	/* the chords are told apart */
+	pattern_of_pages();
+	panel.step = 20;
+	press(&panel, BUTTON(OCT_UP));
+	CHECK(panel.step == 36, "OCT+ alone still turns the page: %d", panel.step);
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(panel.step == 20, "and OCT-");
+	PAGE_COPY(&panel);
+	CHECK(panel.step == 20, "under SEQ it does not");
+	tap_keys(&panel, page_key(2));
+	PAGE_PASTE(&panel);
+	before = *pocket_seq_pattern();
+	poll(&panel, 0, BUTTON(SAVE) | BUTTON(SEQ), 0, 0, 0, 0, 0, NULL);
+	poll(&panel, 0, BUTTON(SAVE) | BUTTON(SEQ) | BUTTON(OCT_DOWN), 0, 0, 0, 0, 0, NULL);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	CHECK(!strcmp(panel.notice, "UNDO"), "SAVE wins: %s", panel.notice);
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_UP));
+	CHECK(!memcmp(&before, pocket_seq_pattern(), sizeof before), "redo");
+
+	/* from another page, SEQ opens PATTERN and the chord still works; OCT means nothing else there */
+	press(&panel, BUTTON(EDIT));
+	PAGE_COPY(&panel);
+	CHECK(panel.page == POCKET_PAGE_PATTERN && !strcmp(panel.notice, "PAGE 3 COPIED"), "%s", panel.notice);
+
+	/* with REC on the keys play, and the chord is the same; PITCH's octave is left alone */
+	press(&panel, BUTTON(SCL));
+	press(&panel, BUTTON(REC));
+	PAGE_COPY(&panel);
+	CHECK(panel.octave == 0 && !strcmp(panel.notice, "PAGE 3 COPIED"), "with REC on");
+	press(&panel, BUTTON(REC));
+	press(&panel, BUTTON(SCL));
+
+	/* a key down under the chord: its release is no tap */
+	const uint32_t c = pocket_seq_pattern()->cell[panel.trigger][2 * POCKET_SEQ_STEPS + 1];
+	poll(&panel, white_key(1), 0, 0, 0, 0, 0, 0, NULL);
+	poll(&panel, white_key(1), BUTTON(SEQ), 0, 0, 0, 0, 0, NULL);
+	poll(&panel, white_key(1), BUTTON(SEQ) | BUTTON(OCT_UP), 0, 0, 0, 0, 0, NULL);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	CHECK(pocket_seq_pattern()->cell[panel.trigger][2 * POCKET_SEQ_STEPS + 1] == c, "no toggle");
+
+	/* while it plays: the position goes on, and the paste is heard from the next step */
+	pattern_of_pages();
+	pocket_seq_set_tempo(300);
+	tap_keys(&panel, page_key(0));
+	PAGE_COPY(&panel);
+	tap_keys(&panel, page_key(1));
+	press(&panel, BUTTON(PLAY));
+	render_peak(200);
+	const uint32_t played = pocket_seq_steps_played();
+	PAGE_PASTE(&panel);
+	render_peak(200);
+	CHECK(pocket_seq_steps_played() > played && pocket_seq_playing(), "it does not stop the music");
+	press(&panel, BUTTON(PLAY));
+	render_peak(4);
+}
+
+/* The whole way: 16 steps, 32, copied, edited, a condition, heard to change, saved, restarted. */
+static void test_page_to_project(void)
+{
+	struct pocket_panel panel;
+	static struct pocket_pattern saved;
+	fake_flash_reset();
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press(&panel, BUTTON(SEQ));
+	clear_pattern();
+	pocket_history_reset();
+	for (unsigned s = 0; s < POCKET_SEQ_STEPS; s += 4) tap_keys(&panel, white_key(s));
+	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_DRUM1][4], "four on the floor, from the keys");
+	poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, 1, 0, NULL);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	PAGE_COPY(&panel);
+	tap_keys(&panel, page_key(1));
+	PAGE_PASTE(&panel);
+	for (unsigned s = 0; s < POCKET_SEQ_STEPS; s++)
+		CHECK(pocket_seq_pattern()->cell[0][16 + s] == pocket_seq_pattern()->cell[0][s], "step %u", s + 17);
+
+	/* an edit on page 2 alone */
+	tap_keys(&panel, white_key(2));
+	CHECK(pocket_seq_pattern()->cell[0][18] && !pocket_seq_pattern()->cell[0][2], "a step added to page 2 is not on page 1");
+
+	/* a condition on step 21, from a held key, turned twice: 2:2. A hold, not a toggle */
+	poll(&panel, white_key(4), 0, 0, 0, 0, 0, 0, NULL);
+	poll(&panel, white_key(4), 0, 0, 0, 0, 2, 0, NULL);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	uint32_t c = pocket_seq_pattern()->cell[0][20];
+	CHECK(POCKET_CELL_VELOCITY(c) && POCKET_CELL_CONDITION(c) == POCKET_CONDITION_2_2, "a condition, and it stays on");
+	CHECK(POCKET_CELL_VELOCITY(c) == POCKET_CELL_VELOCITY(pocket_seq_pattern()->cell[0][4]) && !POCKET_CELL_TONE(c), "velocity and tone as they were");
+	CHECK(!POCKET_CELL_CONDITION(pocket_seq_pattern()->cell[0][4]), "page 1 has none");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+	CHECK(!POCKET_CELL_CONDITION(pocket_seq_pattern()->cell[0][20]) && POCKET_CELL_VELOCITY(pocket_seq_pattern()->cell[0][20]), "undone: no condition, still on");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_UP));
+	CHECK(pocket_seq_pattern()->cell[0][20] == c, "redone");
+
+	/* heard: passes 2 and 4 play step 21, 1 and 3 do not, and step 5 plays on all */
+	pocket_seq_set_tempo(300);
+	press(&panel, BUTTON(PLAY));
+	unsigned passesWith21 = 0, passesWith5 = 0, seen = 0, last = 0xffffffffu;
+	for (int b = 0; b < 8000 && seen < 4u; b++)
+	{
+		render_peak(1);
+		const uint32_t played = pocket_seq_steps_played();
+		if (played == last) continue;
+		last = played;
+		const int at = pocket_seq_position();
+		if (at == 4 && pocket_seq_last_tracks() & 1u) passesWith5++;
+		if (at == 20 && pocket_seq_last_tracks() & 1u) passesWith21 |= 1u << pocket_seq_pass();
+		if (at == 31) seen++;
+	}
+	CHECK(seen == 4u, "four passes of 32 steps: %u", seen);
+	CHECK(passesWith5 == 4u, "step 5 on all: %u", passesWith5);
+	CHECK(passesWith21 == 0xau, "step 21 on the second of two, and only then: %x", passesWith21);
+	press(&panel, BUTTON(PLAY));
+	render_peak(4);
+
+	/* saved, wrecked, and back; then again after a restart */
+	saved = *pocket_seq_pattern();
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "SAVED 1"), "%s", panel.notice);
+	press(&panel, BUTTON(SEQ));
+	clear_pattern();
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(!strcmp(panel.notice, "LOADED 1"), "%s", panel.notice);
+	CHECK(!memcmp(&saved, pocket_seq_pattern(), sizeof saved), "32 steps and the condition, loaded");
+	CHECK(pocket_seq_pattern()->last_page == 1, "two pages");
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(!memcmp(&saved, pocket_seq_pattern(), sizeof saved), "and after a restart");
+}
+
 int main(int argc, char** argv)
 {
 	struct pocket_panel panel;
@@ -2341,7 +2614,7 @@ int main(int argc, char** argv)
 		static uint16_t first[POCKET_SCREEN_W * POCKET_BAND_ROWS];
 		struct pocket_panel_status worst = { 0 };
 		worst.cpu_permille = worst.cpu_peak_permille = 65535;
-		worst.overruns = worst.clipped = worst.dropped = worst.midi_messages = worst.midi_hits = worst.heap_bytes = 0xffffffffu;
+		worst.overruns = worst.dropped = worst.midi_messages = worst.midi_hits = 0xffffffffu;
 		worst.level = 255;
 		worst.master = 255;
 		memcpy(worst.build, "FFFFFFFF", 9);
@@ -2387,6 +2660,8 @@ int main(int argc, char** argv)
 	test_step_keys();
 	test_history();
 	test_save_chords();
+	test_page_copy();
+	test_page_to_project();
 
 	/* screenshots: each screen as the FM-1 would show it */
 	start_engine(&panel);
@@ -2398,7 +2673,6 @@ int main(int argc, char** argv)
 	status.midi_messages = 120;
 	status.midi_hits = 57;
 	status.master = 100;
-	status.heap_bytes = 134124;
 	memcpy(status.build, "1FE05C9D", 9);
 	const char* path = argc > 1 ? argv[1] : "build/host/panel.ppm";
 	for (int screen = -1; screen < POCKET_PAGES; screen++)

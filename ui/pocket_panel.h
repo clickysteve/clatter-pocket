@@ -35,7 +35,7 @@ enum {
 	POCKET_ENC_SELECT, POCKET_ENC_ALGORITHM, POCKET_ENC_KNOB1, POCKET_ENC_KNOB2, POCKET_ENC_KNOB3,
 	POCKET_ENC_KNOB4, POCKET_ENC_PRESETS
 };
-#define POCKET_FW_VERSION "0.7.1 UNVERIFIED"
+#define POCKET_FW_VERSION "0.8.0 UNVERIFIED"
 
 struct pocket_panel_input {
 	uint32_t keys;                      /* held note keys */
@@ -48,7 +48,6 @@ struct pocket_panel_status {
 	uint16_t cpu_permille;      /* engine time per block / block period, mean of the last second */
 	uint16_t cpu_peak_permille; /* worst block in the last second */
 	uint32_t overruns;          /* audio blocks missed since start (FM-1 DMA statistics) */
-	uint32_t clipped;           /* output samples saturated since start */
 	uint32_t dropped;           /* engine events refused (ring full) since start */
 	/* hardware-test diagnostics (all optional: zero shows as "starting", "waiting", empty) */
 	uint8_t state;              /* POCKET_STATE_* */
@@ -56,7 +55,6 @@ struct pocket_panel_status {
 	uint32_t midi_messages;     /* MIDI messages received since start */
 	uint32_t midi_hits;         /* voices triggered from MIDI since start */
 	uint8_t master;             /* MASTER knob's output level, 0..127 */
-	uint32_t heap_bytes;        /* runtime heap at link time (the SDK reports no free heap) */
 	char build[9];              /* build identity, 8 hex digits, or empty */
 };
 enum { POCKET_STATE_STARTING, POCKET_STATE_READY, POCKET_STATE_SAFE, POCKET_STATE_ERROR };
@@ -150,6 +148,9 @@ struct pocket_panel {
 	/* The keys as steps. Last: offsets above fit the byte tables of pocket_panel.c. */
 	uint8_t step_held;                  /* white key last pressed, still down, + 1, or 0 */
 	uint16_t step_tap_ms[POCKET_SEQ_STEPS]; /* per white key: time left for its release to be a tap */
+	/* A page copied, RAM only: until the next copy or a restart. */
+	uint8_t copied;
+	uint32_t clipboard[POCKET_SEQ_TRACKS][POCKET_SEQ_STEPS];
 };
 
 /* The screen is drawn in bands of POCKET_BAND_ROWS rows of POCKET_SCREEN_W pixels, RGB565. */

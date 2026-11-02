@@ -67,7 +67,6 @@ static void update_status(uint32_t now)
 		next.cpu_peak_permille = (uint16_t)((uint64_t)peak * 1000U / block_ticks);
 	}
 	next.overruns = dma.overruns;
-	next.clipped = engine.clipped_samples;
 	next.dropped = engine.events_dropped;
 	next.state = POCKET_STATE_READY;
 	pocket_panel_update_status(&panel, &status, &next);

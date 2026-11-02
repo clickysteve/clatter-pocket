@@ -5,12 +5,12 @@ PRE-FLASH-AUDIT.md) on one M-VAVE FM-1. **Nothing here has been done yet.** Step
 **UNVERIFIED** follow from the SDK's source and build, not from a device. The owner decides
 whether to start, and every step can be the point to stop.
 
-Candidate: firmware 0.7.1, commit `b9ea0ab`, SHA-256
-`796cd55bf0922180d9f9ef9b24336f6ab9ac829d829510d1eeff827c9fcca3e0`.
+Candidate: firmware 0.8.0, commit `24e37e4`, SHA-256
+`be5c69942f34dabe5f729dd288d3eb67b05ff50bea96f33e8ccbb02b38a1ae6d`.
 
 **Install it from <https://clatter-pocket.allmyfriendsaresynths.com/installer/>**, which runs the steps
 below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-`5f445bfd4442fb7903c573a315452fc939f8f7b760843e52ace17c3fdf1f5728`.
+`fc47f1de0776f45c8002841b7cc086265797e6a15154cf956c16063a884de90a`.
 
 Both packages are produced by:
 
@@ -106,7 +106,7 @@ Expected on screen:
 3. "MIDI WAITING";
 4. the seven activity cells and a level meter.
 
-Press **GLO** twice for SYSTEM (GLOBAL, then SYSTEM): version, build, CPU, OVERRUNS, CLIPPED, DROPPED, HEAP. The emulator
+Press **GLO** twice for SYSTEM (GLOBAL, then SYSTEM): version, build, CPU, FAULTS. The emulator
 shows this same sequence (docs/POCKET-UI.md); the stock interface here means the wrong package
 is installed.
 
@@ -116,7 +116,7 @@ Record:
 - any restart;
 - the CPU and peak figures with nothing playing (the engine's cost is the same playing or
   not);
-- the OVERRUNS count after one minute;
+- the FAULTS count after one minute;
 - temperature by touch after 5 minutes.
 
 If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
@@ -125,7 +125,7 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
 
 1. MASTER low. Press **C4**, the 8th note key: DRUM 1 sounds once at its programmed pitch.
 2. Raise MASTER: the level follows smoothly. Fully down is silent.
-3. The level meter moves with each hit and the DRUM 1 cell flashes; CLIPPED stays 0 at
+3. The level meter moves with each hit and the DRUM 1 cell flashes; it stays white, not orange, at
    moderate MASTER. Listen for
    distortion, clicks and dropouts.
 4. Play the keys C4 to E4: each is a different voice, and the VOICE line follows. Press **SCL**
@@ -141,7 +141,7 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
    changes. Turn **PRESETS**: the kit's name shows and the sound changes. Record any control that differs from docs/POCKET-UI.md: the encoder
    positions come from the emulator, not a device.
 7. Watch for 2 minutes: no stuck or endless sounds (a voice whose DECAY is at 127 sustains
-   by design), OVERRUNS not rising, no interruptions.
+   by design), FAULTS not rising, no interruptions.
 
 ## MIDI test
 
