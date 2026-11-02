@@ -24,7 +24,7 @@ none, so use the mouse.
 6. **Program steps on the keys.** SEQ `0` opens PATTERN, and the keyboard becomes the selected
    track's pattern: tap a white key to turn its step on or off, tap one of the first four black keys for
    a page, turn SELECT `← →` for another track. Hold a white key and turn a knob to edit that step. KNOB 2
-   is the tempo, KNOB 3 the swing. Hold SAVE `8` and turn KNOB 3 for more pages
+   is the tempo, KNOB 3 the swing. Hold SEQ and turn KNOB 3 for more pages
    ([step keys](#the-keyboard-on-seq-step-keys)).
 7. **Regenerate one instrument.** Turn SELECT `← →` to a voice, or hit its key. **Hold SAVE `8`** and
    press ENV `3` for a new sound, or ARP `9` for a new rhythm. The rest stays as it was.
@@ -58,12 +58,12 @@ Every control below works on every page, unless it says otherwise.
 | **MASTER** | output level | |
 | HOME held at 1.5 s after power-on | SAFE MODE, unchanged | |
 
-| Knob | PATTERN | PATTERN, step held | PATTERN, SAVE held | SOUND | MIXER | GLOBAL | PROJECTS |
-|---|---|---|---|---|---|---|---|
-| KNOB 1 | selected step's velocity | its velocity | its condition | pitch | level | row | slot |
-| KNOB 2 | tempo | its pitch | | decay | pan | value | |
-| KNOB 3 | swing | its condition | length, a page at a time | filter | | | |
-| KNOB 4 | selected step, across pages | its variation | a page at a time | drive | | | |
+| Knob | PATTERN | PATTERN, step held | PATTERN, SAVE held | PATTERN, SEQ held | SOUND | MIXER | GLOBAL | PROJECTS |
+|---|---|---|---|---|---|---|---|---|
+| KNOB 1 | selected step's velocity | its velocity | its condition | | pitch | level | row | slot |
+| KNOB 2 | tempo | its pitch | | | decay | pan | value | |
+| KNOB 3 | swing | its condition | | length, a page at a time | filter | | | |
+| KNOB 4 | selected step, across pages | its variation | a page at a time | | drive | | | |
 
 Lights: PLAY playing, REC recording, SCL in PITCH, SAVE on a locked track, SEQ on PATTERN, and on
 PATTERN the keys ([step keys](#the-keyboard-on-seq-step-keys)).
@@ -89,6 +89,7 @@ set, with OCT in DRUM or KEY VEL on GLOBAL. MIDI notes keep their own velocity.
 | ALGORITHM moved the step | KNOB 4 |
 | SCL put the knobs on the generator | GLOBAL has DENSITY, COMPLEX, SEED and MUTATE. The style is on ALGORITHM |
 | KNOB 4 set the mutation strength | GLOBAL's MUTATE |
+| SAVE+KNOB 3 set the length | SEQ+KNOB 3, from any page: SEQ opens PATTERN and stays down |
 | ENV undid the pattern | SAVE+OCT− |
 | The buttons acted on PATTERN only | on every page: you can generate from SOUND. Each change has its undo |
 | Keys played the selected voice; the 13th key (F4) was the programmed pitch | DRUM at start-up. In PITCH, **C4** is the programmed pitch, which is what the engine calls note 60 |
@@ -113,7 +114,7 @@ lit. The status line says `KEYS: STEPS`. DRUM and PITCH are as they were on ever
 | **Hold + KNOB 2** | pitch. C4 is the programmed pitch |
 | **Hold + KNOB 3** | condition: always, 1:2, 2:2, 1:3, 2:3, 3:3, 1:4 to 4:4, 25 %, 50 %, 75 % |
 | **Hold + KNOB 4** | variation. A step has one tone, so a variation replaces a note and a note a variation |
-| **Tap black key 1 to 4** | that page, at the same place. A page past the end of the pattern says `PAST THE END: SAVE+K3 LEN`: only SAVE+KNOB 3 lengthens a pattern |
+| **Tap black key 1 to 4** | that page, at the same place. A page past the end of the pattern says `PAST THE END: SEQ+K3 LEN`: only SEQ+KNOB 3 lengthens a pattern |
 | **OCT− / OCT+** | the previous or next page, round the pattern's own length |
 | **SELECT** | another track, on the same page and step: the lamps change with it |
 | **SAVE+OCT− / SAVE+OCT+** | undo, redo. Each toggle is one, and everything done during one hold is one, however long it took |
@@ -397,7 +398,7 @@ power-off.
 | AUTO STEP | 0-4 | after a stopped entry |
 | TEMPO | 30-300 | as KNOB 2 on PATTERN |
 | SWING | 50-75 | as KNOB 3 on PATTERN |
-| LENGTH | 16, 32, 48, 64 | as SAVE+KNOB 3 on PATTERN |
+| LENGTH | 16, 32, 48, 64 | as SEQ+KNOB 3 on PATTERN |
 | STYLE | of 11 | as ALGORITHM |
 | DENSITY, COMPLEX | 0-100 | the generator |
 | SEED | 0-9999 | the next ARP |
@@ -422,7 +423,7 @@ has not been seen**.
 | Voice line | the selected voice, in orange; on PATTERN the step, and what it holds (`S17 N67 1:3`, `S5 PA 25%`); elsewhere the DRUM sound last played (`PERC B`) |
 | PATTERN | PAGE 2/4, and a block a page: orange where it is playing, white on screen, grey in use. The step grid. A note is an orange bar; a variation hollow (A, X, XB) or striped (B, XA); a condition an orange corner. `X` is PERC on D3 and CLAP on SN |
 | MAIN | transport, tempo, swing, style, hits, a row of the pattern, the kit |
-| Footer | what the controls do here; with SAVE held, the chords, in orange |
+| Footer | what the controls do here; with SAVE held, or SEQ on PATTERN, the chords, in orange |
 | SYSTEM's footer | `BOOT+HOME SAFE`: how to reach SAFE MODE |
 
 ## Size

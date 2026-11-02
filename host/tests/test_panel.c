@@ -919,10 +919,26 @@ static void test_saving(void)
 
 	/* a project: a long pattern, conditions, variations, notes, tempo, swing, generator, kit */
 	press(&panel, BUTTON(SEQ));
-	poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, 3, 0, NULL);
+	poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, 3, 0, NULL);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
-	CHECK(pocket_seq_pattern()->last_page == 3, "SAVE+KNOB3: 64 steps");
-	CHECK(panel.page == POCKET_PAGE_PATTERN, "and that is no tap");
+	CHECK(pocket_seq_pattern()->last_page == 3, "SEQ+KNOB3: 64 steps");
+	CHECK(panel.page == POCKET_PAGE_PATTERN, "and SEQ stays on PATTERN");
+	{
+		const int swing = pocket_seq_swing(), tempo_before_chord = pocket_seq_tempo(), step_before_chord = panel.step;
+		poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, -3, 0, NULL);
+		poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+		CHECK(pocket_seq_pattern()->last_page == 3 && pocket_seq_swing() == swing, "SAVE+KNOB3 sets neither length nor swing");
+		CHECK(panel.page == POCKET_PAGE_PATTERN, "and that is no tap");
+		poll(&panel, 0, BUTTON(SEQ), 0, 0, 2, 0, 3, NULL);
+		poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+		CHECK(pocket_seq_tempo() == tempo_before_chord && panel.step == step_before_chord, "SEQ held: the other knobs rest");
+		press(&panel, BUTTON(HOME));
+		poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, -3, 0, NULL);
+		poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+		CHECK(panel.page == POCKET_PAGE_PATTERN && pocket_seq_pattern()->last_page == 0, "from any page, SEQ opens PATTERN and KNOB3 is its length");
+		poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, 3, 0, NULL);
+		poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	}
 	press(&panel, BUTTON(ARP));
 	pocket_seq_set_cell(1, 61, POCKET_CELL_WITH_CONDITION(POCKET_CELL(77, 72), POCKET_CONDITION_3_4));
 	pocket_seq_set_cell(3, 40, POCKET_CELL_WITH_CONDITION(POCKET_CELL(127, POCKET_TONE_VARIATION(POCKET_VARIATION_ALT_B)), POCKET_CONDITION_75));
@@ -976,7 +992,7 @@ static void test_saving(void)
 	press(&panel, BUTTON(EDIT));
 	turn(&panel, POCKET_ENC_KNOB1, 9);
 	press(&panel, BUTTON(SEQ));
-	poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, -1, 0, NULL);
+	poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, -1, 0, NULL);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
 	press(&panel, BUTTON(ARP));
 	panel.density = 10;
@@ -1636,10 +1652,10 @@ static void test_step_keys(void)
 	CHECK(!pattern->cell[0][4] && !pattern->cell[0][20], "a press across a page change toggles nothing");
 	/* a pattern shortened under the keys: they come with it */
 	panel.step = 18;
-	poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, -1, 0, NULL);
+	poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, -1, 0, NULL);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
-	CHECK(pattern->last_page == 0 && panel.step == 2, "SAVE+KNOB3 shortens, the keys on the page left: %d", panel.step);
-	poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, 3, 0, NULL);
+	CHECK(pattern->last_page == 0 && panel.step == 2, "SEQ+KNOB3 shortens, the keys on the page left: %d", panel.step);
+	poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, 3, 0, NULL);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
 	CHECK(pattern->last_page == 3, "and it is how a pattern is lengthened");
 
@@ -1753,12 +1769,12 @@ static void test_long_patterns(void)
 	CHECK(panel.step == 15, "the last step of the page");
 	turn(&panel, POCKET_ENC_KNOB4, 1);
 	CHECK(panel.step == 0, "16 steps: round to the first");
-	poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, 1, 0, NULL);
+	poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, 1, 0, NULL);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
-	CHECK(POCKET_PATTERN_STEPS(pocket_seq_pattern()) == 32, "SAVE+KNOB3: a page longer");
+	CHECK(POCKET_PATTERN_STEPS(pocket_seq_pattern()) == 32, "SEQ+KNOB3: a page longer");
 	turn(&panel, POCKET_ENC_KNOB4, 20);
 	CHECK(panel.step == 20, "the cursor reaches the second page");
-	poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, 2, 0, NULL);
+	poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, 2, 0, NULL);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
 	CHECK(POCKET_PATTERN_STEPS(pocket_seq_pattern()) == 64, "64");
 	poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, 0, 2, NULL);
@@ -1817,12 +1833,12 @@ static void test_long_patterns(void)
 	/* shortening keeps the steps, and the cursor comes in */
 	panel.step = 60;
 	pocket_seq_set_step(1, 60, 90, 0);
-	poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, -3, 0, NULL);
+	poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, -3, 0, NULL);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
 	CHECK(POCKET_PATTERN_STEPS(pocket_seq_pattern()) == 16 && panel.step < 16, "shorter: the cursor is inside: %d", panel.step);
 	CHECK(pocket_seq_pattern()->cell[1][60] != 0, "and the steps of the pages left out stay");
 	/* ARP and LFO work to the length */
-	poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, 3, 0, NULL);
+	poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, 3, 0, NULL);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
 	press(&panel, BUTTON(ARP));
 	press(&panel, BUTTON(LFO));
@@ -2021,7 +2037,7 @@ static void test_history(void)
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
 	press(&panel, BUTTON(SEQ));
 	MARK(0);
-	poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, 3, 0, NULL);
+	poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, 3, 0, NULL);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
 	pocket_panel_tick(&panel, POCKET_MERGE_MS);
 	MARK(1);
@@ -2061,7 +2077,7 @@ static void test_history(void)
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
 	press(&panel, BUTTON(SEQ));
-	poll(&panel, 0, BUTTON(SAVE), 0, 0, 0, 3, 0, NULL);
+	poll(&panel, 0, BUTTON(SEQ), 0, 0, 0, 3, 0, NULL);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
 	panel.density = 100;
 	panel.complexity = 100;

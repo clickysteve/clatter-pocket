@@ -172,8 +172,8 @@ class Machine {
   chord(held, id, ms = 60) { this.x.fm1_key(held, 1); this.run(ms); this.tap(id, ms); this.x.fm1_key(held, 0); this.run(ms); }
   // The emulator delivers detents over time: wait for them.
   turn(enc, clicks) { this.x.fm1_enc(enc, clicks); this.run(120 + 10 * Math.abs(clicks)); }
-  // An encoder turned with SAVE held.
-  chordTurn(enc, clicks) { this.x.fm1_key(BUTTON.SAVE, 1); this.run(60); this.turn(enc, clicks); this.x.fm1_key(BUTTON.SAVE, 0); this.run(60); }
+  // An encoder turned with SAVE, or another button, held.
+  chordTurn(enc, clicks, held = BUTTON.SAVE) { this.x.fm1_key(held, 1); this.run(60); this.turn(enc, clicks); this.x.fm1_key(held, 0); this.run(60); }
   // Which page of steps is playing, from PATTERN's blocks, or -1.
   pagePlaying() { const fb = this.lcd(); for (let p = 0; p < 4; p++) if (fb[72 * 240 + 206 + 7 * p] === ACCENT) return p; return -1; }
   midi(...bytes) { for (const b of bytes) this.x.fm1_midi(b); }
@@ -607,8 +607,8 @@ async function storage(pkg) {
   // ---- a project: a long pattern with a note and a condition, tempo, swing, kit
   const kit = sound(m);
   m.tap(BUTTON.SEQ, 90); m.run(200);
-  m.chordTurn(ENC.KNOB3, 1);
-  shows(m, "PAGE 1/2", "SAVE+KNOB3 lengthens the pattern");
+  m.chordTurn(ENC.KNOB3, 1, BUTTON.SEQ);
+  shows(m, "PAGE 1/2", "SEQ+KNOB3 lengthens the pattern");
   m.tap(BUTTON.ARP, 90); m.run(200);
   m.turn(ENC.KNOB4, 18);
   shows(m, "PAGE 2/2", "KNOB4 reaches the second page");
@@ -645,7 +645,7 @@ async function storage(pkg) {
   check(sound(m).join() !== kit.join(), "ENV changes the sound");
   m.tap(BUTTON.SEQ, 90); m.run(200);
   m.tap(BUTTON.ARP, 90);
-  m.chordTurn(ENC.KNOB3, -1);
+  m.chordTurn(ENC.KNOB3, -1, BUTTON.SEQ);
   m.turn(ENC.KNOB2, -13); m.turn(ENC.KNOB3, -7);
   m.run(300);
   check(m.grid().join() !== page1, "ARP changes the pattern");
@@ -847,9 +847,9 @@ async function longPatterns(m) {
   m.run(300);
   // ---- every length, across its pages
   for (const [pages, by] of [[2, 1], [3, 1], [4, 1]]) {
-    m.chordTurn(ENC.KNOB3, by);
+    m.chordTurn(ENC.KNOB3, by, BUTTON.SEQ);
     m.run(200);
-    shows(m, `PAGE 1/${pages}`, `SAVE+KNOB3: ${pages * 16} steps`);
+    shows(m, `PAGE 1/${pages}`, `SEQ+KNOB3: ${pages * 16} steps`);
     m.tap(BUTTON.ARP, 90);
     m.run(300);
     m.tap(BUTTON.PLAY);
@@ -880,7 +880,7 @@ async function longPatterns(m) {
   m.run(1800);
 
   // ---- conditions, heard: one closed hat on step 1, and nothing else
-  m.chordTurn(ENC.KNOB3, -3);
+  m.chordTurn(ENC.KNOB3, -3, BUTTON.SEQ);
   shows(m, "PAGE 1/1", "back to 16 steps");
   m.tap(BUTTON.REC, 60);
   const setRow = (t, row) => {
@@ -967,7 +967,7 @@ async function longPatterns(m) {
   }
 
   // ---- the worst it can be asked: 64 dense steps of variations, at the fastest tempo, with hits
-  m.chordTurn(ENC.KNOB3, 3);
+  m.chordTurn(ENC.KNOB3, 3, BUTTON.SEQ);
   m.turn(ENC.KNOB2, 180);
   setting(m, ROW.DENSITY, 100, BUTTON.SEQ);
   setting(m, ROW.COMPLEX, 100, BUTTON.SEQ);
@@ -992,7 +992,7 @@ async function longPatterns(m) {
   setting(m, ROW.DENSITY, -100, BUTTON.SEQ);
   setting(m, ROW.COMPLEX, -100, BUTTON.SEQ);
   m.turn(ENC.KNOB2, -180);
-  m.chordTurn(ENC.KNOB3, -3);
+  m.chordTurn(ENC.KNOB3, -3, BUTTON.SEQ);
   m.tap(BUTTON.HOME, 90);
 }
 
@@ -1247,7 +1247,12 @@ async function stepKeyboard(pkg) {
   shows(m, "PAST THE END", "a page past the end is refused, and says so");
   shows(m, "PAGE 1/1", "and the pattern is no longer");
   m.chordTurn(ENC.KNOB3, 3);
-  shows(m, "PAGE 1/4", "SAVE+KNOB3 lengthens it");
+  shows(m, "PAGE 1/1", "SAVE+KNOB3 does not");
+  m.x.fm1_key(BUTTON.SEQ, 1); m.run(200);
+  shows(m, "K3 LEN", "SEQ held: the footer says what KNOB3 does");
+  m.x.fm1_key(BUTTON.SEQ, 0); m.run(200);
+  m.chordTurn(ENC.KNOB3, 3, BUTTON.SEQ);
+  shows(m, "PAGE 1/4", "SEQ+KNOB3 lengthens it");
   for (let p = 0; p < 4; p++) {
     m.tap(KEY(BLACK[p]), 60);
     m.run(200);
@@ -1337,8 +1342,8 @@ async function stepKeyboard(pkg) {
   m.run(200);
   const sixteenth = (RATE * 15) / 240;
   for (let pages = 1; pages <= 4; pages++) {
-    m.chordTurn(ENC.KNOB3, -3);
-    if (pages > 1) m.chordTurn(ENC.KNOB3, pages - 1); // no detents would be a tap of SAVE
+    m.chordTurn(ENC.KNOB3, -3, BUTTON.SEQ);
+    m.chordTurn(ENC.KNOB3, pages - 1, BUTTON.SEQ);
     m.tap(KEY(WHITE[8]), 40);          // step 9, far enough from the next that both are heard
     m.tap(KEY(BLACK[pages - 1]), 60);
     m.tap(KEY(WHITE[15]), 40);         // and the last of the last page
@@ -1360,7 +1365,7 @@ async function stepKeyboard(pkg) {
   }
 
   // ---- 5, 8. a condition set from a held key, heard
-  m.chordTurn(ENC.KNOB3, -3);
+  m.chordTurn(ENC.KNOB3, -3, BUTTON.SEQ);
   m.tap(KEY(WHITE[0]), 40);
   hold(m, KEY(WHITE[0]), 100);
   m.turn(ENC.KNOB3, 1);
@@ -1374,7 +1379,7 @@ async function stepKeyboard(pkg) {
   check(m.grid()[0] === OFF, "undone, step and all", m.grid()[0]);
 
   // ---- 3, 5, 7. all of it while the pattern plays: edits land, pages turn, the lamps keep up
-  m.chordTurn(ENC.KNOB3, 3);
+  m.chordTurn(ENC.KNOB3, 3, BUTTON.SEQ);
   m.turn(ENC.KNOB2, -120); // 120 BPM
   m.run(100);
   m.tap(BUTTON.PLAY);
