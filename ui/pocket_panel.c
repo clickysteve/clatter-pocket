@@ -30,10 +30,9 @@ static const char triggerNames[POCKET_LXR_TRIGGERS][7] = {
 };
 static const char cellNames[POCKET_LXR_TRIGGERS][3] = { "D1", "D2", "D3", "SN", "CY", "CH", "OH" };
 static const char pageNames[POCKET_PAGES][9] = { "MAIN", "PATTERN", "SOUND", "MIXER", "GLOBAL", "SYSTEM", "PROJECTS" };
-static const char pageFooters[POCKET_PAGES][30] = {
+static const char pageFooters[POCKET_PAGES - 1][30] = { /* SOUND's serves MIXER too */
 	"ENV KIT ARP GEN LFO MUTATE",
 	"K1 VEL K2 BPM K3 SWG K4 STEP",
-	"SEL VOICE  KNOBS EDIT",
 	"SEL VOICE  KNOBS EDIT",
 	"K1 ROW K2 VALUE GLO SYSTEM",
 	"GLO BACK  BOOT+HOME SAFE",
@@ -1027,7 +1026,7 @@ static void step_knobs(struct pocket_panel* panel, const int16_t* knob)
 }
 
 /* The knobs of PATTERN: the selected step's velocity, the tempo and swing, the selected step.
- * With SAVE held: its condition, the pattern's length, a page at a time. */
+ * With SAVE held: its condition, a page at a time. With SEQ held: the pattern's length, a page at a time. */
 static void pattern_knobs(struct pocket_panel* panel, const int16_t* knob, int save)
 {
 	if (!(knob[0] | knob[1] | knob[2] | knob[3])) return;
@@ -1036,11 +1035,15 @@ static void pattern_knobs(struct pocket_panel* panel, const int16_t* knob, int s
 		step_knobs(panel, knob);
 		return;
 	}
+	if (panel->previous_buttons & BTN(SEQ))
+	{
+		if (knob[2]) set_length(panel, pocket_seq_pattern()->last_page + knob[2]);
+		return;
+	}
 	const uint32_t c = pocket_seq_pattern()->cell[panel->trigger][panel->step];
 	if (save)
 	{
 		if (knob[0] && c) step_edit(panel, POCKET_CELL_WITH_CONDITION(c, limited((int)POCKET_CELL_CONDITION(c) + knob[0], 0, POCKET_CONDITIONS - 1)));
-		if (knob[2]) set_length(panel, pocket_seq_pattern()->last_page + knob[2]);
 		if (knob[3]) move_step(panel, POCKET_SEQ_STEPS * knob[3]);
 		return;
 	}
@@ -1162,18 +1165,17 @@ static void octave_button(struct pocket_panel* panel, int by, int held)
 static void buttons(struct pocket_panel* panel, uint32_t pressed, uint32_t released, uint32_t held)
 {
 	const int save = (held & BTN(SAVE)) != 0;
+	if ((pressed | released) & (BTN(SAVE) | BTN(SEQ))) panel->dirty |= 1u << B_FOOTER;
 	if (pressed & BTN(SAVE))
 	{
 		panel->save_down = 1;
 		panel->save_chorded = 0;
-		panel->dirty |= 1u << B_FOOTER;
 	}
 	/* SAVE is a tap only if nothing else happened while it was down */
 	if (pressed & ~BTN(SAVE)) panel->save_chorded |= (uint8_t)save;
 	if ((released & BTN(SAVE)) && panel->save_down)
 	{
 		panel->save_down = 0;
-		panel->dirty |= 1u << B_FOOTER;
 		if (!panel->save_chorded && panel->page == POCKET_PAGE_STORE) store_save(panel);
 		else if (!panel->save_chorded) store_open(panel);
 	}
@@ -1247,11 +1249,11 @@ static void step_keys(struct pocket_panel* panel, uint32_t pressed, uint32_t rel
 			panel->dirty |= (1u << B_VOICE) | GRID_BANDS | (1u << (B_BODY + L_RULER)) | HELD_BANDS;
 		}
 	}
-	/* a page: the same place on it. A page past the end is not one: only K3 with SAVE lengthens */
+	/* a page: the same place on it. A page past the end is not one: only K3 with SEQ lengthens */
 	for (int p = 0; p < POCKET_SEQ_PAGES; p++)
 		if (pressed & (1u << stepKeys[POCKET_SEQ_STEPS + p]))
 		{
-			if (p > pocket_seq_pattern()->last_page) announce(panel, "PAST THE END: SAVE+K3 LEN");
+			if (p > pocket_seq_pattern()->last_page) announce(panel, "PAST THE END: SEQ+K3 LEN");
 			else
 			{
 				steps_forget(panel);
@@ -1743,12 +1745,14 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 	}
 	if (band == B_FOOTER)
 	{
-		const char* footer = pageFooters[panel->page];
+		const char* const plain = pageFooters[panel->page - (panel->page >= POCKET_PAGE_MIXER)];
+		const char* footer = plain;
 		if (panel->save_down && panel->page != POCKET_PAGE_STORE)
-			footer = panel->page == POCKET_PAGE_PATTERN ? "K1 COND K3 LEN K4 PAGE" : "OCT- UNDO OCT+ REDO FX LOCK";
+			footer = panel->page == POCKET_PAGE_PATTERN ? "K1 COND K4 PAGE" : "OCT- UNDO OCT+ REDO FX LOCK";
+		if (panel->page == POCKET_PAGE_PATTERN && (panel->previous_buttons & BTN(SEQ))) footer = "K3 LEN";
 		if (step_holding(panel)) footer = "K1 VEL K2 NOTE K3 COND K4 VAR";
 		fill(px, 0, 0, POCKET_SCREEN_W, 1, FAINT);
-		line_text(px, footer, panel->save_down || step_holding(panel) ? ACCENT : DIM);
+		line_text(px, footer, footer != plain ? ACCENT : DIM);
 		return;
 	}
 	if (band == B_STATE)
