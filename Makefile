@@ -6,6 +6,7 @@
 #   make render     render demo WAVs into build/host/
 #   make compare    compare with CLATTER's WebAssembly engine (needs node and CLATTER_DIR)
 #   make emu-test   the built package in the FM-1 emulator (needs node and EMU_WASM)
+#   make emu-strict the built package under the chip's alignment rule (needs EMU_STRICT: tools/emu-strict.sh)
 #   make firmware   FM-1 firmware (see BUILDING.md; needs the JieLi toolchain)
 #   make packed-tables  regenerate engine/lxr_tables_packed.c from the firmware's tables
 #   make site       the website, into build/site (docs/WEBSITE.md); site-test, site-serve
@@ -54,7 +55,7 @@ $(PACKED_OBJ): DSP_CFLAGS += -DPOCKET_PACKED_TABLES
 
 TOOLS := $(BUILD)/test_history $(BUILD)/test_engine $(BUILD)/test_engine_nofx $(BUILD)/test_engine_packed $(BUILD)/test_panel $(BUILD)/test_seq $(BUILD)/test_kit $(BUILD)/test_store $(BUILD)/test_midi $(BUILD)/test_fm1_libm $(BUILD)/bench $(BUILD)/render $(BUILD)/dump
 
-.PHONY: all test bench render compare compare-sp emu-test firmware packed-tables site site-test site-serve clean
+.PHONY: all test bench render compare compare-sp emu-test emu-strict firmware packed-tables site site-test site-serve clean
 all: $(TOOLS) test
 
 # Single-precision variant (make compare-sp): the DSP's double-precision envelope and
@@ -168,6 +169,9 @@ compare-sp: $(BUILD)/dump_sp
 emu-test: $(BUILD)/test_seq $(BUILD)/test_kit
 	node tools/emu-test.mjs --wasm $(EMU_WASM) --stock build/fm1-stock/fm1_open-stock-4c7496d.fwsc
 	python3 tools/check-firmware.py
+
+emu-strict:
+	tools/emu-strict.sh
 
 firmware:
 	firmware/fm1/build.sh

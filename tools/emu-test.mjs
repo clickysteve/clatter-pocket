@@ -1772,7 +1772,7 @@ async function main() {
   systemPage(m);
   m.run(800);
   const first = m.text();
-  shows(m, "0.8.1 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
+  shows(m, "0.8.2 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
   const cpu = /CPU MEAN +([\d.]+)%/.exec(first), peak = /CPU PEAK +([\d.]+)%/.exec(first);
   check(cpu && Number(cpu[1]) > 0, `CPU mean is measured (${cpu?.[1]} %)`, first);
   check(peak && Number(peak[1]) >= Number(cpu?.[1]), `CPU peak (${peak?.[1]} %)`, first);
