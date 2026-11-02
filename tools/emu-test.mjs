@@ -9,7 +9,8 @@
 // the playhead from the LCD's pixels, and a generated pattern is compared with the host's.
 // --wasm is the emulator's WebAssembly core (web/build.sh, or fm1_web.wasm from its site).
 // --stock is a negative control: a stock package must fail the identity check.
-// --only steps runs the keyboard as the pattern alone, --only pages copying pages and conditions.
+// --only steps runs the keyboard as the pattern alone, --only pages copying pages and conditions,
+// --only clock following MIDI clock.
 // Writes a PNG of each screen to --out. Exit status 0 only if every check passed.
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -1489,6 +1490,62 @@ async function stepKeyboard(pkg) {
 }
 
 // A page copied, edited and saved, and conditions counted by the pattern's length.
+// MIDI clock, in by the same route as a note, through the SDK's router: it paces the sequencer, the
+// tempo is measured from it, the knob does nothing, and with the clock gone it all comes back.
+async function midiClock(pkg) {
+  const m = await new Machine().boot(pkg);
+  m.x.fm1_pot(1023);
+  m.run(3000);
+  const clock = (ticks, ms) => {
+    let due = m.x.fm1_ms();
+    for (let i = 0; i < ticks; i++) {
+      due += ms;
+      m.run(Math.max(0, due - m.x.fm1_ms()));
+      m.midi(0xf8);
+    }
+  };
+  const seqHits = () => Number(/SEQ HITS +(\d+)/.exec(m.text())?.[1] ?? -1);
+  const hits = seqHits();
+  check(/TEMPO +120 BPM/.test(m.text()), "its own tempo before any clock", m.text());
+  clock(6, 20);
+  m.run(100);
+  check(seqHits() === hits, "clock alone starts nothing");
+  m.midi(0xfa);
+  clock(24 * 4, 20);
+  m.run(10);
+  check(/TEMPO +125 CLK/.test(m.text()), "the tempo follows MIDI clock, and says so", m.text());
+  check(seqHits() > hits, "Start plays, on the clock", m.text());
+  check(/MIDI WAITING/.test(m.text()), "clock does not fill the MIDI line", m.text());
+  m.png(`${out}/midi-clock.png`);
+  m.tap(BUTTON.SEQ); // a gap in the clock: a beat or two puts the figure right
+  clock(24 * 3, 20);
+  m.x.fm1_enc(ENC.KNOB2, 20); // turned with the clock running, as it would be
+  clock(24 * 2, 20);
+  m.run(10);
+  check(/125 CLK/.test(m.text()), "the tempo knob does nothing while following", m.text());
+  m.tap(BUTTON.HOME);
+  clock(24 * 3, 15);
+  m.run(10);
+  check(/TEMPO +16[5-8] CLK/.test(m.text()), "a new tempo is followed", m.text());
+  m.midi(0xfc);
+  clock(6, 15);
+  const stopped = seqHits();
+  clock(24, 15);
+  m.run(100);
+  check(seqHits() === stopped, "Stop stops, and ticks then move nothing");
+  m.midi(0xfb);
+  clock(48, 15);
+  m.run(10);
+  check(seqHits() > stopped, "Continue goes on", m.text());
+  m.run(900);
+  check(/TEMPO +16[5-8] BPM/.test(m.text()), "the clock gone: its own tempo again, the last one", m.text());
+  check(/STOP/.test(m.text()), "and stopped", m.text());
+  m.tap(BUTTON.SEQ);
+  const before = /TEMPO|(\d+) BPM/.exec(m.text());
+  m.turn(ENC.KNOB2, 5);
+  check(before && !m.text().includes(before[0]), "and the knob works again", m.text());
+}
+
 async function pageCopy(pkg) {
   let m = await new Machine().boot(pkg);
   m.x.fm1_pot(1023);
@@ -1685,7 +1742,7 @@ async function main() {
   const pkg = readFileSync(fwsc);
   console.log(`${fwsc} at ${MHZ} MHz, emulated`);
   if (arg("--only")) {
-    await (arg("--only") === "pages" ? pageCopy : stepKeyboard)(pkg);
+    await ({ pages: pageCopy, clock: midiClock }[arg("--only")] ?? stepKeyboard)(pkg);
     console.log(`emulator: ${checks} checks, ${failures} failed`);
     process.exit(failures ? 1 : 0);
   }
@@ -1772,7 +1829,7 @@ async function main() {
   systemPage(m);
   m.run(800);
   const first = m.text();
-  shows(m, "0.8.2 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
+  shows(m, "0.9.0 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
   const cpu = /CPU MEAN +([\d.]+)%/.exec(first), peak = /CPU PEAK +([\d.]+)%/.exec(first);
   check(cpu && Number(cpu[1]) > 0, `CPU mean is measured (${cpu?.[1]} %)`, first);
   check(peak && Number(peak[1]) >= Number(cpu?.[1]), `CPU peak (${peak?.[1]} %)`, first);
@@ -1827,6 +1884,8 @@ async function main() {
   check(m.takePeak() < SILENT, "SAFE MODE stays silent: the engine is off");
   shows(m, "SAFE MODE - ENGINE OFF", "controls do not leave SAFE MODE");
   check(m.listen(1500).length === 0, "PLAY starts no sequence in SAFE MODE");
+
+  await midiClock(pkg);
 
   // ---- negative control: this script must be able to tell the stock firmware from ours
   if (stock) {

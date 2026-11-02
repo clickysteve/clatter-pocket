@@ -23,4 +23,12 @@ int pocket_midi_drum_trigger(unsigned note);
  * on the keyboard mode (pocket_panel_midi). */
 int pocket_midi_note_on(const uint8_t* message, size_t bytes, int* channel, int* note, int* velocity);
 
+/* MIDI clock, start, stop, continue and song position, on the routing task, to the sequencer.
+ * Returns 1 if the message was one of those, whether it was used or not: it is not used unless
+ * `ready`, nor from another port (`source`) while one is sending. `now` is in milliseconds. */
+int pocket_midi_clock(unsigned source, const uint8_t* message, size_t bytes, uint32_t now, int ready);
+/* Control task, each poll. Half a second with no clock is the clock gone: stops, and the sequencer
+ * goes back to its own tempo. Returns a tempo measured since the last call, in BPM, or 0. */
+int pocket_midi_clock_poll(uint32_t now);
+
 #endif

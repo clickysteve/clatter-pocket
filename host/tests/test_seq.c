@@ -1000,6 +1000,154 @@ static void test_phrases(void)
 	CHECK(kept > 0 && !stray, "a variation keeps its condition through mutation: %d, %d stray", kept, stray);
 }
 
+/* MIDI clock: `ticks` of it, one every `samples`, blocks running between them. */
+static void clock_run(int ticks, uint64_t samples)
+{
+	static uint64_t next;
+	if (next < now) next = now;
+	for (int i = 0; i < ticks; i++)
+	{
+		next += samples;
+		while (now + BLOCK <= next)
+		{
+			pocket_seq_block();
+			now += BLOCK;
+		}
+		pocket_seq_clock_tick();
+	}
+	pocket_seq_block();
+	now += BLOCK;
+}
+
+static void test_midi_clock(void)
+{
+	/* a start waits for the first tick, and that tick is step 0 */
+	reset(RATE);
+	for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100, 0);
+	pocket_seq_clock_tick();
+	pocket_seq_clock_start();
+	run_blocks(100);
+	CHECK(event_count == 0 && pocket_seq_external(), "nothing before the first tick after Start");
+	clock_run(1, 1000);
+	CHECK(event_count == 1 && pocket_seq_position() == 0, "the first tick is step 0: %d", event_count);
+	clock_run(5, 1000);
+	CHECK(event_count == 1, "five more ticks are still step 0: %d", event_count);
+	clock_run(1, 1000);
+	CHECK(event_count == 2 && pocket_seq_position() == 1, "the sixth is step 1: %d", event_count);
+
+	/* it is the ticks that count, whatever the tempo says: 6 to a step, on the tick, for an hour's worth */
+	static const int settings[] = { 30, 120, 300 };
+	static const unsigned clocks[] = { 30, 97, 137, 240, 300 };
+	for (unsigned t = 0; t < 3; t++)
+		for (unsigned c = 0; c < 5; c++)
+		{
+			reset(RATE);
+			for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100, 0);
+			pocket_seq_set_tempo(settings[t]);
+			pocket_seq_clock_start();
+			const uint64_t samples = (uint64_t)RATE * 60u / (24u * clocks[c]);
+			const int steps = 2000;
+			int late = 0;
+			clock_run(1, samples);
+			for (int n = 1; n < steps; n++)
+			{
+				clock_run(6, samples);
+				if (event_count != n + 1) late++;
+			}
+			CHECK(!late, "clock %u BPM, tempo %d: %d of %d steps not on their tick", clocks[c], settings[t], late, steps);
+		}
+
+	/* swing: a pair is still 12 ticks, the first of it longer, and the pair never drifts */
+	reset(RATE);
+	for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100, 0);
+	pocket_seq_set_tempo(120);
+	pocket_seq_set_swing(62);
+	pocket_seq_clock_start();
+	const uint64_t tick = (uint64_t)RATE * 60u / (24u * 120u);
+	clock_run(1, tick);
+	const uint64_t begun = events[0].at;
+	clock_run(12 * 200, tick);
+	CHECK(event_count == 401, "400 steps in 200 pairs of 12 ticks: %d", event_count);
+	const uint64_t first = events[1].at - events[0].at, second = events[2].at - events[1].at;
+	CHECK(first > second + 4 * tick / 2 && first + second <= 12 * tick + BLOCK && first + second + BLOCK >= 12 * tick,
+	      "swung pair %llu and %llu samples", (unsigned long long)first, (unsigned long long)second);
+	const uint64_t wanted = 200u * 12u * tick;
+	const uint64_t took = events[400].at - begun;
+	CHECK(took + BLOCK >= wanted && took <= wanted + BLOCK, "200 pairs took %llu, not %llu", (unsigned long long)took, (unsigned long long)wanted);
+
+	/* stop, ticks going by, continue: on from where it was */
+	reset(RATE);
+	for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100, 0);
+	pocket_seq_clock_start();
+	clock_run(1 + 6 * 5, 1000);
+	CHECK(pocket_seq_position() == 5, "at step 5: %d", pocket_seq_position());
+	pocket_seq_play(0);
+	run_blocks(2);
+	CHECK(pocket_seq_position() == POCKET_SEQ_NOT_PLAYING, "stopped");
+	const int stopped = event_count;
+	clock_run(60, 1000);
+	CHECK(event_count == stopped, "ticks move nothing when stopped");
+	pocket_seq_clock_continue();
+	run_blocks(4);
+	CHECK(event_count == stopped, "continue waits for ticks");
+	clock_run(6, 1000);
+	CHECK(event_count == stopped + 1 && pocket_seq_position() == 6, "continue goes on at step 6: %d", pocket_seq_position());
+
+	/* a song position, sent while stopped, one unit a step, within the pattern */
+	pocket_seq_play(0);
+	run_blocks(2);
+	pocket_seq_clock_position(16 + 3);
+	pocket_seq_clock_continue();
+	run_blocks(2);
+	clock_run(1, 1000);
+	CHECK(pocket_seq_position() == 3, "song position 19 of 16 steps is step 3: %d", pocket_seq_position());
+	clock_run(5, 1000);
+	CHECK(pocket_seq_position() == 3, "an odd step is the short half of its pair");
+	clock_run(1, 1000);
+	CHECK(pocket_seq_position() == 4, "and goes on: %d", pocket_seq_position());
+
+	/* Start while playing starts again */
+	pocket_seq_clock_start();
+	run_blocks(2);
+	clock_run(1, 1000);
+	CHECK(pocket_seq_position() == 0, "Start restarts: %d", pocket_seq_position());
+
+	/* continue with nothing played is a start, not a run from nowhere */
+	reset(RATE);
+	pocket_seq_set_step(0, 0, 100, 0);
+	pocket_seq_clock_continue();
+	run_blocks(4);
+	clock_run(1, 1000);
+	CHECK(event_count == 1 && pocket_seq_position() == 0, "continue from nothing is step 0");
+
+	/* PLAY while following: waits for a tick too */
+	reset(RATE);
+	pocket_seq_set_step(0, 0, 100, 0);
+	pocket_seq_set_external(1);
+	pocket_seq_play(1);
+	run_blocks(50);
+	CHECK(event_count == 0, "PLAY waits for the clock");
+	clock_run(1, 1000);
+	CHECK(event_count == 1, "and starts on it");
+	pocket_seq_play(0);
+	run_blocks(2);
+
+	/* clock arriving while it plays by itself takes over; gone, its own tempo is back */
+	reset(RATE);
+	for (int i = 0; i < POCKET_SEQ_STEPS; i++) pocket_seq_set_step(0, i, 100, 0);
+	pocket_seq_set_tempo(120);
+	pocket_seq_play(1);
+	run_until_event(4);
+	pocket_seq_set_external(1);
+	const int before = event_count;
+	clock_run(6 * 8, tick / 4);
+	CHECK(event_count >= before + 7 && event_count <= before + 8, "a clock four times as fast sets the pace: %d", event_count - before);
+	pocket_seq_set_external(0);
+	const int own = event_count;
+	run_blocks(RATE * 2u / BLOCK);
+	CHECK(event_count >= own + 15 && event_count <= own + 17, "and its own tempo after: %d steps in 2 s", event_count - own);
+}
+
 int main(int argc, char** argv)
 {
 	if (argc > 1 && !strcmp(argv[1], "--print"))
@@ -1029,6 +1177,7 @@ int main(int argc, char** argv)
 	test_pages();
 	test_conditions();
 	test_phrases();
+	test_midi_clock();
 	printf("sequencer: %d checks, %d failed\n", checks, failures);
 	return failures ? 1 : 0;
 }

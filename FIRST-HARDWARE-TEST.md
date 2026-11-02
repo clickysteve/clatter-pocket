@@ -171,6 +171,20 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
 
    DROP should stay 0, XRUN should not rise, and the sound should not stutter.
 
+## MIDI clock test
+
+Send clock from a DAW over USB. The emulator has only had it by the DIN route, so record what happens
+here. docs/POCKET-SEQUENCER.md says what each message does.
+
+1. With the DAW at 120 BPM and clock on, press play in the DAW. The FM-1 starts from step 1, and MAIN
+   shows `TEMPO 120 CLK`.
+2. Change the DAW's tempo: the figure follows within two beats. KNOB 2 on PATTERN does nothing.
+3. Record the FM-1 over USB against a click from the DAW for 5 minutes: the pattern stays on the click,
+   and the offset does not grow. Record the offset.
+4. Stop in the DAW: the FM-1 stops. Play again, and from a bar in the middle: it starts where the DAW does.
+5. With SWING above 50, listen for even swing.
+6. Turn clock off in the DAW: within a second the screen says `BPM` again.
+
 ## Extended test
 
 - **Stability:**

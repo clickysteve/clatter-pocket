@@ -11,9 +11,15 @@
 #include <string.h>
 #include "pocket_lxr.h"
 #include "pocket_midi.h"
+#include "pocket_seq.h"
 
 static int failures, checks;
 #define CHECK(cond, ...) do { checks++; if (!(cond)) { failures++; printf("FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while (0)
+
+static void emit_nothing(int track, int velocity, int note, int variation)
+{
+	(void)track; (void)velocity; (void)note; (void)variation;
+}
 
 int main(void)
 {
@@ -79,6 +85,67 @@ int main(void)
 	CHECK(!pocket_midi_note_on(sysex, sizeof sysex, &c, &t, &v), "SysEx accepted");
 	CHECK(!pocket_midi_note_on(off, 3, &c, &t, &v), "note-off accepted");
 	CHECK(!pocket_midi_note_on(zero, 3, &c, &t, &v), "note-on with velocity 0 accepted");
+
+	/* the clock's messages, and nothing else, are the clock's */
+	static const uint8_t clock[] = { 0xf8 }, start[] = { 0xfa }, resume[] = { 0xfb }, stop[] = { 0xfc }, sensing[] = { 0xfe };
+	static const uint8_t song[] = { 0xf2, 3, 0 }, bad_song[] = { 0xf2, 0x83, 0 }, note[] = { 0x90, 36, 100 };
+	pocket_seq_init(44118, 64, emit_nothing);
+	CHECK(pocket_midi_clock(0, clock, 1, 0, 0) && !pocket_seq_external(), "before the engine runs clock is taken and not used");
+	CHECK(!pocket_midi_clock(0, sensing, 1, 0, 1) && !pocket_midi_clock(0, note, 3, 0, 1) && !pocket_midi_clock(0, bad_song, 3, 0, 1)
+	      && !pocket_midi_clock(0, NULL, 1, 0, 1) && !pocket_midi_clock(0, song, 2, 0, 1) && !pocket_midi_clock(0, clock, 2, 0, 1), "other messages are not the clock's");
+	int notes = 0;
+	for (unsigned s = 0; s < 256; s++)
+	{
+		const uint8_t m1[1] = { (uint8_t)s };
+		const int c1 = pocket_midi_clock(9, m1, 1, 0, 0);
+		if (c1 != (s == 0xf8 || s == 0xfa || s == 0xfb || s == 0xfc)) notes++;
+	}
+	CHECK(!notes, "%d one-byte messages wrongly taken", notes);
+
+	/* the tempo: from a beat of ticks, on a clock of whole milliseconds with a jittered tick */
+	static const int tempos[] = { 30, 60, 90, 120, 125, 137, 174, 200, 300 };
+	for (unsigned t = 0; t < sizeof tempos / sizeof *tempos; t++)
+	{
+		pocket_seq_init(44118, 64, emit_nothing);
+		uint64_t at = 1000000u * (t + 1u);
+		pocket_midi_clock(0, start, 1, (uint32_t)(at / 1000u), 1);
+		int got = 0, last = 0, changes = 0;
+		for (unsigned i = 0; i < 24u * 8u; i++)
+		{
+			at += 2500000u / (unsigned)tempos[t];
+			pocket_midi_clock(0, clock, 1, (uint32_t)((at + (i & 1u) * 900u) / 1000u), 1);
+			const int bpm = pocket_midi_clock_poll((uint32_t)(at / 1000u));
+			if (bpm)
+			{
+				got = bpm;
+				pocket_seq_set_tempo(bpm);
+				changes += last && bpm != last;
+				last = bpm;
+			}
+		}
+		const int off = got - tempos[t];
+		CHECK(off >= -1 && off <= 1, "%d BPM read as %d", tempos[t], got);
+		CHECK(changes <= 1, "%d BPM: the figure moved %d times", tempos[t], changes);
+		pocket_midi_clock(0, stop, 1, (uint32_t)(at / 1000u), 1);
+		CHECK(!pocket_seq_playing(), "stop stops");
+	}
+
+	/* two ports: the first keeps the clock while it is sending */
+	pocket_seq_init(44118, 64, emit_nothing);
+	pocket_midi_clock_poll(100000); /* forget the last port's clock */
+	uint32_t ms = 200000;
+	pocket_midi_clock(1, start, 1, ms, 1);
+	pocket_midi_clock(2, stop, 1, ms + 10, 1);
+	CHECK(pocket_seq_playing(), "another port cannot stop it");
+	pocket_midi_clock(1, resume, 1, ms + 20, 1);
+	pocket_midi_clock(2, start, 1, ms + 5000, 1);
+	CHECK(pocket_seq_playing() && pocket_seq_external(), "a port silent for seconds gives way");
+
+	/* half a second of nothing: gone */
+	pocket_midi_clock_poll(ms + 5400);
+	CHECK(pocket_seq_external(), "still following after 400 ms");
+	pocket_midi_clock_poll(ms + 5500);
+	CHECK(!pocket_seq_external() && !pocket_seq_playing(), "stopped and on its own tempo after 500 ms");
 
 	printf("midi: %d checks, %d failed\n", checks, failures);
 	return failures ? 1 : 0;

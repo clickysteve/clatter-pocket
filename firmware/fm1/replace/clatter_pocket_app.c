@@ -271,6 +271,7 @@ void groove_screen_control(void)
 		(void)pocket_panel_apply(&panel, &in); /* HOME+ARP has nowhere to go back to */
 		show_leds(0, 14U, pocket_panel_leds(&panel), &shown_leds);
 		show_leds(14U, POCKET_KEYS, pocket_panel_key_leds(&panel), &shown_key_leds);
+		pocket_panel_clock(&panel, pocket_midi_clock_poll(now));
 	}
 	update_status(now);
 	paint(BANDS_PER_POLL);
@@ -278,10 +279,11 @@ void groove_screen_control(void)
 
 /* ---- MIDI ---- */
 
-/* Routing task: parse and queue only (no engine access, no blocking). */
+/* Routing task: parse and queue only (no engine access, no blocking). Clock goes to the sequencer
+   from here, the sooner the better, and is not counted: it would keep the MIDI line busy. */
 void fm1_app_midi_received(unsigned source, const uint8_t* m, size_t n)
 {
-	(void)source;
+	if (pocket_midi_clock(source, m, n, fm1_millis(), state == POCKET_STATE_READY)) return;
 	midi_messages++;
 	int channel, note, velocity;
 	if (!pocket_midi_note_on(m, n, &channel, &note, &velocity)) return;

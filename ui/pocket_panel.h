@@ -35,7 +35,7 @@ enum {
 	POCKET_ENC_SELECT, POCKET_ENC_ALGORITHM, POCKET_ENC_KNOB1, POCKET_ENC_KNOB2, POCKET_ENC_KNOB3,
 	POCKET_ENC_KNOB4, POCKET_ENC_PRESETS
 };
-#define POCKET_FW_VERSION "0.8.2 UNVERIFIED"
+#define POCKET_FW_VERSION "0.9.0 UNVERIFIED"
 
 struct pocket_panel_input {
 	uint32_t keys;                      /* held note keys */
@@ -151,6 +151,7 @@ struct pocket_panel {
 	/* A page copied, RAM only: until the next copy or a restart. */
 	uint8_t copied;
 	uint32_t clipboard[POCKET_SEQ_TRACKS][POCKET_SEQ_STEPS];
+	uint8_t clock_shown;                /* the screen says CLK */
 };
 
 /* The screen is drawn in bands of POCKET_BAND_ROWS rows of POCKET_SCREEN_W pixels, RGB565. */
@@ -171,6 +172,9 @@ void pocket_panel_start_sequencer(struct pocket_panel* panel);
 int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_input* in);
 /* The parameter (PAR_*) behind control c for the selected trigger. */
 int pocket_panel_param(const struct pocket_panel* panel, int c);
+/* Each poll, with what pocket_midi_clock_poll returned: the measured tempo, if any, becomes the
+ * tempo, and the screen shows whether MIDI clock is being followed. */
+void pocket_panel_clock(struct pocket_panel* panel, int bpm);
 /* A note-on from MIDI, channel 0-15: the same path as the keys, so it plays the same way in DRUM
  * and PITCH and is recorded. Returns 1 if it played a voice. */
 int pocket_panel_midi(struct pocket_panel* panel, unsigned channel, unsigned note, unsigned velocity);

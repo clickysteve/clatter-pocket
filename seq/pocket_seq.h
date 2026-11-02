@@ -87,6 +87,16 @@ void pocket_seq_set_tempo(int bpm);
 int pocket_seq_tempo(void);
 void pocket_seq_set_swing(int percent);
 int pocket_seq_swing(void);
+/* MIDI clock, from the routing task (ui/pocket_midi.c). While external, ticks move the steps, 6 to
+ * a step, and the tempo above only places swung steps between them. A start, the panel's PLAY too,
+ * waits for a tick: the first tick after it is the first step. Start restarts from step 0; continue
+ * goes on from where it stopped, or from a song position sent while stopped, one unit a step. */
+void pocket_seq_clock_tick(void);
+void pocket_seq_clock_start(void);
+void pocket_seq_clock_continue(void);
+void pocket_seq_clock_position(unsigned sixteenths);
+void pocket_seq_set_external(int on);
+int pocket_seq_external(void);
 
 /* The pattern as it plays. */
 const struct pocket_pattern* pocket_seq_pattern(void);
