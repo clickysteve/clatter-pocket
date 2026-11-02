@@ -140,7 +140,8 @@ static void test_refusals(void)
 	memset(fake_flash + FIRST, 0xff, SECTORS);
 	uint32_t bank[3] = { 0x53314d46u, 1, 400000 };
 	memcpy(fake_flash + SAMPLE, bank, sizeof bank);
-	CHECK(pocket_store_open() == POCKET_STORE_OCCUPIED, "a bank that reaches us");
+	CHECK(pocket_store_open() == POCKET_STORE_SAMPLES, "a bank that reaches us");
+	CHECK(pocket_store_claim() == POCKET_STORE_FAILED, "and it cannot be claimed");
 	bank[2] = 360448; /* exactly up to them */
 	memcpy(fake_flash + SAMPLE, bank, sizeof bank);
 	CHECK(pocket_store_open() == POCKET_STORE_OK, "a bank that stops short");
@@ -353,6 +354,52 @@ static void test_old_banks(void)
 	CHECK(pocket_store_open() == POCKET_STORE_OCCUPIED, "a sector with nothing of ours beside it is not");
 }
 
+/* What V15 left in the sectors: asked for, it goes, and only that goes */
+static void test_claim(void)
+{
+	fake_flash_reset();
+	CHECK(pocket_store_claim() == POCKET_STORE_FAILED, "a blank store has nothing to claim");
+	CHECK(fake_flash_ops == 0, "and nothing is erased for it");
+	memset(fake_flash + FIRST, 0x42, SECTORS);
+	memset(fake_flash + FIRST - SECTOR, 0x33, SECTOR);
+	memset(fake_flash + FIRST + SECTORS, 0x44, SECTOR);
+	CHECK(pocket_store_open() == POCKET_STORE_OCCUPIED, "held");
+	CHECK(pocket_store_claim() == POCKET_STORE_OK, "claimed");
+	int blank = 1;
+	for (unsigned i = 0; i < SECTORS; i++) blank &= fake_flash[FIRST + i] == 0xff;
+	CHECK(blank, "all four erased");
+	CHECK(fake_flash[FIRST - 1] == 0x33 && fake_flash[FIRST - SECTOR] == 0x33 && fake_flash[FIRST + SECTORS] == 0x44
+	      && fake_flash[FIRST + SECTORS + SECTOR - 1] == 0x44, "and nothing either side");
+	put(0, 7);
+	CHECK(pocket_store_commit() == POCKET_STORE_OK, "and a save then works");
+	CHECK(pocket_store_open() == POCKET_STORE_OK, "and is found");
+	CHECK(pocket_store_claim() == POCKET_STORE_FAILED, "a store of ours is not claimed");
+
+	/* only the sectors in the way are touched */
+	fake_flash_reset();
+	memset(fake_flash + FIRST + SECTOR, 0x42, SECTOR);
+	CHECK(pocket_store_claim() == POCKET_STORE_OK, "one sector");
+	CHECK(fake_flash_ops == 1, "one erase: %ld", fake_flash_ops);
+
+	/* a power cut anywhere, a refusal anywhere: asked again, it finishes */
+	for (long cut = 0; cut < 4; cut++)
+	{
+		fake_flash_reset();
+		memset(fake_flash + FIRST, 0x42, SECTORS);
+		fake_flash_cut_at = cut;
+		pocket_store_claim();
+		fake_flash_power_on();
+		fake_flash_cut_at = -1;
+		CHECK(pocket_store_open() == POCKET_STORE_OCCUPIED, "cut at %ld: still held", cut);
+		CHECK(pocket_store_claim() == POCKET_STORE_OK, "cut at %ld: and claimed after", cut);
+		fake_flash_reset();
+		memset(fake_flash + FIRST, 0x42, SECTORS);
+		fake_flash_fail_at = cut;
+		CHECK(pocket_store_claim() == POCKET_STORE_FAILED, "refused at %ld", cut);
+		fake_flash_fail_at = -1;
+	}
+}
+
 int main(void)
 {
 	test_basics();
@@ -361,6 +408,7 @@ int main(void)
 	for (unsigned h = 0; h < 12; h++)
 		for (unsigned p = 0; p < POCKET_STORE_PROJECTS; p += 4) cut_everywhere(h, p);
 	test_old_banks();
+	test_claim();
 	printf("store: %d checks, %d failed\n", checks, failures);
 	return failures ? 1 : 0;
 }

@@ -12,10 +12,11 @@
  * sector it replaces becomes free. So the copy before stays whole until the new one is, and a power
  * cut at any moment loses at most the save in progress. The records' contents are the caller's.
  *
- * Nothing that is not ours is ever erased or written: a sector is used only if it is blank, or is
- * one of ours, and a store whose sectors hold anything else refuses to open. Banks of kits and
- * patterns from firmware before projects are never written either, and their space is only given
- * up by pocket_store_forget_old.
+ * Nothing that is not ours is erased or written unless the player says so: a sector is used only if
+ * it is blank, or is one of ours, and a store whose sectors hold anything else refuses to open until
+ * pocket_store_claim, which a second press on the page asks for. On a used FM-1 these sectors can hold
+ * what stock V15 left there. A sample bank is never claimed. Banks of kits and patterns from firmware
+ * before projects are never written either, and their space is only given up by pocket_store_forget_old.
  */
 #ifndef POCKET_STORE_H
 #define POCKET_STORE_H
@@ -38,7 +39,8 @@ enum {
 	POCKET_STORE_DAMAGED = 1,      /* opened, but a good copy of something is gone */
 	POCKET_STORE_UNAVAILABLE = -1, /* the user partition is not the size the sectors assume */
 	POCKET_STORE_OCCUPIED = -2,    /* something else is in these sectors: they stay untouched */
-	POCKET_STORE_FAILED = -3       /* Flash refused, or read back wrong: the last good copy stands */
+	POCKET_STORE_FAILED = -3,      /* Flash refused, or read back wrong: the last good copy stands */
+	POCKET_STORE_SAMPLES = -4      /* a stock sample bank reaches these sectors: they stay untouched */
 };
 
 /* Looks at all four sectors. Writes nothing. Any result below zero leaves nothing to save to. */
@@ -56,6 +58,9 @@ int pocket_store_commit(void);
 /* The old bank of a kind: is there one, and the first `bytes` of a slot of it, all zero if empty. */
 int pocket_store_old(unsigned kind);
 void pocket_store_old_peek(unsigned kind, unsigned slot, void* data, unsigned bytes);
+/* Asked for, on POCKET_STORE_OCCUPIED only: erases what is in the way, and opens the store. Blocks
+ * for each erase and silences audio. A cut leaves what is left in the way, to be asked again. */
+int pocket_store_claim(void);
 /* Gives up the old banks: their sectors go back to holding projects. Asked for, never assumed. */
 int pocket_store_forget_old(void);
 

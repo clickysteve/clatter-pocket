@@ -1102,8 +1102,24 @@ static void test_saving(void)
 	const long before = fake_flash_ops;
 	press(&panel, BUTTON(SAVE));
 	press(&panel, BUTTON(OCT_DOWN));
-	CHECK(fake_flash_ops == before, "the page cannot write then");
+	CHECK(fake_flash_ops == before, "one press, or a load, does not write");
 	for (unsigned line = 4; line < 12; line++) pocket_panel_draw_band(&panel, NULL, line, band);
+	press(&panel, BUTTON(HOME));
+	press(&panel, BUTTON(PLAY));
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(SAVE));
+	CHECK(fake_flash_ops == before && panel.store_state == POCKET_STORE_OCCUPIED, "not while playing");
+	press(&panel, BUTTON(HOME));
+	press(&panel, BUTTON(PLAY));
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(SAVE));
+	CHECK(fake_flash_ops == before && panel.store_state == POCKET_STORE_OCCUPIED, "the question first");
+	press(&panel, BUTTON(SAVE));
+	CHECK(panel.store_state == POCKET_STORE_OK && fake_flash_ops == before + 2, "the second press erases what was in the way: %ld", fake_flash_ops - before);
+	CHECK(!strstr((char*)panel.notice, "SAVED"), "and saves nothing: %s", panel.notice);
+	press(&panel, BUTTON(SAVE));
+	CHECK(strstr((char*)panel.notice, "SAVED"), "the next press saves: %s", panel.notice);
 	press(&panel, BUTTON(HOME));
 
 	/* a failed save says so, and the last good one stands */

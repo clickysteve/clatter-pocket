@@ -809,18 +809,31 @@ async function storage(pkg) {
   m = await fresh([[STORE, foreign]]);
   const held = m.flash();
   open(m);
-  shows(m, "FLASH IN USE: SAVING OFF", "data that is not ours closes the store");
-  m.tap(BUTTON.SAVE, 60);
+  shows(m, "FLASH IN USE: TAP SAVE", "data that is not ours closes the store");
   m.tap(BUTTON.SAVE, 60);
   m.run(300);
-  check(changed(held, m.flash()).filter((a) => a >= USER).length === 0, "and it stays as it was");
+  shows(m, "ERASE 4 SECTORS: SAVE AGAIN", "and asks");
+  check(changed(held, m.flash()).filter((a) => a >= USER).length === 0, "it stays as it was until the answer");
+  m.tap(BUTTON.SAVE, 60);
+  m.run(300);
+  const given = changed(held, m.flash()).filter((a) => a >= USER);
+  check(given.length > 0 && given.every((a) => a >= STORE && a < STORE_END), "the answer erases those sectors and nothing else");
+  shows(m, "1 --", "and the store opens");
+  m.tap(BUTTON.SAVE, 60);
+  m.run(400);
+  shows(m, "SAVED 1", "and a save works");
   // a sample bank long enough to reach them, even with them blank
   const bank = new Uint8Array(SECTOR).fill(255);
   new DataView(bank.buffer).setUint32(0, 0x53314d46, true);
   new DataView(bank.buffer).setUint32(8, 400000, true);
   m = await fresh([[USER + 69632, bank]]);
   open(m);
-  shows(m, "FLASH IN USE: SAVING OFF", "a stock sample bank over them closes the store too");
+  const banked = m.flash();
+  shows(m, "SAMPLES IN FLASH: SAVING OFF", "a stock sample bank over them closes the store too");
+  m.tap(BUTTON.SAVE, 60);
+  m.tap(BUTTON.SAVE, 60);
+  m.run(300);
+  check(changed(banked, m.flash()).filter((a) => a >= USER).length === 0, "and cannot be erased from here");
 
   // ---- SAFE MODE, with saves on the chip: not a read of them, and every control tried
   m = await new Machine().boot(pkg);

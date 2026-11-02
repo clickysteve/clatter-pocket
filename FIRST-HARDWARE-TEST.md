@@ -203,9 +203,11 @@ here. docs/POCKET-SEQUENCER.md says what each message does.
 **The first write this firmware makes to the device's Flash. Do it last, and only after the backups
 in "Before installation".** docs/POCKET-STORAGE.md says what is and is not known.
 
-1. Stopped, tap **SAVE**. PROJECTS shows 9 empty slots, or **FLASH IN USE: SAVING
-   OFF** or **NO USER FLASH**. Either of those two is a safe result and the end of this test: nothing has
-   been written. Record it, and which firmware the unit came from.
+1. Stopped, tap **SAVE**. PROJECTS shows 9 empty slots, **FLASH IN USE: TAP SAVE**, **SAMPLES IN FLASH:
+   SAVING OFF** or **NO USER FLASH**. Record which, and which firmware the unit came from. With
+   FLASH IN USE, tap SAVE: it asks ERASE 4 SECTORS: SAVE AGAIN. Only if you accept losing what is there,
+   tap again, and record whether the 9 empty slots appear. The other two are safe results and the end of
+   this test: nothing has been written.
 2. Tap **SAVE** again, on slot 1. Record what is heard and how long the screen takes to show SAVED 1.
 3. Press ENV for another kit, then tap SAVE and press **OCT−**: the first kit is back.
 4. Power off, power on, tap SAVE: slot 1 is listed, and loads.

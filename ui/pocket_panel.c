@@ -663,9 +663,30 @@ static void store_forget(struct pocket_panel* panel)
 	panel->dirty |= BODY_BANDS;
 }
 
+/* FLASH IN USE: the player's to give up, as a second press, and stopped, as any erase. */
+static void store_claim(struct pocket_panel* panel)
+{
+	if (pocket_seq_playing())
+	{
+		announce(panel, "STOP TO SAVE");
+		return;
+	}
+	if (!store_confirmed(panel, "ERASE 4 SECTORS: SAVE AGAIN")) return;
+	panel->store_armed = 0;
+	panel->store_state = (int8_t)pocket_store_claim();
+	if (panel->store_state < 0) store_failed(panel);
+	else announce(panel, "FLASH ERASED");
+	panel->dirty |= BODY_BANDS;
+}
+
 static void store_save(struct pocket_panel* panel)
 {
 	const unsigned slot = panel->store_slot;
+	if (panel->store_state == POCKET_STORE_OCCUPIED)
+	{
+		store_claim(panel); /* and no more: the press said erase, not save */
+		return;
+	}
 	if (panel->store_state < 0) return;
 	if (pocket_seq_playing())
 		announce(panel, "STOP TO SAVE");
@@ -1666,7 +1687,7 @@ static void draw_store(const struct pocket_panel* panel, unsigned line, uint16_t
 	if (panel->store_state < 0)
 	{
 		if (line) return;
-		line_text(px, panel->store_state == POCKET_STORE_UNAVAILABLE ? "NO USER FLASH" : panel->store_state == POCKET_STORE_OCCUPIED ? "FLASH IN USE: SAVING OFF" : "FLASH ERROR", INK);
+		line_text(px, panel->store_state == POCKET_STORE_UNAVAILABLE ? "NO USER FLASH" : panel->store_state == POCKET_STORE_OCCUPIED ? "FLASH IN USE: TAP SAVE" : panel->store_state == POCKET_STORE_SAMPLES ? "SAMPLES IN FLASH: SAVING OFF" : "FLASH ERROR", INK);
 		return;
 	}
 	if (slot >= store_rows()) return;

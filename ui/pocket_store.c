@@ -104,7 +104,7 @@ static int examine(void)
 	if (fm1_flash_size() != PARTITION_BYTES) return POCKET_STORE_UNAVAILABLE;
 	/* a sample bank can have a blank sector in it, so being blank here does not make it free */
 	if (fm1_flash_read(SAMPLE_OFFSET, sample, sizeof sample)) return POCKET_STORE_FAILED;
-	if (sample[0] == SAMPLE_MAGIC && sample[2] > SAMPLE_REACH) return POCKET_STORE_OCCUPIED;
+	if (sample[0] == SAMPLE_MAGIC && sample[2] > SAMPLE_REACH) return POCKET_STORE_SAMPLES;
 	for (unsigned s = 0; s < SECTORS; s++)
 	{
 		states[s] = (uint8_t)scan(s, &generations[s], &formats[s]);
@@ -222,6 +222,14 @@ void pocket_store_old_peek(unsigned kind, unsigned slot, void* data, unsigned by
 	uint8_t* d = data;
 	if (oldBank[kind] < 0 || fm1_flash_read(sector_offset((unsigned)oldBank[kind]) + OLD_SLOTS_AT + slot * POCKET_STORE_OLD_SLOT_BYTES, d, bytes))
 		while (bytes--) *d++ = 0;
+}
+
+int pocket_store_claim(void)
+{
+	if (examine() != POCKET_STORE_OCCUPIED) return POCKET_STORE_FAILED;
+	for (unsigned s = 0; s < SECTORS; s++)
+		if (states[s] == FOREIGN && fm1_flash_erase(sector_offset(s))) return POCKET_STORE_FAILED;
+	return pocket_store_open();
 }
 
 int pocket_store_forget_old(void)
