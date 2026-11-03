@@ -1102,8 +1102,24 @@ static void test_saving(void)
 	const long before = fake_flash_ops;
 	press(&panel, BUTTON(SAVE));
 	press(&panel, BUTTON(OCT_DOWN));
-	CHECK(fake_flash_ops == before, "the page cannot write then");
+	CHECK(fake_flash_ops == before, "one press, or a load, does not write");
 	for (unsigned line = 4; line < 12; line++) pocket_panel_draw_band(&panel, NULL, line, band);
+	press(&panel, BUTTON(HOME));
+	press(&panel, BUTTON(PLAY));
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(SAVE));
+	CHECK(fake_flash_ops == before && panel.store_state == POCKET_STORE_OCCUPIED, "not while playing");
+	press(&panel, BUTTON(HOME));
+	press(&panel, BUTTON(PLAY));
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(SAVE));
+	CHECK(fake_flash_ops == before && panel.store_state == POCKET_STORE_OCCUPIED, "the question first");
+	press(&panel, BUTTON(SAVE));
+	CHECK(panel.store_state == POCKET_STORE_OK && fake_flash_ops == before + 2, "the second press erases what was in the way: %ld", fake_flash_ops - before);
+	CHECK(!strstr((char*)panel.notice, "SAVED"), "and saves nothing: %s", panel.notice);
+	press(&panel, BUTTON(SAVE));
+	CHECK(strstr((char*)panel.notice, "SAVED"), "the next press saves: %s", panel.notice);
 	press(&panel, BUTTON(HOME));
 
 	/* a failed save says so, and the last good one stands */
@@ -2350,6 +2366,33 @@ static void test_page_copy(void)
 }
 
 /* The whole way: 16 steps, 32, copied, edited, a condition, heard to change, saved, restarted. */
+/* MIDI clock has the tempo: the knob does nothing, and the screen says so */
+static void test_clock_tempo(void)
+{
+	static struct pocket_panel panel;
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press(&panel, BUTTON(SEQ));
+	const int tempo = pocket_seq_tempo();
+	pocket_seq_set_external(1);
+	pocket_panel_clock(&panel, 0);
+	CHECK(panel.clock_shown && (panel.dirty & (1u << 1)), "following shows at once");
+	panel.dirty = 0;
+	turn(&panel, POCKET_ENC_KNOB2, 7);
+	CHECK(pocket_seq_tempo() == tempo, "the tempo knob does nothing while following: %d", pocket_seq_tempo());
+	pocket_panel_clock(&panel, 174);
+	CHECK(pocket_seq_tempo() == 174 && panel.dirty, "the tempo is the clock's: %d", pocket_seq_tempo());
+	panel.dirty = 0;
+	pocket_panel_clock(&panel, 174);
+	pocket_panel_clock(&panel, 0);
+	CHECK(!panel.dirty, "nothing new, nothing to draw");
+	pocket_seq_set_external(0);
+	pocket_panel_clock(&panel, 0);
+	CHECK(!panel.clock_shown && pocket_seq_tempo() == 174, "gone: the last tempo stays");
+	turn(&panel, POCKET_ENC_KNOB2, 2);
+	CHECK(pocket_seq_tempo() != 174, "and the knob works again: %d", pocket_seq_tempo());
+}
+
 static void test_page_to_project(void)
 {
 	struct pocket_panel panel;
@@ -2662,6 +2705,7 @@ int main(int argc, char** argv)
 	test_save_chords();
 	test_page_copy();
 	test_page_to_project();
+	test_clock_tempo();
 
 	/* screenshots: each screen as the FM-1 would show it */
 	start_engine(&panel);

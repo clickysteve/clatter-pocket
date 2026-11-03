@@ -117,8 +117,8 @@ $(BUILD)/test_history: host/tests/test_history.c ui/pocket_history.c ui/pocket_h
 $(BUILD)/test_seq: host/tests/test_seq.c $(SEQ_DEPS)
 	$(CC) $(HOST_CFLAGS) -fsanitize=address,undefined -fno-omit-frame-pointer $< $(SEQ) -o $@
 # MIDI input, with AddressSanitizer: a read past a message fails the test.
-$(BUILD)/test_midi: host/tests/test_midi.c ui/pocket_midi.c ui/pocket_midi.h
-	$(CC) $(HOST_CFLAGS) -fsanitize=address -fno-omit-frame-pointer $< ui/pocket_midi.c -o $@
+$(BUILD)/test_midi: host/tests/test_midi.c ui/pocket_midi.c ui/pocket_midi.h seq/pocket_seq.c seq/pocket_seq.h
+	$(CC) $(HOST_CFLAGS) -fsanitize=address,undefined -fno-omit-frame-pointer $< ui/pocket_midi.c seq/pocket_seq.c -o $@
 # The FM-1 build's own sqrtf and fmaf (the PI32v2 FPU and the SDK's libc have neither).
 $(BUILD)/test_fm1_libm: host/tests/test_fm1_libm.c firmware/fm1/pocket_fm1_libm.c
 	$(CC) $(HOST_CFLAGS) -ffp-contract=off $< -lm -o $@

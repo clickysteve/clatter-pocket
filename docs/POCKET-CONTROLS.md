@@ -61,7 +61,7 @@ Every control below works on every page, unless it says otherwise.
 | Knob | PATTERN | PATTERN, step held | PATTERN, SAVE held | PATTERN, SEQ held | SOUND | MIXER | GLOBAL | PROJECTS |
 |---|---|---|---|---|---|---|---|---|
 | KNOB 1 | selected step's velocity | its velocity | its condition | | pitch | level | row | slot |
-| KNOB 2 | tempo | its pitch | | | decay | pan | value | |
+| KNOB 2 | tempo (nothing while following MIDI clock) | its pitch | | | decay | pan | value | |
 | KNOB 3 | swing | its condition | | length, a page at a time | filter | | | |
 | KNOB 4 | selected step, across pages | its variation | a page at a time | | drive | | | |
 
@@ -439,8 +439,7 @@ power-off.
 | MIDI CH | ALL, 1-16 | input channel |
 | MIDI MAP | GM, KEYS | DRUM's note map |
 
-**Left out, because they would not work:** MIDI output and thru, external clock (the firmware sends
-nothing and the clock is the audio's), a velocity curve, and a default tempo (these settings are not stored).
+**Left out, because they would not work:** MIDI output and thru, a velocity curve, and a default tempo (these settings are not stored).
 
 ## The screen
 
@@ -473,6 +472,9 @@ has not been seen**.
 
 **0.7.1, length on SEQ+KNOB 3: 437,532 bytes, 16,389 free, the margin kept by 5 bytes.** Heap 110,092.
 The next feature needs flash found for it first.
+
+**0.9.0, following MIDI clock, and saving past what V15 left: 437,468 bytes, 16,453 free, the margin kept by
+69 bytes.** Heap 109,196. The next feature needs flash found for it first.
 
 **0.8.2, the voice buffer aligned: 436,412 bytes, 17,509 free, the margin kept by 1,125 bytes.** The
 first device test of 0.8.1 reset in a loop at the first audio block (HARDWARE.md, Faults). The fix adds
@@ -630,7 +632,7 @@ not driven by hand. The website still offers 0.5.0.
   patterns and kits together. Tempo and swing alone are not undoable.
 - While playing, recording cannot remove a step, and steps are 16ths, up to 64, no chaining.
 - Recording's timing is when the control task reads the key (after the scanner's debounce), then 16ths.
-- No MIDI clock, no MIDI output, no thru.
+- No MIDI clock out, no MIDI output, no thru. MIDI clock in is followed: [POCKET-SEQUENCER.md](POCKET-SEQUENCER.md#following-midi-clock).
 - At high WILD a kit can be odd: that is the point. 1 voice of the 1,344 rendered rang past 2
   seconds. Kits have no LFOs or FX.
 - HOME+ARP stays the reserved exit gesture, so ARP does nothing while HOME is held.

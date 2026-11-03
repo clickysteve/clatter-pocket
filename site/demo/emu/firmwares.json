@@ -5,13 +5,13 @@
     {
       "id": "clatter-pocket",
       "name": "CLATTER Pocket",
-      "version": "0.8.2 UNVERIFIED",
+      "version": "0.9.0 UNVERIFIED",
       "author": "The CLATTER contributors",
       "license": "GPL-3.0-only",
       "about": "A generative drum machine on the LXR sound engine. An emulator build: it has never run on a physical FM-1.",
       "repo": "https://github.com/clickysteve/clatter-pocket",
       "package": "clatter-pocket-emulator-only.bin",
-      "sha256": "4ce8a56af7171e4615f1564df0cace808e9a780df83752da05d809170ec137de"
+      "sha256": "de027b06b8b622a96d9f20ee8c0379a4dbde81c52c28763dfd25deb0d3f0a794"
     }
   ]
 }

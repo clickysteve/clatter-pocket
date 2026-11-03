@@ -313,6 +313,19 @@ static void generate(struct pocket_panel* panel)
 	pattern_changed(panel);
 }
 
+void pocket_panel_clock(struct pocket_panel* panel, int bpm)
+{
+	const uint8_t external = (uint8_t)pocket_seq_external();
+	const int moved = bpm && bpm != pocket_seq_tempo();
+	if (moved)
+	{
+		pocket_seq_set_tempo(bpm);
+		pocket_lxr_set_bpm(pocket_seq_tempo());
+	}
+	if (moved || external != panel->clock_shown) panel->dirty |= (1u << B_STATE) | BODY_BANDS;
+	panel->clock_shown = external;
+}
+
 void pocket_panel_start_sequencer(struct pocket_panel* panel)
 {
 	/* the LXR's velocity gain is a per-voice switch, off in the init kit: without it every step
@@ -650,9 +663,30 @@ static void store_forget(struct pocket_panel* panel)
 	panel->dirty |= BODY_BANDS;
 }
 
+/* FLASH IN USE: the player's to give up, as a second press, and stopped, as any erase. */
+static void store_claim(struct pocket_panel* panel)
+{
+	if (pocket_seq_playing())
+	{
+		announce(panel, "STOP TO SAVE");
+		return;
+	}
+	if (!store_confirmed(panel, "ERASE 4 SECTORS: SAVE AGAIN")) return;
+	panel->store_armed = 0;
+	panel->store_state = (int8_t)pocket_store_claim();
+	if (panel->store_state < 0) store_failed(panel);
+	else announce(panel, "FLASH ERASED");
+	panel->dirty |= BODY_BANDS;
+}
+
 static void store_save(struct pocket_panel* panel)
 {
 	const unsigned slot = panel->store_slot;
+	if (panel->store_state == POCKET_STORE_OCCUPIED)
+	{
+		store_claim(panel); /* and no more: the press said erase, not save */
+		return;
+	}
 	if (panel->store_state < 0) return;
 	if (pocket_seq_playing())
 		announce(panel, "STOP TO SAVE");
@@ -934,6 +968,7 @@ static void row_move(struct pocket_panel* panel, int row, int by)
 	}
 	else if (row == ROW_TEMPO)
 	{
+		if (pocket_seq_external()) return; /* MIDI clock has the tempo */
 		pocket_seq_set_tempo(pocket_seq_tempo() + by);
 		pocket_lxr_set_bpm(pocket_seq_tempo()); /* the engine's tempo-synced LFOs */
 	}
@@ -1509,6 +1544,8 @@ static int transport(uint16_t* px, int y)
 	return text(px, MARGIN, y, playing ? "PLAY" : "STOP", playing ? ACCENT : INK);
 }
 
+static const char* tempo_unit(void) { return pocket_seq_external() ? " CLK" : " BPM"; }
+
 /* PAGE 2/4, and a block a page: orange where it is playing, white the one on screen. */
 static void draw_transport(const struct pocket_panel* panel, uint16_t* px)
 {
@@ -1516,7 +1553,7 @@ static void draw_transport(const struct pocket_panel* panel, uint16_t* px)
 	const int shown = (int)shown_page(panel);
 	char b[24];
 	transport(px, y);
-	append(append_number(b, (uint32_t)pocket_seq_tempo()), " BPM");
+	append(append_number(b, (uint32_t)pocket_seq_tempo()), tempo_unit());
 	text(px, 48, y, b, INK);
 	append_number(append(append_number(append(b, "PAGE "), (uint32_t)shown + 1u), "/"), (uint32_t)pages);
 	text(px, 128, y, b, INK);
@@ -1563,7 +1600,7 @@ static void draw_legend(const struct pocket_panel* panel, uint16_t* px)
 	}
 	d = append(d, "VEL");
 	d = v ? append_number(d, v) : append(d, "--");
-	d = append_number(append(d, " BPM"), (uint32_t)pocket_seq_tempo());
+	d = append_number(append(d, tempo_unit()), (uint32_t)pocket_seq_tempo());
 	d = append_number(append(d, " SWG"), (uint32_t)pocket_seq_swing());
 	append_number(append(append_number(append(d, " STEP"), panel->step + 1u), "/"), POCKET_PATTERN_STEPS(pocket_seq_pattern()));
 	line_text(px, b, DIM);
@@ -1582,7 +1619,7 @@ static void draw_main(const struct pocket_panel* panel, unsigned line, uint16_t*
 {
 	char a[12], b[20];
 	if (line == 0) transport(px, (POCKET_BAND_ROWS - 10) / 2);
-	if (line == 1) label_value(px, "TEMPO", concat(b, number(a, (uint32_t)pocket_seq_tempo(), 0), " BPM"));
+	if (line == 1) label_value(px, "TEMPO", concat(b, number(a, (uint32_t)pocket_seq_tempo(), 0), tempo_unit()));
 	if (line == 2) label_number(px, "SWING", (uint32_t)pocket_seq_swing());
 	if (line == 3) label_value(px, "STYLE", pocket_gen_style_name((unsigned)panel->style));
 	if (line == L_MAIN_HITS) label_number(px, "SEQ HITS", pocket_seq_triggers());
@@ -1650,7 +1687,7 @@ static void draw_store(const struct pocket_panel* panel, unsigned line, uint16_t
 	if (panel->store_state < 0)
 	{
 		if (line) return;
-		line_text(px, panel->store_state == POCKET_STORE_UNAVAILABLE ? "NO USER FLASH" : panel->store_state == POCKET_STORE_OCCUPIED ? "FLASH IN USE: SAVING OFF" : "FLASH ERROR", INK);
+		line_text(px, panel->store_state == POCKET_STORE_UNAVAILABLE ? "NO USER FLASH" : panel->store_state == POCKET_STORE_OCCUPIED ? "FLASH IN USE: TAP SAVE" : panel->store_state == POCKET_STORE_SAMPLES ? "SAMPLES IN FLASH: SAVING OFF" : "FLASH ERROR", INK);
 		return;
 	}
 	if (slot >= store_rows()) return;

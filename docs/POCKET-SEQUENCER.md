@@ -58,6 +58,33 @@ block.
 that block, at most 1.45 ms after the press is read. STOP silences the next step; voices ring out
 as they do after a key press. PLAY always starts from step 0.
 
+## Following MIDI clock
+
+There is nothing to turn on. Clock arriving on USB, DIN or BLE takes over, and the screen says `CLK`
+where it said `BPM`.
+
+| Message | |
+|---|---|
+| Clock | 24 to the beat, so 6 to a step. Ticks move the steps; the tempo knob does nothing |
+| Start | from step 1, on the next clock |
+| Stop | stops. Ticks then move nothing |
+| Continue | on from where it stopped |
+| Song position, while stopped | where the next Continue starts, one unit a step, within the pattern |
+
+PLAY still works while following, and waits for the next clock.
+
+**Straight steps land on their tick.** Each tick is worth 50 × rate of phase, so 6 of them are a step
+and a step is not reached until its tick has arrived, at most one block (1.45 ms) later. Nothing can
+drift, whatever the tempo reads. **Swing** falls between ticks, so the tempo, measured over each beat,
+fills in between them, held short of the next tick.
+
+**The tempo** the screen shows is measured over a beat, and the engine's tempo-synced LFOs get it too.
+A new figure must be heard twice, or differ by more than 1, so 120.4 does not flicker. A save stores it.
+
+**Half a second with no clock** is the clock gone: playing stops, the last tempo stays and the knob is
+back. If two ports send clock, the first keeps it until it has been silent for 2 seconds: both would be
+twice the speed. Clock does not count as MIDI activity on the MIDI line.
+
 ## Live editing
 
 The control task and the interrupt share only single aligned words. There are no locks and no
@@ -207,7 +234,7 @@ In [POCKET-CONTROLS.md](POCKET-CONTROLS.md), for the firmware as it now stands.
 - Steps have velocity, a note or a variation, and a condition. No free parameter locks, though
   variations are built on the engine's.
 - Timing resolution is the 64-sample block, 1.45 ms.
-- No MIDI clock in or out, and no MIDI note output.
+- MIDI clock in, on any port ([Following MIDI clock](#following-midi-clock)). No clock out, and no MIDI note output.
 - Swing is by pairs of steps, on 16ths.
 - An amp decay of 127 on SOUND never ends and 126 lasts minutes: LXR firmware behaviour
   (`test_long_decays`), the same after a key press. STOP does not mute voices, so such a voice

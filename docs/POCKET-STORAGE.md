@@ -124,12 +124,16 @@ the emulator. A blank-sector test alone would have passed them.
 
 1. **Nothing happens until asked.** No Flash access at start-up, in SAFE MODE, or at all until PROJECTS
    opens. Undo and redo never touch it. `check-firmware.py` and the emulator tests hold this.
-2. **Only blank or ours.** Opening the store reads all four sectors. Anything that is neither all
-   0xFF nor carrying one of our magic numbers closes it: `FLASH IN USE: SAVING OFF`, and those sectors
-   are never erased or written. Saving stays off on such a device; the instrument is unaffected.
+2. **Only blank or ours, unless the player says otherwise.** Opening the store reads all four sectors.
+   Anything that is neither all 0xFF nor carrying one of our magic numbers closes it: `FLASH IN USE: TAP
+   SAVE`. Stopped, SAVE asks `ERASE 4 SECTORS: SAVE AGAIN`, and a second press erases what is in the way,
+   those sectors only, and saves nothing. Until then they are untouched and the instrument is
+   unaffected. This was needed on the first device, which had been on V15, whose settings area
+   runs through these sectors. What was there is not known. V15 is expected to rebuild its settings if
+   it is restored; that has not been tried.
 3. **The partition must be exactly the expected size**, or no sector here means what it should.
 4. **A sample bank reaching these sectors closes the store**, because a sample can contain a blank
-   sector, so blank is not proof of free.
+   sector, so blank is not proof of free: `SAMPLES IN FLASH: SAVING OFF`. This one cannot be erased from here.
 5. **The sector last written is never the one erased.** See below.
 6. **Saving only when stopped.** Erasing a sector silences audio for its length, and that is not
    worth a dropout in a performance. Loading writes nothing, and works while playing.

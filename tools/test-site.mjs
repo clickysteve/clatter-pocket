@@ -930,10 +930,11 @@ test('the hero carries the agreed words', () => {
   assert.match(html, /<a class="button" href="installer\/">INSTALL EXPERIMENTAL FIRMWARE/);
 });
 
-test('MIDI: only input is claimed, and the rest is denied', () => {
+test('MIDI: notes and clock in are claimed, and the rest is denied', () => {
   const text = page('index.html').replace(/<[^>]+>/g, ' ');
-  for (const m of text.matchAll(/[^.]*MIDI (output|thru|clock)[^.]*\./gi)) assert.match(m[0], /\bno\b/i, m[0]);
-  for (const m of text.matchAll(/[^.]*external clock[^.]*\./gi)) assert.match(m[0], /\bno\b/i, m[0]);
+  for (const m of text.matchAll(/[^.]*MIDI (output|thru)[^.]*\./gi)) assert.match(m[0], /\bno\b/i, m[0]);
+  assert.match(text, /MIDI clock in is followed/);
+  assert.doesNotMatch(text, /MIDI clock out|sends? MIDI clock/i);
 });
 
 test('the page does not present the firmware as finished', () => {

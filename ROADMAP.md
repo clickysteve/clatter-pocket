@@ -74,7 +74,8 @@ checked as far as possible without the toolchain or device), **open**.
 - **done (emulator; not on hardware)** DRUM and PITCH keyboards, step and live recording with a note
   per step, GLOBAL settings (docs/POCKET-CONTROLS.md)
 - **open** more than one pattern playing in turn, chaining, track lengths
-- **open** MIDI clock in and out, and note output
+- **done (emulator; not on hardware)** following MIDI clock in, with start, stop, continue and song position (docs/POCKET-SEQUENCER.md)
+- **open** MIDI clock out, and note output
 
 ## D - Generative CLATTER
 

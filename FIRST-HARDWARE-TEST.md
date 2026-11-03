@@ -5,18 +5,19 @@ PRE-FLASH-AUDIT.md) on one M-VAVE FM-1. Steps marked **UNVERIFIED** follow from 
 and build, not from a device. The owner decides whether to start, and every step can be the point
 to stop.
 
-**Result so far.** On 2026-11-02 the owner installed 0.8.1, the first version on a device: it showed
-the start screen, then reset in a loop. `voiceData` was misaligned, and the first audio block faulted
-(HARDWARE.md, Faults). 0.8.2 fixes that in the emulator under the chip's alignment rule. It has not
-run on a device. **From a unit looping on 0.8.1:** power on holding HOME until SAFE MODE shows, then
-connect the installer. **UNVERIFIED**: record whether SAFE MODE holds and whether the update completes.
+**Result so far, on one unit.** 0.8.1, the first version on a device, showed the start screen and reset
+in a loop: `voiceData` was misaligned, and the first audio block faulted (HARDWARE.md, Faults). The owner
+restored V15 from a browser. 0.8.2, installed from stock through both stages, fixed the loop, and audio
+and USB audio pass. PROJECTS said FLASH IN USE: SAVING OFF, which 0.9.0 can get past when asked. Nothing
+else below has been recorded yet, and 0.9.0 has not run on a device. **From a unit looping at the
+start screen:** power on holding HOME until SAFE MODE shows, then connect the installer. **UNVERIFIED**.
 
-Candidate: firmware 0.8.2, commit `ebfdadf`, SHA-256
-`4ce8a56af7171e4615f1564df0cace808e9a780df83752da05d809170ec137de`.
+Candidate: firmware 0.9.0, commit `8606873`, SHA-256
+`de027b06b8b622a96d9f20ee8c0379a4dbde81c52c28763dfd25deb0d3f0a794`.
 
 **Install it from <https://clatter-pocket.allmyfriendsaresynths.com/installer/>**, which runs the steps
 below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-`7414ffade8d5332e2236910aa42b128c2ae731b15eb6e8b31efc36c8f11fa28c`.
+`551023881bb938e169e9a7ba3144fd67005c8d8397cc8d94b3e6afd06398aa43`.
 
 Both packages are produced by:
 
@@ -171,6 +172,20 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
 
    DROP should stay 0, XRUN should not rise, and the sound should not stutter.
 
+## MIDI clock test
+
+Send clock from a DAW over USB. The emulator has only had it by the DIN route, so record what happens
+here. docs/POCKET-SEQUENCER.md says what each message does.
+
+1. With the DAW at 120 BPM and clock on, press play in the DAW. The FM-1 starts from step 1, and MAIN
+   shows `TEMPO 120 CLK`.
+2. Change the DAW's tempo: the figure follows within two beats. KNOB 2 on PATTERN does nothing.
+3. Record the FM-1 over USB against a click from the DAW for 5 minutes: the pattern stays on the click,
+   and the offset does not grow. Record the offset.
+4. Stop in the DAW: the FM-1 stops. Play again, and from a bar in the middle: it starts where the DAW does.
+5. With SWING above 50, listen for even swing.
+6. Turn clock off in the DAW: within a second the screen says `BPM` again.
+
 ## Extended test
 
 - **Stability:**
@@ -189,9 +204,11 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
 **The first write this firmware makes to the device's Flash. Do it last, and only after the backups
 in "Before installation".** docs/POCKET-STORAGE.md says what is and is not known.
 
-1. Stopped, tap **SAVE**. PROJECTS shows 9 empty slots, or **FLASH IN USE: SAVING
-   OFF** or **NO USER FLASH**. Either of those two is a safe result and the end of this test: nothing has
-   been written. Record it, and which firmware the unit came from.
+1. Stopped, tap **SAVE**. PROJECTS shows 9 empty slots, **FLASH IN USE: TAP SAVE**, **SAMPLES IN FLASH:
+   SAVING OFF** or **NO USER FLASH**. Record which, and which firmware the unit came from. With
+   FLASH IN USE, tap SAVE: it asks ERASE 4 SECTORS: SAVE AGAIN. Only if you accept losing what is there,
+   tap again, and record whether the 9 empty slots appear. The other two are safe results and the end of
+   this test: nothing has been written.
 2. Tap **SAVE** again, on slot 1. Record what is heard and how long the screen takes to show SAVED 1.
 3. Press ENV for another kit, then tap SAVE and press **OCT−**: the first kit is back.
 4. Power off, power on, tap SAVE: slot 1 is listed, and loads.

@@ -16,6 +16,10 @@
  * The pair always adds up to two straight steps (600 * rate), whatever the swing, and what is
  * left over at each step is carried into the next: a step fires on the first engine block
  * boundary at or after its exact time, never accumulating the difference.
+ *
+ * Following MIDI clock, 24 to the beat and so 6 to a step, each tick is worth 50 * rate of phase,
+ * and the tempo measured from the ticks only fills in between them: phase is pulled up to the last
+ * tick and kept short of the next, so a straight step lands on its tick and a swung one between two.
  */
 #include "pocket_seq.h"
 #include "pocket_lxr.h" /* POCKET_CONTROL_CODE */
@@ -35,6 +39,9 @@ static volatile uint8_t runRequest;
 static volatile uint16_t tempoBpm;
 static volatile uint8_t swingPercent;
 static volatile uint8_t skips[POCKET_SEQ_TRACKS]; /* step + 1 not to sound, or 0 */
+/* MIDI routing task and control -> audio */
+static volatile uint8_t externalClock, cueRestart, cueContinue, cueStep, cuePlaced;
+static volatile uint32_t clockSeen, clockFrom; /* ticks; the first step waits for one after clockFrom */
 /* audio -> control */
 static volatile uint8_t position;
 static volatile uint32_t stepsPlayed, triggers, lastTracks;
@@ -43,9 +50,11 @@ static uint8_t running, step, pairSwing;
 static volatile uint8_t pass;              /* 0..11: 12 is every condition's whole cycle */
 static uint32_t dice;
 static volatile uint32_t phase, interval; /* read by pocket_seq_quantise */
-static uint32_t unitPerBlock;
+static uint32_t unitPerBlock, clockUsed;
+static int32_t tickPhase;                  /* phase of the last tick: short of 0 after a swung step */
+static uint8_t followed;
 /* set at init */
-static uint32_t unitPerSwing;              /* 6 * rate */
+static uint32_t unitPerSwing, unitPerTick; /* 6 * rate, 50 * rate */
 static pocket_seq_emit emit;
 
 /* The passes of 12 on which a condition sounds, a bit each: a table rather than a division. */
@@ -65,14 +74,54 @@ POCKET_CONTROL_CODE void pocket_seq_init(uint32_t sample_rate, unsigned block_fr
 	position = POCKET_SEQ_NOT_PLAYING;
 	stepsPlayed = triggers = lastTracks = 0;
 	running = 0;
+	step = 0;
+	phase = interval = 0;
+	externalClock = cueRestart = cueContinue = cueStep = cuePlaced = followed = 0;
 	unitPerSwing = 6u * sample_rate;
+	unitPerTick = 50u * sample_rate;
 	unitPerBlock = 20u * block_frames;
 	emit = fn;
 }
 
 /* ------------------------------------------------------------------ control context */
-void pocket_seq_play(int on) { runRequest = on ? 1 : 0; }
+void pocket_seq_play(int on)
+{
+	clockFrom = clockSeen;
+	cueContinue = 0;
+	runRequest = on ? 1 : 0;
+}
 int pocket_seq_playing(void) { return runRequest; }
+
+void pocket_seq_clock_tick(void) { clockSeen++; }
+void pocket_seq_set_external(int on) { externalClock = on ? 1 : 0; }
+int pocket_seq_external(void) { return externalClock; }
+
+POCKET_CONTROL_CODE void pocket_seq_clock_start(void)
+{
+	cueStep = 0;
+	cuePlaced = cueContinue = 0;
+	clockFrom = clockSeen;
+	externalClock = 1;
+	cueRestart = 1;
+	runRequest = 1;
+}
+
+POCKET_CONTROL_CODE void pocket_seq_clock_continue(void)
+{
+	if (runRequest) return;
+	cueContinue = !cuePlaced;
+	cuePlaced = 0;
+	clockFrom = clockSeen;
+	externalClock = 1;
+	runRequest = 1;
+}
+
+POCKET_CONTROL_CODE void pocket_seq_clock_position(unsigned sixteenths)
+{
+	if (runRequest) return;
+	cueStep = (uint8_t)(sixteenths % POCKET_PATTERN_STEPS(&patterns[live]));
+	cuePlaced = 1;
+}
 
 void pocket_seq_set_tempo(int bpm)
 {
@@ -182,18 +231,54 @@ static void fire(void)
 	position = step;
 }
 
+/* Where phase goes in a block that follows the clock: to the last tick, at most, and short of the next. */
+static uint32_t followed_phase(uint32_t next)
+{
+	const uint32_t seen = clockSeen;
+	if (!followed)
+	{
+		followed = 1;
+		clockUsed = seen;
+		tickPhase = (int32_t)phase;
+	}
+	tickPhase += (int32_t)((seen - clockUsed) * unitPerTick);
+	clockUsed = seen;
+	if ((int32_t)next < tickPhase) return (uint32_t)tickPhase;
+	if ((int32_t)next >= tickPhase + (int32_t)unitPerTick) return (uint32_t)tickPhase + unitPerTick - 1u;
+	return next;
+}
+
 void pocket_seq_block(void)
 {
+	const unsigned external = externalClock;
+	if (cueRestart)
+	{
+		cueRestart = 0;
+		running = 0;
+	}
 	if (!running)
 	{
 		if (!runRequest) return;
+		const uint32_t from = clockFrom;
+		if (external && clockSeen == from) return; /* the first tick after a start is the first step */
 		running = 1;
-		step = 0;
+		followed = (uint8_t)external;
+		if (cueContinue)
+		{
+			cueContinue = 0;
+			clockUsed = from;
+			if (interval) return; /* from where it stopped, if it ever ran */
+		}
+		clockUsed = from + external;
+		tickPhase = 0;
+		step = cueStep;
+		cueStep = 0;
+		cuePlaced = 0;
 		phase = 0;
 		pass = 0;
 		dice = 0x9e3779b9u;
 		pairSwing = swingPercent;
-		interval = unitPerSwing * pairSwing;
+		interval = unitPerSwing * (step & 1u ? 100u - pairSwing : pairSwing);
 		fire();
 		return;
 	}
@@ -203,9 +288,13 @@ void pocket_seq_block(void)
 		position = POCKET_SEQ_NOT_PLAYING;
 		return;
 	}
-	phase += unitPerBlock * tempoBpm;
-	if (phase < interval) return;
-	phase -= interval;
+	uint32_t next = phase + unitPerBlock * tempoBpm;
+	if (external) next = followed_phase(next);
+	else followed = 0;
+	phase = next;
+	if (next < interval) return;
+	phase = next - interval;
+	if (external) tickPhase -= (int32_t)interval;
 	if (++step >= POCKET_PATTERN_STEPS(&patterns[live]))
 	{
 		step = 0;
