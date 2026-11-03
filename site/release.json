@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "version": "0.9.1",
+  "version": "0.9.2",
   "status": "experimental",
   "installEnabled": true,
   "releaseDate": "2026-11-03",
   "firmware": {
-    "filename": "clatter-pocket-0.9.1-1e306c71-UNVERIFIED.fwsc",
-    "sha256": "1e306c717e7af822056d2817fab7b2b1f34b5f42e72cca2980b36ae00c3f2d14",
+    "filename": "clatter-pocket-0.9.2-85617104-UNVERIFIED.fwsc",
+    "sha256": "8561710440e4dce57b49557e970e29eb89b46a21d92d293369da43a5fcea1048",
     "bytes": 492084,
-    "buildId": "b2725e6c22d1940d5012274302579d5ef856fe8dbaa7f5f4f9b2280d709ed723",
+    "buildId": "873b590d9b4c86687d2d8202aab8613a2586387a22989b305bb7486620df56c5",
     "loaderSha256": "ef1f2db89b011fa53e71df363f0122de0ea896618c53fb53e8da676322004541",
     "product": "FM-1_8000014",
     "family": 7,
     "checks": {
-      "commit": "902ce74",
+      "commit": "33798c6",
       "singlePrecision": true,
       "firmwareChecks": true,
       "audioPath": true,
@@ -48,10 +48,11 @@
     ]
   },
   "notes": [
-    "Firmware 0.9.1 puts the DRUM keys and MIDI in the order of the screen. MIDI from C1 is a different sound on every note: existing DAW patterns will trigger different sounds, and MIDI MAP on GLOBAL gives the General MIDI notes back.",
-    "On PROJECTS, SAVE saves, OCT+ loads and OCT− erases, and the footer says so. A question stays on screen for 3 seconds. Saves from firmware 0.5.0 are no longer read.",
-    "It follows MIDI clock on any port, with start, stop, continue and song position. If PROJECTS says FLASH IN USE, tap SAVE and confirm: this erases four sectors of user Flash that stock firmware may have left data in. Nothing is erased until you confirm.",
-    "Tested on the host and in the FM-1 emulator, including under the chip's alignment rule. 0.9.1 has not run on a device. 0.9.0 runs on one unit with sound, USB audio, MIDI notes, MIDI clock over USB and saving. Bluetooth, long runs and leaving for official firmware are untested.",
+    "Firmware 0.9.2 keeps GLOBAL's playing settings after a power-off: KEYS, OCTAVE, KEY VEL, FOLLOW, QUANTISE, AUTO STEP, MIDI CH and MIDI MAP. Any project save stores them, and so does a tap of SAVE on GLOBAL. They are read once at start-up, never in SAFE MODE.",
+    "Projects can have an 8-letter name: on PROJECTS, KNOB 2 picks the place and KNOB 3 the letter, and the slot shows it. Saves from earlier firmware load as before, with no name. The LXR's FX parameters, which did nothing on the FM-1, are no longer kept.",
+    "The installer now accepts the update loader under any ota- name. One FM-1 came back from the handover as ota-FM1C_0000000000000000, and the installer timed out waiting for another name. The cause is not known.",
+    "0.9.1 runs on one unit with the keys, MIDI MAP and projects, and 0.9.0 there with sound, USB audio, MIDI notes, MIDI clock over USB and saving. 0.9.2 has not run on a device: it is tested on the host and in the FM-1 emulator, including under the chip's alignment rule. Bluetooth, long runs and leaving for official firmware are untested.",
+    "If PROJECTS says FLASH IN USE, tap SAVE and confirm: this erases four sectors of user Flash that stock firmware may have left data in. Nothing is erased until you confirm.",
     "If an FM-1 is restarting at the start-up screen: power on holding HOME until SAFE MODE shows, then connect the installer. This has not been tried on a device."
   ]
 }

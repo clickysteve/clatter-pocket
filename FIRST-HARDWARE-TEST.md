@@ -16,12 +16,12 @@ recorded yet, and 0.9.2 has not run on a device.
 **From a unit looping at the start screen:** power on holding HOME until SAFE MODE shows, then connect
 the installer. **UNVERIFIED**.
 
-Candidate: firmware 0.9.1, commit `902ce74`, SHA-256
-`1e306c717e7af822056d2817fab7b2b1f34b5f42e72cca2980b36ae00c3f2d14`.
+Candidate: firmware 0.9.2, commit `33798c6`, SHA-256
+`8561710440e4dce57b49557e970e29eb89b46a21d92d293369da43a5fcea1048`.
 
 **Install it from <https://clatter-pocket.allmyfriendsaresynths.com/installer/>**, which runs the steps
 below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-`57134077951c875df9afd99533bbd10ecb79dae816a88c8d0e5fe653c39574a5`.
+`ff1fa31aefa43ce2593dcd1728d734ffba203d726a081f94c0561521ccfd0cf9`.
 
 Both packages are produced by:
 
