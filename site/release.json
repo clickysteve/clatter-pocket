@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "version": "1.0.0",
-  "status": "experimental",
+  "status": "hardware-verified",
   "installEnabled": true,
   "releaseDate": "2026-11-03",
   "firmware": {
-    "filename": "clatter-pocket-1.0.0-4d661dae-UNVERIFIED.fwsc",
+    "filename": "clatter-pocket-1.0.0-4d661dae.fwsc",
     "sha256": "4d661dae903801385adc99abe3387474b059210f1c49037cef3ef1cacb6f5956",
     "bytes": 492084,
     "buildId": "f04ed788bd1deb3a6bc17b3383c4c7f754c334053386f56bb0e4f483a704d899",
@@ -20,7 +20,13 @@
       "emulator": true
     }
   },
-  "verification": null,
+  "verification": {
+    "firmwareSha256": "4d661dae903801385adc99abe3387474b059210f1c49037cef3ef1cacb6f5956",
+    "date": "2026-11-03",
+    "units": 1,
+    "report": "https://github.com/clickysteve/clatter-pocket/issues/2",
+    "recoveryTested": true
+  },
   "openFirmware": {
     "version": "V14",
     "repository": "m-vave/fm1_open",
@@ -48,10 +54,10 @@
     ]
   },
   "notes": [
-    "CLATTER Pocket 1.0. The firmware is 0.9.4's, with a plain version number and its own identity, FM-1_8133700, so The Firmware Hub and installers can tell it from official Open. Installing it over Open or an earlier CLATTER Pocket, and leaving it for official firmware, work as before.",
-    "0.9.4 is verified on one FM-1: installed from V15 and over other firmware, patterns cleared and copied, its kits played, left for V15 and installed again. The report: https://github.com/clickysteve/clatter-pocket/issues/1. 1.0's own identity is being checked on the same unit before it is marked verified.",
-    "On PATTERN, hold SEQ and press REC to clear the pattern; SAVE+OCT− undoes it. Hold SEQ with OCT− to copy a page and OCT+ to paste it.",
-    "Untested on a device: Bluetooth MIDI and audio, DIN and TRS MIDI, SAFE MODE, and runs longer than a test session.",
+    "CLATTER Pocket 1.0 is hardware verified on one FM-1: installed over another firmware and from stock V15, left for V15 and installed again, and it reports its own identity, FM-1_8133700. The report: https://github.com/clickysteve/clatter-pocket/issues/2, and the full test of the same firmware as 0.9.4: https://github.com/clickysteve/clatter-pocket/issues/1.",
+    "On PATTERN, hold SEQ and press REC to clear the pattern; SAVE+OCT− undoes it. Hold SEQ with OCT− to copy a page and OCT+ to paste it. Projects have 8-letter names, and GLOBAL's playing settings survive a power-off.",
+    "Builds before 1.0 reported official Open's identity, FM-1_8000014. Installing 1.0 over them, or over official Open, works as before.",
+    "One unit, so not every case is covered. Untested on a device: Bluetooth MIDI and audio, DIN and TRS MIDI, SAFE MODE, and runs longer than a test session.",
     "If an FM-1 is restarting at the start-up screen: power on holding HOME until SAFE MODE shows, then connect the installer. This has not been tried on a device."
   ]
 }

@@ -71,6 +71,7 @@ const fill = {
   'package': release.firmware?.filename ?? 'None published',
   'package-sha': release.firmware?.sha256 ?? 'none',
   'package-commit': release.firmware?.checks?.commit ?? '',
+  'verification-report': release.verification?.report ?? '',
   'open-version': release.openFirmware?.version ?? '',
   'open-sha': release.openFirmware?.sha256 ?? '',
   'open-repository': release.openFirmware?.repository ?? '',
@@ -89,7 +90,7 @@ const fill = {
 for (const page of ['index.html', 'demo/index.html', 'installer/index.html']) {
   const path = join(out, page);
   // <!-- @if name --> this <!-- @else --> that <!-- @end -->, innermost first, so that they nest
-  const when = { open, experimental: open && release.status === STATUS.EXPERIMENTAL };
+  const when = { open, experimental: open && release.status === STATUS.EXPERIMENTAL, verified: open && release.status === STATUS.HARDWARE_VERIFIED };
   const block = /<!-- @if (\w+) -->((?:(?!<!-- @if )[\s\S])*?)(?:<!-- @else -->((?:(?!<!-- @if )[\s\S])*?))?<!-- @end -->/;
   let chosen = readFileSync(path, 'utf8');
   while (block.test(chosen)) chosen = chosen.replace(block, (all, name, yes, no = '') => {

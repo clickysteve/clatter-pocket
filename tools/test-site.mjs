@@ -40,6 +40,11 @@ const openBytes = () => new Uint8Array(readFileSync(openFile));
 
 /** What the site says when no release is enabled. */
 const closed = () => ({ ...release(), status: STATUS.EMULATOR_ONLY, installEnabled: false, firmware: null, releaseDate: null });
+/** The same release, as it was published for its device test: experimental, saying UNVERIFIED. */
+function experimental() {
+  const r = release();
+  return { ...r, status: STATUS.EXPERIMENTAL, firmware: { ...r.firmware, filename: r.firmware.filename.replace(/\.fwsc$/, '-UNVERIFIED.fwsc') }, verification: null };
+}
 function verified() {
   const r = release();
   return {
@@ -49,21 +54,24 @@ function verified() {
 }
 
 // ---------------------------------------------------------------- the gate
-test('the published release is experimental, enabled, and says UNVERIFIED', () => {
+test('the published release is hardware verified, for this package, and does not say UNVERIFIED', () => {
   const r = release();
-  assert.equal(r.status, STATUS.EXPERIMENTAL);
+  assert.equal(r.status, STATUS.HARDWARE_VERIFIED);
   assert.equal(r.installEnabled, true);
   assert.deepEqual(refusals(r), []);
-  assert.match(r.firmware.filename, /UNVERIFIED/);
-  assert.equal(r.verification, null);
-  assert.equal(statusLabel(r), 'UNVERIFIED: EXPERIMENTAL');
-  assert.equal(installLabel(r), 'INSTALL EXPERIMENTAL FIRMWARE');
+  assert.doesNotMatch(r.firmware.filename, /UNVERIFIED/);
+  assert.equal(r.verification.firmwareSha256, r.firmware.sha256);
+  assert.equal(r.verification.recoveryTested, true);
+  assert.match(r.verification.report, /^https:\/\/github\.com\/clickysteve\/clatter-pocket\/issues\/\d+$/);
+  assert.equal(statusLabel(r), 'HARDWARE VERIFIED');
+  assert.equal(installLabel(r), 'INSTALL FIRMWARE');
 });
 
 test('an experimental release needs no hardware verification', () => {
-  const r = release();
-  r.verification = null;
-  assert.equal(installAllowed(r), true);
+  const r = experimental();
+  assert.deepEqual(refusals(r), []);
+  assert.equal(statusLabel(r), 'UNVERIFIED: EXPERIMENTAL');
+  assert.equal(installLabel(r), 'INSTALL EXPERIMENTAL FIRMWARE');
 });
 
 test('a verified release must prove it, for this package', () => {
@@ -90,7 +98,9 @@ test('every technical field still closes the gate', () => {
     r => { r.status = 'emulator-only'; }, r => { r.status = 'unverified'; }, r => { r.status = undefined; },
     r => { r.schema = 2; }, r => { r.releaseDate = null; }, r => { r.notes = []; }, r => { r.version = ''; },
     r => { r.firmware = null; }, r => { r.firmware.filename = 'other.fwsc'; },
-    r => { r.firmware.filename = 'clatter-pocket-0.5.0.fwsc'; },  // experimental, not saying so
+    r => { r.firmware.filename = 'clatter-pocket-1.0.0-UNVERIFIED.fwsc'; },  // verified, saying UNVERIFIED
+    r => { r.verification = null; }, r => { r.verification.firmwareSha256 = 'e'.repeat(64); }, r => { r.verification.recoveryTested = false; },
+    r => { r.verification.report = 'http://example.org'; }, r => { r.verification.units = 0; }, r => { r.verification.date = 'soon'; },
     r => { r.firmware.sha256 = 'abc'; }, r => { r.firmware.buildId = null; }, r => { r.firmware.loaderSha256 = null; }, r => { r.firmware.bytes = 12; },
     r => { r.firmware.product = 'FM-1_015'; }, r => { r.firmware.family = 6; },
     r => { r.firmware.checks = null; }, r => { r.firmware.checks.commit = 'nope'; }, r => { r.firmware.checks.singlePrecision = false; },
@@ -126,8 +136,11 @@ test('a verified release cannot say UNVERIFIED, and only a verified one drops th
   const r = verified();
   r.firmware.filename = 'clatter-pocket-0.6.0-UNVERIFIED.fwsc';
   assert.equal(installAllowed(r), false);
-  assert.match(statusLabel(release()), /UNVERIFIED/);
+  assert.match(statusLabel(experimental()), /UNVERIFIED/);
   assert.match(statusLabel(closed()), /UNVERIFIED/);
+  const unsaid = experimental();
+  unsaid.firmware.filename = 'clatter-pocket-1.0.0.fwsc';
+  assert.equal(installAllowed(unsaid), false, 'an experimental package must say UNVERIFIED');
   const broken = verified();
   broken.verification = null;
   assert.match(statusLabel(broken), /UNVERIFIED/);
@@ -162,7 +175,19 @@ function closedSite() {
 }
 const off = closedSite();
 
-test('the site builds, with the experimental package in it', () => {
+/** The site as it was for the device test: the same package, published as experimental. */
+function experimentalSite() {
+  const dir = scratch(), r = experimental(), file = join(dir, 'release.json'), out = join(dir, 'site');
+  mkdirSync(join(dir, r.version), { recursive: true });
+  cpSync(packageFile(), join(dir, r.version, r.firmware.filename));
+  writeFileSync(file, JSON.stringify(r));
+  const result = buildSite('--out', out, '--release', file, '--releases', dir);
+  if (result.status !== 0) throw new Error(result.stderr);
+  return name => readFileSync(join(out, name), 'utf8');
+}
+const experimentalPage = experimentalSite();
+
+test('the site builds, with the verified package in it', () => {
   assert.equal(built.status, 0, built.stderr);
   assert.match(built.stdout, /installation ENABLED/);
   const served = readFileSync(join(site, 'installer/firmware', release().firmware.filename));
@@ -274,7 +299,7 @@ test('a package that does not match its hash fails the build', () => {
 test('a package M-VAVE\'s checks refuse fails the build, even with the right hash', () => {
   const bytes = readFileSync(packageFile());
   bytes[5000] ^= 1;                                    // a corrupt entry, whose hash is then declared
-  const r = fixture(x => { x.firmware.sha256 = sha(bytes); }, bytes);
+  const r = fixture(x => { x.firmware.sha256 = x.verification.firmwareSha256 = sha(bytes); }, bytes);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /failed M-VAVE's package checks/);
   const wrongLoader = fixture(x => { x.firmware.loaderSha256 = x.openFirmware.loaderSha256 = 'f'.repeat(64); });
@@ -570,8 +595,8 @@ test('the package is what the docs and the release say it is', () => {
   assert.equal(meta.schema, 1);
   assert.equal(meta.family, 7);
   assert.equal(meta.url, `firmware/${release().firmware.filename}`);
-  assert.equal(meta.hardware_validated, false);
-  assert.equal(packageMeta(verified()).hardware_validated, true);
+  assert.equal(meta.hardware_validated, true);
+  assert.equal(packageMeta(experimental()).hardware_validated, false);
   assert.equal(meta.data, undefined);
 });
 
@@ -901,8 +926,16 @@ test('Stage 1 is not called done by a device that goes silent after restarting',
   assert.equal(session.state, 'failed');
 });
 
-test('the experimental warning is the agreed one, before Install, with a confirmation', () => {
+test('a verified release has no experimental warning, and still a confirmation before Install', () => {
   const html = page('installer/index.html');
+  assert.ok(!html.includes('EXPERIMENTAL FIRMWARE'));
+  assert.ok(!html.includes('not yet been verified on physical hardware'));
+  assert.ok(html.indexOf('id="confirm"') < html.indexOf('id="install"'));
+  assert.match(html, /Hardware-verified release\./);
+});
+
+test('the experimental warning is the agreed one, before Install, with a confirmation', () => {
+  const html = experimentalPage('installer/index.html');
   for (const line of ['EXPERIMENTAL FIRMWARE',
     'CLATTER Pocket has passed emulator testing but has not yet been verified on physical hardware.',
     'Installing it replaces the FM-1’s stock instrument firmware.',
@@ -911,6 +944,8 @@ test('the experimental warning is the agreed one, before Install, with a confirm
   assert.ok(html.indexOf('id="confirm"') < html.indexOf('id="install"'));
   assert.match(html, /<dd>M-VAVE FM-1<\/dd>/);
   assert.ok(html.includes(release().firmware.sha256));
+  assert.match(experimentalPage('index.html'), /UNVERIFIED: EXPERIMENTAL/);
+  assert.match(experimentalPage('index.html'), /<b>It is unproven\.<\/b>/);
 });
 
 test('the installer page carries the recovery route', () => {
@@ -980,10 +1015,12 @@ test('the emulator stays under its own licence', () => {
 });
 
 // ---------------------------------------------------------------- the pages
-test('every page keeps the UNVERIFIED designation', () => {
-  for (const name of pages) assert.match(page(name), /UNVERIFIED: EXPERIMENTAL/, name);
+test('every page says HARDWARE VERIFIED, and none says UNVERIFIED', () => {
+  for (const name of pages) {
+    assert.match(page(name), /HARDWARE VERIFIED/, name);
+    assert.doesNotMatch(page(name), /UNVERIFIED/, name);
+  }
   assert.equal(NOT_AVAILABLE, 'Hardware installation is not yet available. CLATTER Pocket is currently verified in the FM-1 emulator only.');
-  assert.doesNotMatch(page('index.html'), /HARDWARE VERIFIED/);
 });
 
 test('every page moves itself to HTTPS: Web MIDI, crypto and the audio worklet need it', () => {
@@ -1004,7 +1041,7 @@ test('the hero carries the agreed words', () => {
   for (const text of ['A generative drum machine hiding inside your FM-1.',
     'Seven voices of authentic LXR drum synthesis. Generative kits, evolving rhythms, live recording and melodic percussion, running directly on the M-VAVE FM-1.',
     'TRY IN BROWSER', 'VIEW SOURCE ON GITHUB']) assert.ok(html.includes(text), text);
-  assert.match(html, /<a class="button" href="installer\/">INSTALL EXPERIMENTAL FIRMWARE/);
+  assert.match(html, /<a class="button" href="installer\/">INSTALL FIRMWARE/);
 });
 
 test('MIDI: notes and clock in are claimed, and the rest is denied', () => {
@@ -1017,8 +1054,9 @@ test('MIDI: notes and clock in are claimed, and the rest is denied', () => {
 test('the page does not present the firmware as finished', () => {
   const text = page('index.html');
   assert.doesNotMatch(text, /production[- ]ready|stable release|safe to (flash|install)(?! yet)|download (now|firmware)/i);
-  assert.match(text, /<b>It is unproven\.<\/b>/);
-  assert.doesNotMatch(text, /has been tested on a physical FM-1/);
+  assert.match(text, /<b>It is tested on one FM-1\.<\/b>/);
+  assert.ok(text.includes(release().verification.report), 'and links the report');
+  assert.match(text, /untested/, 'and says what was not tested');
 });
 
 const attrs = html => [...html.matchAll(/\s(?:href|src)="([^"]+)"/g)].map(m => m[1].replace(/&amp;/g, '&'));
@@ -1086,7 +1124,7 @@ test('under /clatter-pocket/, everything a page names is served, and nothing out
 });
 
 test('the release configuration is served, for the installer to read', () => {
-  assert.equal(JSON.parse(page('release.json')).status, 'experimental');
+  assert.equal(JSON.parse(page('release.json')).status, 'hardware-verified');
   assert.match(page('installer/installer.js'), /fetch\('\.\.\/release\.json'/);
 });
 
