@@ -476,6 +476,9 @@ has not been seen**.
 **0.7.1, length on SEQ+KNOB 3: 437,532 bytes, 16,389 free, the margin kept by 5 bytes.** Heap 110,092.
 The next feature needs flash found for it first.
 
+**0.9.2, GLOBAL's settings kept after a power-off and project names: 437,468 bytes, 16,453 free, the margin
+kept by 69 bytes.** Heap 109,164. The next feature needs flash found for it first.
+
 **0.9.1, the keys and MIDI in the screen's order, OCT+ loads, OCT− erases: 436,572 bytes, 17,349 free, the margin
 kept by 965 bytes.** Reading saves from 0.5.0 went to pay for it: no device has any.
 

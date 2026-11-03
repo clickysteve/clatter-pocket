@@ -9,7 +9,10 @@ to stop.
 in a loop: `voiceData` was misaligned, and the first audio block faulted (HARDWARE.md, Faults). The owner
 restored V15 from a browser. 0.8.2, installed from stock through both stages, fixed the loop. On 0.9.0,
 audio, USB audio, MIDI notes, MIDI clock over USB, and saving after erasing what V15 left, all work, and a
-save survives a power cycle. Nothing else below has been recorded yet, and 0.9.1 has not run on a device.
+save survives a power cycle. 0.9.1 came back from the handover as `ota-FM1C_0000000000000000`, which
+the installer did not take for the loader, and it timed out twice; the offline page, changed to take any
+`ota-` loader, then installed it, and the keys, MIDI MAP and projects work. Nothing else below has been
+recorded yet, and 0.9.2 has not run on a device.
 **From a unit looping at the start screen:** power on holding HOME until SAFE MODE shows, then connect
 the installer. **UNVERIFIED**.
 
