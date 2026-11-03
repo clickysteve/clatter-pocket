@@ -1121,7 +1121,7 @@ test('the demo keys are the emulator\'s', () => {
   const main = readFileSync(join(site, 'demo/emu/main.js'), 'utf8');
   const map = /R REC, 1\.\.0 (FX SCL ENV LFO EDIT GLO HOME SAVE ARP SEQ)/.exec(main)[1].split(' ');
   const keys = [...'1234567890'];
-  map.forEach((label, i) => assert.equal(CONTROLS.find(c => c.label === label).key, keys[i], label));
+  map.forEach((label, i) => assert.equal(CONTROLS.find(c => c.id === label.toLowerCase()).key, keys[i], label));
   assert.match(main, /const PIANO = "awsedftgyhujkolp;'"/);
   assert.match(main, /ArrowLeft: \[0, -1\], ArrowRight: \[0, 1\], ArrowDown: \[1, -1\], ArrowUp: \[1, 1\], ",": \[2, -1\], ".": \[2, 1\]/);
 });

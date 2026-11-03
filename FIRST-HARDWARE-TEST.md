@@ -134,14 +134,15 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
 
 ## First audio test
 
-1. MASTER low. Press **C4**, the 8th note key: DRUM 1 sounds once at its programmed pitch.
+1. MASTER low. Press **F3**, the leftmost key: KICK, on DRUM 1, sounds once at its programmed pitch.
+   Since 0.9.1 the keys run in the screen's order from there: C4, the 8th key, is PERC, on DRUM 3.
 2. Raise MASTER: the level follows smoothly. Fully down is silent.
-3. The level meter moves with each hit and the DRUM 1 cell flashes; it stays white, not orange, at
+3. The level meter moves with each hit and the first activity cell flashes; it stays white, not orange, at
    moderate MASTER. Listen for
    distortion, clicks and dropouts.
-4. Play the keys C4 to E4: each is a different voice, and the VOICE line follows. Press **SCL**
+4. Play the first seven keys: each is a different voice, and the VOICE line follows. Press **SEL**
    for KEYS: PITCH, then several keys: the selected voice at different pitches. **OCT+** moves them
-   an octave. Press **SCL** again. Turn **SELECT**: the VOICE line changes.
+   an octave. Press **SEL** again. Turn **SELECT**: the VOICE line changes.
 5. Press **SEQ**. The keys' lamps show the selected voice's steps. Tap each white key from F3 to G5
    in order: step 1 to 16 toggles, its own lamp changes as the key goes down, and nothing sounds. Tap G#3:
    the screen says PAST THE END. Press **PLAY**: a lamp runs along the white keys. Hold a white key and turn KNOB 1:
@@ -203,11 +204,11 @@ here. docs/POCKET-SEQUENCER.md says what each message does.
 **The first write this firmware makes to the device's Flash. Do it last, and only after the backups
 in "Before installation".** docs/POCKET-STORAGE.md says what is and is not known.
 
-1. Stopped, tap **SAVE**. PROJECTS shows 9 empty slots, **FLASH IN USE: TAP SAVE**, **SAMPLES IN FLASH:
-   SAVING OFF** or **NO USER FLASH**. Record which, and which firmware the unit came from. With
-   FLASH IN USE, tap SAVE: it asks ERASE 4 SECTORS: SAVE AGAIN. Only if you accept losing what is there,
-   tap again, and record whether the 9 empty slots appear. The other two are safe results and the end of
-   this test: nothing has been written.
+1. Stopped, tap **SAVE**. PROJECTS shows 9 slots, **SAMPLES IN FLASH: SAVING OFF** or **NO USER
+   FLASH**. Record which, and which firmware the unit came from. Since 0.9.3, whatever another firmware
+   left in the four sectors (V15 does) is erased as PROJECTS opens, without a question: record whether
+   the 9 slots appear straight away. The other two are safe results and the end of this test: nothing
+   has been written.
 2. Tap **SAVE** again, on slot 1. Record what is heard and how long the screen takes to show SAVED 1.
 3. Press ENV for another kit, then tap SAVE and press **OCT+**: the first kit is back. Press **OCT−**
    twice on a slot you do not need: it asks, then the slot is empty.

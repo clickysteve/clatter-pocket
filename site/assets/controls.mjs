@@ -9,7 +9,7 @@
 export const CONTROLS = [
   { id: 'keys', label: 'KEYS', kind: '27 note keys, F3 to G5, no velocity', group: 'Play', key: 'A W S E D F T G Y H U J K O L P ; \'',
     does: 'Play. In DRUM, three banks of the same nine sounds. In PITCH every key plays the selected voice chromatically. On SEQ the keyboard is the pattern: the 16 white keys are a page of steps, and the first four black keys the pages.' },
-  { id: 'scl', label: 'SCL', kind: 'Button', group: 'Play', key: '2', light: 'lit in PITCH',
+  { id: 'scl', label: 'SEL', kind: 'Button', group: 'Play', key: '2', light: 'lit in PITCH',
     does: 'Switch the keyboard: KEYS: DRUM or KEYS: PITCH.' },
   { id: 'octdown', label: 'OCT−', kind: 'Button', group: 'Play', key: 'Z',
     does: 'PITCH: an octave down, to −3. DRUM: the keys hit softer: 40, 70, 100 or 127. On SEQ: the previous page. With SEQ held: copy the page.',

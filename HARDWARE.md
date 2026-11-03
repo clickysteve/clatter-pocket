@@ -64,7 +64,7 @@ in 0x01C00000–0x01C80000.
 | Display | **240 × 240**, RGB565, SPI with DMA in bands of 240 × 16 pixels | Verified (`fm1.h`) |
 | Display type | Colour TFT | Reported (Synthtopia) |
 | Note keys | **27** (F3-G5), with LEDs | Verified (`fm1.h`: bits 0..26) |
-| Buttons | **14**: OCT−, OCT+, FX, SCL, ENV, LFO, EDIT, GLO, HOME, SAVE, ARP, SEQ, PLAY, REC, with LEDs | Verified (`app/screen.c` enum, `fm1_led_set`) |
+| Buttons | **14**: OCT−, OCT+, FX, SCL (labelled SEL on the unit), ENV, LFO, EDIT, GLO, HOME, SAVE, ARP, SEQ, PLAY, REC, with LEDs | Verified (`app/screen.c` enum, `fm1_led_set`) |
 | Encoders | **7**, relative (detents) | Verified (`fm1.h`) |
 | Pot | 1 (MASTER), 10-bit ADC | Verified |
 | Battery | ADC reading available; 2000 mAh, about 12 h | Verified (ADC) / Reported (capacity) |

@@ -120,7 +120,7 @@ act afterwards. So HOME's page function cannot reach SAFE MODE, or the reverse.
   SAVE here stores the eight playing settings for after a power-off: SETTINGS SAVED, and the footer
   says SAVE KEEPS.
 - **PROJECTS**: a tap of SAVE, 9 slots, a slot's name or kit, tempo and length. The status line is the
-  name the next save writes, and says K2 K3 EDIT ([POCKET-STORAGE.md](POCKET-STORAGE.md)).
+  name the next save writes, and says K2 MOVE K3 A-Z, the place being changed an orange block ([POCKET-STORAGE.md](POCKET-STORAGE.md)).
 - **SYSTEM**: GLO from GLOBAL. Version, build, CPU mean and peak, FAULTS, and how to reach SAFE MODE.
 
 FAULTS is audio overruns plus engine events dropped since start: 0 is the only good number. An overrun also
