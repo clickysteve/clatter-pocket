@@ -241,7 +241,7 @@ void pocket_kit_voice(uint8_t* kit, unsigned character, uint32_t seed, unsigned 
 	v[K_RESO] = (uint8_t)limited(v[K_RESO] + c->reso, 0, 100);
 	v[K_CUTOFF] = (uint8_t)limited(v[K_CUTOFF] + bright, 20, 127);
 	if (c->rate < 127u && chance(&rng, 40u + wild / 2u)) v[K_RATE] = (uint8_t)(c->rate + pocket_gen_below(&rng, 128u - c->rate));
-	if (c->drive > 15u && chance(&rng, 50)) v[K_FDRIVE] = (uint8_t)pocket_gen_below(&rng, 60);
+	if (c->drive > 15u && chance(&rng, 50) && voice) v[K_FDRIVE] = (uint8_t)pocket_gen_below(&rng, 60); /* not the kick: it was louder than its kit */
 	if (voice < 3u)
 	{
 		/* the two toms are two pitches; the drums of a kit sit on one scale */
@@ -254,11 +254,11 @@ void pocket_kit_voice(uint8_t* kit, unsigned character, uint32_t seed, unsigned 
 	if ((archetype == SNARE || archetype == CLAP) && (v[K_FTYPE] == 0 || v[K_FTYPE] == 6) && v[K_CUTOFF] < 100u) v[K_CUTOFF] = 100;
 	if (voice < 3u && v[K_FTYPE] == 1u && v[K_CUTOFF] > 50u) v[K_CUTOFF] = 50;
 	if (v[K_PWM] < 20u) v[K_PWM] = (uint8_t)(20u + pocket_gen_below(&rng, 80));
-	/* swells, sirens and rolls */
-	if (wild > 60u)
+	/* swells, sirens and rolls, never on the kick: it stays a kick at any WILD */
+	if (voice && wild > 60u)
 	{
 		const unsigned p = (wild - 60u) * 3u / 4u;
-		if (voice && chance(&rng, p)) v[K_ATTACK] = (uint8_t)(3u + pocket_gen_below(&rng, 14));
+		if (chance(&rng, p)) v[K_ATTACK] = (uint8_t)(3u + pocket_gen_below(&rng, 14));
 		if (chance(&rng, p))
 		{
 			v[K_P_AMT] = (uint8_t)(90u + pocket_gen_below(&rng, 38));

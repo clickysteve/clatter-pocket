@@ -32,7 +32,7 @@ after power-on (hold HOME then for SAFE MODE, engine off), MIDI notes play as th
 
 | Control | Action |
 |---|---|
-| note keys | DRUM: three banks of the same nine sounds. PITCH: the selected voice, chromatically (SEL switches). **On SEQ, the pattern:** white keys are a page of steps, the first four black keys the pages, held steps edited with the knobs |
+| note keys | DRUM: three banks of the same nine sounds. PITCH: the selected voice, chromatically (SEL switches). **On SEQ, the pattern:** white keys are a page of steps, the first four black keys the pages, held steps edited with the knobs, SEQ+REC clears it |
 | OCT− / OCT+ | PITCH: octave. DRUM: how hard the keys hit. On SEQ: page. Held SAVE: undo, redo |
 | PLAY, REC | start or stop; recording on or off |
 | ENV, ARP, LFO | a new kit, a new pattern, mutate. Held SAVE: the selected voice only |

@@ -119,6 +119,7 @@ lit. The status line says `KEYS: STEPS`. DRUM and PITCH are as they were on ever
 | **SELECT** | another track, on the same page and step: the lamps change with it |
 | **SAVE+OCT− / SAVE+OCT+** | undo, redo. Each toggle is one, and everything done during one hold is one, however long it took |
 | **SEQ+OCT− / SEQ+OCT+** | copy the page on screen, paste over the page on screen ([below](#copying-a-page)) |
+| **SEQ+REC** | clear the pattern: every step of every page and track off, `PATTERN CLEARED`. The length, tempo, swing and kit stay. One undo, SAVE+OCT−, brings it all back |
 | **REC** | gives the keys back to play and record while it is on: step entry with a note or a variation needs them. Leave it and they are steps again |
 
 A knob turned at any moment during a press makes it a hold, however short. A knob can neither turn a
@@ -325,7 +326,9 @@ the whole system 2.4 KB. `seq/pocket_kit.c` is a compact port of CLATTER's `kitg
 - **WILD** is how strictly a voice follows its archetype: narrow at 0, as written at 50, and above
   that wider ranges, open menus, voices becoming other archetypes, swells, sirens and rolls. Level,
   drive and resonance are not widened: wild is different, not louder. **The kick stays a kick at any
-  WILD**, so a rhythm keeps its anchor.
+  WILD**, so a rhythm keeps its anchor: since 0.9.4 it gets no swell, siren, roll or slope, and no
+  filter drive from a dirty character. Before, GLITCH's kick had a siren's pitch sweep and two drives,
+  and played 5 dB over the rest of its kit; NOISE's and ACID's kicks lost the filter drive too.
 
 **Three ways to design silence are prevented by rule**: a low-pass over a noise voice, a high-pass over
 a drum, a pulse wave with no width. CLATTER finds these by rendering each voice (`kitcheck.ts`),
