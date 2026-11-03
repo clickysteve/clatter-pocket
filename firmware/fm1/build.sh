@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
 # CLATTER Pocket FM-1 firmware build (macOS, Linux; on Windows run it from Git Bash).
 #
-#   firmware/fm1/build.sh [--prepare-only] [--placement sram|tcm] [--single-precision]
-#   firmware/fm1/build.sh --stock     (the unmodified fm1_open, same toolchain and steps:
-#                                      the known-good comparison, in build/fm1-stock/)
-#   firmware/fm1/build.sh --replace [--placement ...] [--single-precision]
+#   firmware/fm1/build.sh --replace --single-precision [--prepare-only] [--placement sram|tcm]
 #                                     (CLATTER Pocket instead of the stock instrument
 #                                      application, in build/fm1-replace/; BUILDING.md)
+#   firmware/fm1/build.sh --stock     (the unmodified fm1_open, same toolchain and steps:
+#                                      the known-good comparison, in build/fm1-stock/)
 #
-# 1. prepares build/fm1/tree: the pinned fm1_open (third_party/fm1_open), with
-#    firmware/fm1/fm1_open.patch applied, the FM-1 adapter in app/clatter_pocket/ and
-#    exactly the CLATTER Pocket engine files the firmware links in pocket/;
+# --single-precision is not optional in practice: without it the build passes its checks, but
+# the DSP runs on soft doubles, too slow for the audio interrupt. --replace is what a build
+# without --stock is anyway; it stays so that the command says what it does.
+#
+# 1. prepares build/fm1-replace/tree: the pinned fm1_open (third_party/fm1_open), with
+#    firmware/fm1/replace/fm1_open-replace.patch applied, its instrument application removed,
+#    the application in app/clatter_pocket/ and exactly the CLATTER Pocket engine files the
+#    firmware links in pocket/;
 # 2. runs firmware/fm1/Build-ClatterPocket.ps1 (PowerShell 7, the JieLi toolchain; through
 #    Wine unless on Windows) with -FirmwareOnly, which checks the SDK and toolchain hashes,
 #    compiles, links, runs fm1_open's firmware checks plus CLATTER Pocket's, and packages
-#    build/fm1/tree/build/dx7/generated/FM1_OFFICIAL_OPEN.fwsc;
-# 3. moves the package to build/fm1/clatter-pocket-fm1-UNVERIFIED.fwsc.
+#    tree/build/dx7/generated/FM1_OFFICIAL_OPEN.fwsc;
+# 3. moves the package to build/fm1-replace/clatter-pocket-fm1-replace-UNVERIFIED.fwsc.
 #
 # NOTHING HERE FLASHES A DEVICE. Read HARDWARE.md (recovery) before installing any build.
 # Environment: FM1_PI32_TOOLCHAIN (the toolchain's pi32 folder), PWSH (default pwsh),
@@ -24,7 +28,6 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
 stock=0
-replace=0
 placement=sram
 single=()
 prepare_only=0
@@ -34,15 +37,14 @@ while [[ $# -gt 0 ]]; do
 	--placement) placement=$2; shift ;;
 	--single-precision) single=(-SinglePrecision) ;;
 	--stock) stock=1 ;;
-	--replace) replace=1 ;;
+	--replace) ;;
 	*) echo "unknown option $1" >&2; exit 2 ;;
 	esac
 	shift
 done
 
-out_dir="$repo/build/fm1"
+out_dir="$repo/build/fm1-replace"
 [[ $stock == 1 ]] && out_dir="$repo/build/fm1-stock"
-[[ $replace == 1 ]] && out_dir="$repo/build/fm1-replace"
 tree="$out_dir/tree"
 
 pinned=4c7496d
@@ -57,7 +59,7 @@ mkdir -p "$tree"
 (cd "$fm1" && git archive --format=tar HEAD) | tar -x -C "$tree"
 if [[ $stock == 1 ]]; then
 	echo "   unmodified fm1_open $actual"
-elif [[ $replace == 1 ]]; then
+else
 	# The stock instrument application goes; the board layer (app/board/), the output mix
 	# (app/audio_output.c) and the headers stay. firmware/fm1/replace/ has the replacement.
 	(cd "$tree" && patch -s -p1 < "$here/replace/fm1_open-replace.patch")
@@ -66,9 +68,6 @@ elif [[ $replace == 1 ]]; then
 	done
 	mkdir -p "$tree/app/clatter_pocket"
 	cp "$here/replace/clatter_pocket_app.c" "$here/replace/clatter_pocket_app.h" "$tree/app/clatter_pocket/"
-else
-	(cd "$tree" && patch -s -p1 < "$here/fm1_open.patch")
-	cp -R "$here/app/clatter_pocket" "$tree/app/"
 fi
 if [[ $stock == 0 ]]; then
 
@@ -102,7 +101,7 @@ mv "$tree/pocket/lxr/upstream/Core/Src/Soundengine/MIDI/ParameterArray.c" "$pock
 cp "$repo/engine/pocket_param_table.c" "$pocket/flash/"
 cp "$repo/engine/lxr_tables_packed.c" "$repo/engine/lxr_tables_unpack.c" "$pocket/flash/"
 cp "$repo/engine/lxr_tables_packed.h" "$pocket/engine/"
-echo "   $(find "$pocket" -name '*.c' | wc -l | tr -d ' ') CLATTER Pocket sources, fm1_open $actual + $([[ $replace == 1 ]] && echo "replace/fm1_open-replace.patch, stock instrument application removed" || echo fm1_open.patch)"
+echo "   $(find "$pocket" -name '*.c' | wc -l | tr -d ' ') CLATTER Pocket sources, fm1_open $actual + replace/fm1_open-replace.patch, stock instrument application removed"
 fi
 [[ $prepare_only == 1 ]] && exit 0
 
@@ -123,15 +122,13 @@ if [[ $stock == 1 ]]; then
 	echo "== building unmodified fm1_open"
 	single=(-Stock)
 else
-	echo "== building (placement $placement${single:+, single precision}$([[ $replace == 1 ]] && echo ", replacing the stock instrument"))"
-	[[ $replace == 1 ]] && single+=(-Replace)
+	echo "== building (placement $placement${single:+, single precision}, replacing the stock instrument)"
 fi
 "$pwsh" -NoProfile -File "$here/Build-ClatterPocket.ps1" -Root "$tree" -FirmwareOnly \
 	-Toolchain "$FM1_PI32_TOOLCHAIN" -Placement "$placement" "${wine[@]+"${wine[@]}"}" "${single[@]+"${single[@]}"}"
 
-out="$out_dir/clatter-pocket-fm1-UNVERIFIED.fwsc"
+out="$out_dir/clatter-pocket-fm1-replace-UNVERIFIED.fwsc"
 [[ $stock == 1 ]] && out="$out_dir/fm1_open-stock-$actual.fwsc"
-[[ $replace == 1 ]] && out="$out_dir/clatter-pocket-fm1-replace-UNVERIFIED.fwsc"
 # moved, not copied: stock and CLATTER Pocket packages are the same size (the layout padding)
 # and the SDK names both FM1_OFFICIAL_OPEN.fwsc, so only the clearly named one is left
 mv "$tree/build/dx7/generated/FM1_OFFICIAL_OPEN.fwsc" "$out"
