@@ -57,7 +57,8 @@ Layers, each independent of the one above:
   is a sample-and-hold; near rate 0 it holds a DC level for ever, which the LXR-02's
   AC-coupled outputs remove (test `test_decimator_hold`). It changes a kick's peak by 0.6 %.
 - **FX bus off.** The firmware's delay needs 64 KB (`FX_BUFFER`); the FM-1 build links
-  `engine/fx_off.c` (the bus exists, stays `FX_OFF`, FX parameters are kept in the kit). The
+  `engine/fx_off.c` (the bus exists and stays `FX_OFF`). The panel never sends the 12 FX
+  parameters: they keep their place in a saved project, so older saves load, and are saved as 0. The
   voices do not pass through the bus, so they render identically (both test variants).
 - **No allocation, no locks, no I/O** in the audio path; all state is static.
 - **Late start.** The engine initialises in the control loop 1.5 s after the SDK has started the

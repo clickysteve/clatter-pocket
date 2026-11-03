@@ -9,7 +9,8 @@
  * instrument already shares (HARDWARE.md, ARCHITECTURE.md). Until a memory budget for it
  * is established, the FM-1 build links this file instead: the bus exists (the parameter
  * array points into it and the voices read fxBus.fxType) but never leaves FX_OFF and has no
- * delay memory. FX parameters are still stored in the kit, so kits round-trip unchanged.
+ * delay memory. The panel never sends the 12 FX parameters (ui/pocket_panel.c, KIT_FX): they keep
+ * their place in a saved project, so older saves load, and a save holds 0 for them.
  *
  * The voices do not pass through the FX bus, so this changes nothing they render.
  */

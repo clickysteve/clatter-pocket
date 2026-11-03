@@ -90,6 +90,10 @@ enum { L_TRANSPORT = 0, L_RULER = 1, L_GRID = 2, L_GRID_LAST = 6, L_LEGEND = 7, 
 /* A kit is applied a little at a time, from here, while everything else keeps running. */
 #define KIT_PER_POLL 12
 static uint8_t kitTarget[POCKET_SOUND_PARAMS], kitNext[POCKET_SOUND_PARAMS];
+/* The LXR's 12 FX parameters are not in this build. They keep their place in a kit and a saved
+ * project, so every save loads, but here they are always 0: nothing sends them to the engine,
+ * and a save writes 0 where they were. */
+#define KIT_FX(p) ((p) >= POCKET_PAR_FX_TYPE && (p) <= POCKET_PAR_FX_DELAY_TYPE)
 
 /* Actions that continue while they are the last thing done: a tag each. */
 enum { MERGE_NONE, MERGE_ENTRY, MERGE_TAKE, MERGE_BROWSE, MERGE_LENGTH, MERGE_PARAM, MERGE_CELL = MERGE_PARAM + POCKET_SOUND_PARAMS };
@@ -267,7 +271,8 @@ static void limit_step(struct pocket_panel* panel)
 static void kit_sync(const struct pocket_panel* panel)
 {
 	if (panel->kit_cursor) return;
-	for (int p = 1; p < POCKET_SOUND_PARAMS; p++) kitTarget[p] = (uint8_t)pocket_lxr_get_param(p);
+	for (int p = 1; p < POCKET_SOUND_PARAMS; p++)
+		if (!KIT_FX(p)) kitTarget[p] = (uint8_t)pocket_lxr_get_param(p);
 }
 
 static void replay_word(void* context, unsigned kind, unsigned index, uint32_t value)
@@ -468,6 +473,7 @@ static void say_kit(struct pocket_panel* panel)
 /* kitNext is the new kit: what differs goes to the history, and it is applied from here. */
 static void kit_commit(struct pocket_panel* panel)
 {
+	for (int p = POCKET_PAR_FX_TYPE; p <= POCKET_PAR_FX_DELAY_TYPE; p++) kitNext[p] = 0;
 	for (int p = 1; p < POCKET_SOUND_PARAMS; p++)
 		if (kitNext[p] != kitTarget[p])
 		{
@@ -547,7 +553,7 @@ static void kit_pump(struct pocket_panel* panel)
 	if (!p) return;
 	for (; p < POCKET_SOUND_PARAMS && sent < KIT_PER_POLL; p++)
 	{
-		if (kitTarget[p] == pocket_lxr_get_param(p)) continue;
+		if (KIT_FX(p) || kitTarget[p] == pocket_lxr_get_param(p)) continue;
 		if (pocket_lxr_set_param(p, kitTarget[p])) break;
 		sent++;
 	}

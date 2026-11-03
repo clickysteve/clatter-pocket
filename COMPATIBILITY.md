@@ -36,7 +36,7 @@ The FM-1 build stores the LXR's tables packed and unpacks them at start-up
 (FM1-REPLACEMENT.md); `make test` checks that the unpacked tables are byte-identical to the
 firmware's and that the comparison script renders bit-identical voices with them.
 
-Known differences from CLATTER, by design: no FX bus on the FM-1 (FX parameters are kept);
+Known differences from CLATTER, by design: no FX bus on the FM-1 (its 12 parameters are not sent, and saved as 0);
 output DC blocker on the FM-1; the FM-1's 44 100 Hz is CLATTER's rate too, so pitch and timing
 match each other (both 1.6 cents below the LXR-02).
 

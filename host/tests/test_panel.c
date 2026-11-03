@@ -1124,6 +1124,58 @@ static void test_saving(void)
 	CHECK(panel.store_state >= 0 && used, "and the last one is still there");
 }
 
+/* A save from before 0.9.2 can hold the LXR's FX parameters. It loads: every other parameter as
+ * it was, the FX ones not at all, and a save from it holds 0 where they were. */
+#define RECORD_PARAMS 20 /* a record: the rhythm (12 bytes), the sound's head (6), wild, reserved */
+static void test_saved_fx(void)
+{
+	struct pocket_panel panel;
+	static uint8_t before[POCKET_SOUND_PARAMS], after[POCKET_SOUND_PARAMS], engine[POCKET_SOUND_PARAMS];
+	fake_flash_reset();
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0);
+	press(&panel, BUTTON(ENV));
+	settle(&panel);
+	kit_now(engine);
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "SAVED 1"), "a project: %s", panel.notice);
+	uint8_t* record = pocket_store_project(0);
+	int layout = 0;
+	for (int p = 1; p < POCKET_PAR_FX_TYPE; p++) layout += record[RECORD_PARAMS + p] == engine[p];
+	CHECK(layout == POCKET_PAR_FX_TYPE - 1, "the record's parameters are where this test writes: %d", layout);
+	for (int p = 1; p < POCKET_SOUND_PARAMS; p++) before[p] = record[RECORD_PARAMS + p];
+	for (int p = POCKET_PAR_FX_TYPE; p <= POCKET_PAR_FX_DELAY_TYPE; p++)
+	{
+		CHECK(!record[RECORD_PARAMS + p], "FX parameter %d is saved as 0", p);
+		record[RECORD_PARAMS + p] = (uint8_t)(1 + 9 * (p - POCKET_PAR_FX_TYPE));
+	}
+	CHECK(pocket_store_commit() == POCKET_STORE_OK, "as an older firmware left it");
+
+	press(&panel, BUTTON(HOME));
+	press(&panel, BUTTON(ENV));
+	settle(&panel);
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(OCT_UP));
+	CHECK(!strcmp(panel.notice, "LOADED 1"), "it loads: %s", panel.notice);
+	settle(&panel);
+	kit_now(after);
+	int same = 0;
+	for (int p = 1; p < POCKET_SOUND_PARAMS; p++)
+		if (!(p >= POCKET_PAR_FX_TYPE && p <= POCKET_PAR_FX_DELAY_TYPE)) same += after[p] == before[p];
+	CHECK(same == POCKET_SOUND_PARAMS - 1 - 12, "every other parameter as it was saved: %d", same);
+	for (int p = POCKET_PAR_FX_TYPE; p <= POCKET_PAR_FX_DELAY_TYPE; p++)
+		CHECK(after[p] == engine[p], "FX parameter %d does not reach the engine: %d", p, after[p]);
+
+	panel.store_slot = 1;
+	press(&panel, BUTTON(SAVE));
+	record = pocket_store_project(1);
+	int zero = 0;
+	for (int p = POCKET_PAR_FX_TYPE; p <= POCKET_PAR_FX_DELAY_TYPE; p++) zero += !record[RECORD_PARAMS + p];
+	CHECK(zero == 12, "saved again, they are 0: %d", zero);
+	render_peak(4);
+}
+
 /* What a sound is, independent of how loud: how it moves, how long it lasts, how bright it is. */
 #define SHAPE_WINDOW 128
 #define SHAPE_WINDOWS 320
@@ -2652,6 +2704,7 @@ int main(int argc, char** argv)
 	test_midi();
 	test_global();
 	test_saving();
+	test_saved_fx();
 	test_variations();
 	test_long_patterns();
 	test_step_keys();
