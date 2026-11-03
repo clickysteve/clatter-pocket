@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "version": "0.9.0",
+  "version": "0.9.1",
   "status": "experimental",
   "installEnabled": true,
   "releaseDate": "2026-11-03",
   "firmware": {
-    "filename": "clatter-pocket-0.9.0-de027b06-UNVERIFIED.fwsc",
-    "sha256": "de027b06b8b622a96d9f20ee8c0379a4dbde81c52c28763dfd25deb0d3f0a794",
+    "filename": "clatter-pocket-0.9.1-1e306c71-UNVERIFIED.fwsc",
+    "sha256": "1e306c717e7af822056d2817fab7b2b1f34b5f42e72cca2980b36ae00c3f2d14",
     "bytes": 492084,
-    "buildId": "e98d396ea16857d2c7c9ea41d0e23f94314c25b2b5c205d7d06b737e44eef7c0",
+    "buildId": "b2725e6c22d1940d5012274302579d5ef856fe8dbaa7f5f4f9b2280d709ed723",
     "loaderSha256": "ef1f2db89b011fa53e71df363f0122de0ea896618c53fb53e8da676322004541",
     "product": "FM-1_8000014",
     "family": 7,
     "checks": {
-      "commit": "8606873",
+      "commit": "902ce74",
       "singlePrecision": true,
       "firmwareChecks": true,
       "audioPath": true,
@@ -48,10 +48,10 @@
     ]
   },
   "notes": [
-    "Firmware 0.9.0 follows MIDI clock on any port, with start, stop, continue and song position. While it does, the screen says CLK and the tempo knob does nothing.",
-    "Saving now works on an FM-1 that has been on stock firmware. If PROJECTS says FLASH IN USE, tap SAVE and confirm: this erases four sectors of user Flash that stock firmware may have left data in. Nothing is erased until you confirm.",
-    "64 steps on four pages, the keyboard as the pattern on SEQ, conditions, projects saved in user Flash, page copy and paste.",
-    "Tested on the host and in the FM-1 emulator, including under the chip's alignment rule. 0.9.0 has not run on a device. 0.8.2 runs on one unit, with sound and USB audio; 0.8.1 before it reset in a loop.",
+    "Firmware 0.9.1 puts the DRUM keys and MIDI in the order of the screen. MIDI from C1 is a different sound on every note: existing DAW patterns will trigger different sounds, and MIDI MAP on GLOBAL gives the General MIDI notes back.",
+    "On PROJECTS, SAVE saves, OCT+ loads and OCT− erases, and the footer says so. A question stays on screen for 3 seconds. Saves from firmware 0.5.0 are no longer read.",
+    "It follows MIDI clock on any port, with start, stop, continue and song position. If PROJECTS says FLASH IN USE, tap SAVE and confirm: this erases four sectors of user Flash that stock firmware may have left data in. Nothing is erased until you confirm.",
+    "Tested on the host and in the FM-1 emulator, including under the chip's alignment rule. 0.9.1 has not run on a device. 0.9.0 runs on one unit with sound, USB audio, MIDI notes, MIDI clock over USB and saving. Bluetooth, long runs and leaving for official firmware are untested.",
     "If an FM-1 is restarting at the start-up screen: power on holding HOME until SAFE MODE shows, then connect the installer. This has not been tried on a device."
   ]
 }
