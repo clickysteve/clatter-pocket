@@ -18,7 +18,7 @@
 </head>
 <body>
 <a class="skip" href="#main">Skip to the content</a>
-<p class="strip" role="status"><b>{{status}}</b> <span>Firmware {{version}} has passed emulator testing. It has not run on a physical FM-1, and the previous release reset in a loop on one.</span> <a href="#install">Status</a></p>
+<p class="strip" role="status"><b>{{status}}</b> <span>Firmware {{version}} has passed emulator testing. It has not run on a physical FM-1 yet. The release before it, 0.8.2, runs on one unit.</span> <a href="#install">Status</a></p>
 
 <header class="top">
   <a class="brand" href="#main">CLATTER POCKET</a>
@@ -88,7 +88,7 @@
     <article class="window">
       <h3 class="tab">MIDI input</h3>
       <p>Note-ons play and record like the keys, at their own velocity, with General MIDI drum notes in DRUM.</p>
-      <p class="dim">Input over DIN was run in the emulator; USB and Bluetooth have not been exercised. There is no MIDI output, no thru and no external clock.</p>
+      <p class="dim">Input over DIN was run in the emulator; USB and Bluetooth have not been exercised. MIDI clock in is followed, with start, stop and continue. There is no MIDI output and no thru.</p>
     </article>
   </div>
 </section>
@@ -210,13 +210,13 @@
     <details><summary>Does it use samples?</summary>
       <p>No sample playback. Every hit is synthesised live, and a kit is a set of parameters. The LXR engine does use wavetables and twelve short transient tables, as part of its synthesis.</p></details>
     <details><summary>Can I control it with MIDI?</summary>
-      <p>Note input, yes: notes over DIN, USB and Bluetooth take the same path as the keys. Only DIN has been exercised, in the emulator. There is no MIDI output, no thru and no external clock.</p></details>
+      <p>Note input, yes: notes over DIN, USB and Bluetooth take the same path as the keys. Only DIN has been exercised, in the emulator. MIDI clock in is followed, with start, stop, continue and song position, tried only over DIN in the emulator. There is no MIDI output and no thru.</p></details>
     <details><summary>Can I save patterns and kits?</summary>
       <p>Yes: 9 projects, each a kit and a pattern together, in the FM-1's user Flash. Tested on a model of the chip and in the emulator, not on a device. Back up anything you cannot afford to lose; there is no export. GLOBAL settings are not saved.</p></details>
     <details><summary>Can I try it without hardware?</summary>
       <p>Yes. <a href="demo/">The demo</a> runs the firmware in the FM-1 emulator, in your browser.</p></details>
     <details><summary>Is installation currently safe?</summary>
-      <!-- @if experimental --><p><b>It is unproven.</b> Firmware {{version}} has not run on a physical FM-1. The previous release reset in a loop at the start-up screen on the first one it was tried on. This release fixes the fault found there, but other problems may remain, so its safety is unknown. The installer keeps M-VAVE's compatibility and integrity checks, but those cannot show how the firmware behaves on a device. Install it only if you accept that a firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @else --><p><b>No, not yet.</b> The firmware is not proven on a physical FM-1, so its safety is unknown, and this site will not install it. A firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @end --></details>
+      <!-- @if experimental --><p><b>It is unproven.</b> Firmware {{version}} has not run on a physical FM-1. The first version tried on one, 0.8.1, reset in a loop at the start-up screen until it was restored. The next, 0.8.2, fixed that and runs on that unit, with sound and USB audio. Most of the hardware test is still to do, so its safety is unknown. The installer keeps M-VAVE's compatibility and integrity checks, but those cannot show how the firmware behaves on a device. Install it only if you accept that a firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @else --><p><b>No, not yet.</b> The firmware is not proven on a physical FM-1, so its safety is unknown, and this site will not install it. A firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @end --></details>
   </div>
 </section>
 

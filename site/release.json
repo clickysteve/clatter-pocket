@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "version": "0.8.2",
+  "version": "0.9.0",
   "status": "experimental",
   "installEnabled": true,
-  "releaseDate": "2026-11-02",
+  "releaseDate": "2026-11-03",
   "firmware": {
-    "filename": "clatter-pocket-0.8.2-4ce8a56a-UNVERIFIED.fwsc",
-    "sha256": "4ce8a56af7171e4615f1564df0cace808e9a780df83752da05d809170ec137de",
+    "filename": "clatter-pocket-0.9.0-de027b06-UNVERIFIED.fwsc",
+    "sha256": "de027b06b8b622a96d9f20ee8c0379a4dbde81c52c28763dfd25deb0d3f0a794",
     "bytes": 492084,
-    "buildId": "a8aa0d79a93214fac222e7d8ae988972fe062b68b5b797829d17807e7a736d84",
+    "buildId": "e98d396ea16857d2c7c9ea41d0e23f94314c25b2b5c205d7d06b737e44eef7c0",
     "loaderSha256": "ef1f2db89b011fa53e71df363f0122de0ea896618c53fb53e8da676322004541",
     "product": "FM-1_8000014",
     "family": 7,
     "checks": {
-      "commit": "ebfdadf",
+      "commit": "8606873",
       "singlePrecision": true,
       "firmwareChecks": true,
       "audioPath": true,
@@ -48,9 +48,10 @@
     ]
   },
   "notes": [
-    "Firmware 0.8.2 fixes the reset loop at the start-up screen that stopped the first test on a real FM-1: an audio buffer was misaligned, which the FM-1's chip treats as a fatal fault.",
-    "The start-up screen carries the logo. Copy a page and paste it to any other with SEQ+OCT− and SEQ+OCT+, as one undo. SYSTEM is down to version, build, CPU and faults. 64 steps on four pages, the keyboard as the pattern on SEQ, conditions, projects saved in user Flash.",
-    "Tested on the host and in the FM-1 emulator, now also under the chip's alignment rule. 0.8.2 itself has not run on a device, and the fix is not yet confirmed on one.",
-    "If 0.8.1 left your FM-1 restarting: power on holding HOME until SAFE MODE shows, then connect the installer. This should keep the engine off long enough to update; it has not been tried on a device."
+    "Firmware 0.9.0 follows MIDI clock on any port, with start, stop, continue and song position. While it does, the screen says CLK and the tempo knob does nothing.",
+    "Saving now works on an FM-1 that has been on stock firmware. If PROJECTS says FLASH IN USE, tap SAVE and confirm: this erases four sectors of user Flash that stock firmware may have left data in. Nothing is erased until you confirm.",
+    "64 steps on four pages, the keyboard as the pattern on SEQ, conditions, projects saved in user Flash, page copy and paste.",
+    "Tested on the host and in the FM-1 emulator, including under the chip's alignment rule. 0.9.0 has not run on a device. 0.8.2 runs on one unit, with sound and USB audio; 0.8.1 before it reset in a loop.",
+    "If an FM-1 is restarting at the start-up screen: power on holding HOME until SAFE MODE shows, then connect the installer. This has not been tried on a device."
   ]
 }
