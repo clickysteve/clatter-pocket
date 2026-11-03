@@ -101,7 +101,7 @@ test('every technical field still closes the gate', () => {
     r => { r.openFirmware.asset = 'other.html'; }, r => { r.openFirmware.sums = 'other'; }, r => { r.openFirmware.assetSha256 = 'abc'; },
     r => { r.openFirmware.sumsSha256 = null; }, r => { r.openFirmware.sha256 = 'abc'; }, r => { r.openFirmware.buildId = null; },
     r => { r.openFirmware.loaderSha256 = 'e'.repeat(64); }, r => { r.openFirmware.bytes = 12; },
-    r => { r.openFirmware.product = 'FM-1_8000015'; }, r => { r.openFirmware.product = 'FM-1_015'; }, r => { r.openFirmware.family = 6; },
+    r => { r.openFirmware.product = 'FM-1_015'; }, r => { r.openFirmware.family = 6; },
   ];
   breaks.forEach((change, i) => {
     const r = structuredClone(release());
@@ -310,7 +310,7 @@ const same = (written, expected) => assert.equal(Buffer.compare(Buffer.from(writ
 
 function rig(options = {}, memory) {
   const access = simulatedAccess();
-  const device = new SimulatedFM1(FM1Web, access, { imageBytes: pkg.image.length, newBuild: pkg.build_id, ...options });
+  const device = new SimulatedFM1(FM1Web, access, { imageBytes: pkg.image.length, newBuild: pkg.build_id, newIdentity: pkg.product, ...options });
   const events = { states: [], lines: [], phases: [] };
   const ui = {
     state: name => events.states.push(name), log: text => events.lines.push(t(text)),
@@ -319,7 +319,7 @@ function rig(options = {}, memory) {
   return { access, device, events, memory, session: newSession(access, ui, memory) };
 }
 /** A device as stock V15 reports itself, which restarts as whichever package it is sent. */
-const stockRig = (options = {}, memory) => rig({ identity: 'FM-1_015', protocol: 'stock', build: '00'.repeat(32), newBuild: undefined, images, ...options }, memory);
+const stockRig = (options = {}, memory) => rig({ identity: 'FM-1_015', protocol: 'stock', build: '00'.repeat(32), newBuild: undefined, newIdentity: undefined, images, ...options }, memory);
 const openRig = (options = {}, memory) => rig({ build: openPkg.build_id, ...options }, memory);
 const wrote = device => device.log.includes('start') || device.writes > 0;
 const hasCJK = text => /[㐀-鿿]/.test(text);
