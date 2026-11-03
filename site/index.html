@@ -18,7 +18,7 @@
 </head>
 <body>
 <a class="skip" href="#main">Skip to the content</a>
-<p class="strip" role="status"><b>{{status}}</b> <span>Firmware {{version}} has passed emulator testing. It has not run on a physical FM-1 yet. The release before it, 0.9.0, runs on one unit.</span> <a href="#install">Status</a></p>
+<p class="strip" role="status"><b>{{status}}</b> <span><!-- @if verified -->Firmware {{version}} is tested on a physical FM-1: installed, played, and left for official firmware and back.<!-- @else -->Firmware {{version}} has passed emulator testing. It has not run on a physical FM-1 yet.<!-- @end --></span> <a href="#install">Status</a></p>
 
 <header class="top">
   <a class="brand" href="#main">CLATTER POCKET</a>
@@ -212,11 +212,11 @@
     <details><summary>Can I control it with MIDI?</summary>
       <p>Note input, yes: notes over DIN, USB and Bluetooth take the same path as the keys. Only DIN has been exercised, in the emulator. MIDI clock in is followed, with start, stop, continue and song position, confirmed over USB on one unit. There is no MIDI output and no thru.</p></details>
     <details><summary>Can I save patterns and kits?</summary>
-      <p>Yes: 9 projects, each a kit and a pattern together, in the FM-1's user Flash. Tested on a model of the chip and in the emulator, not on a device. Back up anything you cannot afford to lose; there is no export. GLOBAL settings are not saved.</p></details>
+      <p>Yes: 9 projects, each a kit and a pattern together, in the FM-1's user Flash. Tested on a device as well as in the emulator, including after a power-off. Back up anything you cannot afford to lose; there is no export. GLOBAL's playing settings survive a power-off too.</p></details>
     <details><summary>Can I try it without hardware?</summary>
       <p>Yes. <a href="demo/">The demo</a> runs the firmware in the FM-1 emulator, in your browser.</p></details>
     <details><summary>Is installation currently safe?</summary>
-      <!-- @if experimental --><p><b>It is unproven.</b> Firmware {{version}} has not run on a physical FM-1. The first version tried on one, 0.8.1, reset in a loop at the start-up screen until it was restored. 0.9.0 runs on that unit, with sound, USB audio, MIDI notes, MIDI clock over USB and saving. Bluetooth, long runs and leaving for official firmware are untested, so its safety is unknown. The installer keeps M-VAVE's compatibility and integrity checks, but those cannot show how the firmware behaves on a device. Install it only if you accept that a firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @else --><p><b>No, not yet.</b> The firmware is not proven on a physical FM-1, so its safety is unknown, and this site will not install it. A firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @end --></details>
+      <!-- @if verified --><p><b>It is tested on one FM-1.</b> Firmware {{version}} was installed over other firmware and from stock V15, played, then left for official V15 and installed again, all on one unit (<a href="{{verification-report}}">the report</a>). Bluetooth, DIN MIDI, SAFE MODE and long runs are untested, and one unit cannot cover every FM-1. The installer keeps M-VAVE's compatibility and integrity checks. Back up first: moving between firmwares can erase projects and samples.</p><!-- @else --><!-- @if experimental --><p><b>It is unproven.</b> Firmware {{version}} has not run on a physical FM-1. The first version tried on one, 0.8.1, reset in a loop at the start-up screen until it was restored. 0.9.0 runs on that unit, with sound, USB audio, MIDI notes, MIDI clock over USB and saving. Bluetooth, long runs and leaving for official firmware are untested, so its safety is unknown. The installer keeps M-VAVE's compatibility and integrity checks, but those cannot show how the firmware behaves on a device. Install it only if you accept that a firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @else --><p><b>No, not yet.</b> The firmware is not proven on a physical FM-1, so its safety is unknown, and this site will not install it. A firmware that does not start could need recovery tools, or M-VAVE's help.</p><!-- @end --><!-- @end --></details>
   </div>
 </section>
 
@@ -228,7 +228,7 @@
     <tbody>
       <tr><th scope="row">Emulator build</th><td>Firmware {{emu-version}}, commit <code>{{emu-commit}}</code>. Tested in the emulator. For the demo only.</td><td><a href="demo/">Runs in the demo</a></td></tr>
       <!-- @if experimental --><tr><th scope="row">Experimental firmware</th><td>Firmware {{version}}, commit <code>{{package-commit}}</code>. The same package as the emulator build. Unverified: it has passed emulator testing, not a device.</td><td><a href="installer/">The installer</a></td></tr><!-- @else --><tr><th scope="row">Experimental firmware</th><td>Built from source by you. Unverified, and not safe to assume flashable.</td><td><a href="https://github.com/clickysteve/clatter-pocket/blob/main/BUILDING.md">BUILDING.md</a>. Not published here</td></tr><!-- @end -->
-      <tr><th scope="row">Hardware-verified release</th><td>A build tested on a device, end to end, with the way back tested too.</td><td><b>None yet</b></td></tr>
+      <tr><th scope="row">Hardware-verified release</th><!-- @if verified --><td>Firmware {{version}}, commit <code>{{package-commit}}</code>. Tested on a device, end to end, with the way back tested too.</td><td><a href="installer/">The installer</a></td><!-- @else --><td>A build tested on a device, end to end, with the way back tested too.</td><td><b>None yet</b></td><!-- @end --></tr>
     </tbody>
   </table>
   </div>

@@ -20,13 +20,16 @@ changed in 0.9.3. 0.9.3, installed over 0.9.2 first time, passed start-up (CPU 5
 FAULTS 0), naming and keeping a name after a power-off, and MIDI notes. 0.9.4 adds SEQ+REC to clear a
 pattern and tames GLITCH's kick: installed over 0.9.3 and again after V15 and Open, every remaining
 step passed ([report](https://github.com/clickysteve/clatter-pocket/issues/1)). 1.0.0 is 0.9.4 with a plain
-version and its own identity, `FM-1_8133700`, and has not run on a device. Not recorded: SAFE MODE,
-Bluetooth, long runs.
+version and its own identity, `FM-1_8133700`: installed over 0.9.4 and from V15 through Open, reporting
+`FM-1_8133700`, left for V15 and installed again, so **1.0.0 is hardware verified**, on one unit
+([report](https://github.com/clickysteve/clatter-pocket/issues/2)). Not recorded: SAFE MODE, Bluetooth,
+DIN MIDI, long runs.
 **From a unit looping at the start screen:** power on holding HOME until SAFE MODE shows, then connect
 the installer. **UNVERIFIED**.
 
-Candidate: firmware 1.0.0, commit `0b861a5`, identity `FM-1_8133700`, SHA-256
-`4d661dae903801385adc99abe3387474b059210f1c49037cef3ef1cacb6f5956`.
+Release: firmware 1.0.0, hardware verified, `clatter-pocket-1.0.0-4d661dae.fwsc`, commit `0b861a5`, identity
+`FM-1_8133700`, SHA-256 `4d661dae903801385adc99abe3387474b059210f1c49037cef3ef1cacb6f5956`. A later
+candidate replaces this line.
 
 **Install it from <https://clatter-pocket.allmyfriendsaresynths.com/installer/>**, which runs the steps
 below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256

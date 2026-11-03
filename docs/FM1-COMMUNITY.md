@@ -94,8 +94,8 @@ From [its submission page](https://thefirmwarehub.com/submit/):
 
 | Requirement | CLATTER Pocket |
 |---|---|
-| Tested on a real FM-1, installed from V15 and from another firmware, and leaving it again. "Emulator runs and builds don't count" | **Met for 0.9.4** on one FM-1: installed from V15 through official Open and over earlier CLATTER Pocket builds, left for V15 and installed again ([report](https://github.com/clickysteve/clatter-pocket/issues/1)). 1.0's own identity needs the same once more |
-| A release with a `.fwsc`, containing the update loader | the package has the loader; the GitHub release comes with 1.0 |
+| Tested on a real FM-1, installed from V15 and from another firmware, and leaving it again. "Emulator runs and builds don't count" | **Met for 0.9.4** on one FM-1: installed from V15 through official Open and over earlier CLATTER Pocket builds, left for V15 and installed again ([report](https://github.com/clickysteve/clatter-pocket/issues/1)). **Met for 1.0** with its own identity: over 0.9.4, from V15, left for V15 and back, reporting `FM-1_8133700` ([report](https://github.com/clickysteve/clatter-pocket/issues/2)) |
+| A release with a `.fwsc`, containing the update loader | **Met:** [v1.0.0](https://github.com/clickysteve/clatter-pocket/releases/tag/v1.0.0), with `clatter-pocket-1.0.0-4d661dae.fwsc` and M-VAVE's loader in it |
 | Open licence, complete source public, in the repository at each tag | GPL-3.0-only, public |
 | A `FM-1_` identity no other firmware uses | **Met from 1.0:** `FM-1_8133700`, free on the hub when chosen. fm1_open's updater (`WebUpdate.js`, `openIdentity`) takes any `FM-1_8` and six digits as Open-family, so the workbench and the installer go on treating it as Open, and the way back is unchanged. The hub's own rule is `FM-1_` and 3 to 8 digits; the short ones belong to firmwares with their own loader |
 | An `fmhub.json` in the repository's root | in the root from 1.0 |
