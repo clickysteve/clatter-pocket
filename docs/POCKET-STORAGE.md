@@ -14,7 +14,7 @@ the FM-1 emulator. One unit is not many, and an emulator cannot stand in for a d
 |---|---|
 | Tap **SAVE** | opens PROJECTS. In the browser emulator, `8` |
 | **SELECT** or KNOB 1 | choose a slot |
-| **KNOB 2**, **KNOB 3** | name the project: KNOB 2 picks the letter's place, KNOB 3 the letter (a space, A-Z, 0-9, -). The status line shows the name, `NAME AB[C]_____  K2 K3 EDIT`, with the place in brackets. A save writes it, and the slot's row shows it in place of the kit. A load brings it back; a restart starts with none |
+| **KNOB 2**, **KNOB 3** | name the project: KNOB 2 picks the letter's place, KNOB 3 the letter (a space, A-Z, 0-9, -). The status line shows the name, `NAME ABC..... K2 MOVE K3 A-Z`: an empty place is a dot, and the place KNOB 3 changes is an orange block. A save writes it, and the slot's row shows it in place of the kit. A load brings it back; a restart starts with none |
 | Tap **SAVE** again | store here. On a slot in use it asks first: tap again within 3 seconds, while OVERWRITE: SAVE AGAIN shows. Only when stopped: STOP TO SAVE otherwise. It says SAVED 3 |
 | **OCT+** | load this slot, also while a pattern plays |
 | **OCT−** | erase this slot. It asks first: press again while ERASE: OCT- AGAIN shows. Only when stopped |
@@ -50,7 +50,7 @@ TEMPO, SWING, LENGTH and the generator rows are the project's, and come back wit
 | Read | once, at start-up, after the engine is running, and never in SAFE MODE: the newest good sector's settings. Anything foreign, damaged, from before 0.9.2, or out of range means the default, and says nothing |
 | Not stored | when the store is closed: FLASH IN USE says to open PROJECTS, and nothing is written |
 
-Not yet on a device: 0.9.2 has not run on one.
+On a device: 0.9.2 kept all eight after a power-off on the owner's unit.
 
 ## How many, and why nine
 
@@ -137,9 +137,9 @@ the emulator. A blank-sector test alone would have passed them.
    touch it. `check-firmware.py` and the emulator tests hold this.
 2. **Only blank or ours, unless the player says otherwise.** Opening the store reads all four sectors.
    Anything that is neither all 0xFF nor carrying one of our magic numbers closes it: `FLASH IN USE: TAP
-   SAVE`. Stopped, SAVE asks `ERASE 4 SECTORS: SAVE AGAIN`, and a second press erases what is in the way,
-   those sectors only, and saves nothing. Until then they are untouched and the instrument is
-   unaffected. This was needed on the first device, which had been on V15, whose settings area
+   SAVE`. Since 0.9.3 nothing asks: stopped, opening PROJECTS (or the next SAVE there) erases what is in
+   the way, those sectors only, and the store opens. Until then they are untouched and the instrument is
+   unaffected. The owner chose this after the question confused on the device. This was needed on the first device, which had been on V15, whose settings area
    runs through these sectors: FLASH IN USE came up there, and the erase and the first save worked.
    What was there is not known. V15 is expected to rebuild its settings if it is restored; that has
    not been tried.

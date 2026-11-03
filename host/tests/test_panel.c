@@ -1077,31 +1077,33 @@ static void test_saving(void)
 	settle(&panel);
 	render_peak(4); /* the worst of it plays */
 
-	/* what the page says when it cannot save, and that nothing is then written */
+	/* what another firmware left in our sectors: erased without asking, never while playing */
 	fake_flash_reset();
 	memset(fake_flash + 430080, 0x12, 8192);
 	press(&panel, BUTTON(HOME));
-	press(&panel, BUTTON(SAVE));
-	CHECK(panel.store_state == POCKET_STORE_OCCUPIED, "foreign data: %d", panel.store_state);
+	press(&panel, BUTTON(PLAY));
 	const long before = fake_flash_ops;
 	press(&panel, BUTTON(SAVE));
+	CHECK(panel.store_state == POCKET_STORE_OCCUPIED, "foreign data, playing: %d", panel.store_state);
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(SAVE));
 	press(&panel, BUTTON(OCT_UP));
-	CHECK(fake_flash_ops == before, "one press, or a load, does not write");
-	for (unsigned line = 4; line < 12; line++) pocket_panel_draw_band(&panel, NULL, line, band);
-	press(&panel, BUTTON(HOME));
+	CHECK(fake_flash_ops == before && panel.store_state == POCKET_STORE_OCCUPIED, "not while playing, nor a load");
+	for (unsigned line = 1; line < 12; line++) pocket_panel_draw_band(&panel, NULL, line, band);
 	press(&panel, BUTTON(PLAY));
 	press(&panel, BUTTON(SAVE));
-	press(&panel, BUTTON(SAVE));
-	press(&panel, BUTTON(SAVE));
-	CHECK(fake_flash_ops == before && panel.store_state == POCKET_STORE_OCCUPIED, "not while playing");
+	CHECK(panel.store_state == POCKET_STORE_OK && fake_flash_ops > before + 2, "stopped, one SAVE erases what was in the way and saves: %ld", fake_flash_ops - before);
+	CHECK(strstr((char*)panel.notice, "SAVED"), "and says it saved: %s", panel.notice);
 	press(&panel, BUTTON(HOME));
-	press(&panel, BUTTON(PLAY));
+	fake_flash_reset();
+	memset(fake_flash + 430080, 0x12, 8192);
+	const long opened = fake_flash_ops;
 	press(&panel, BUTTON(SAVE));
-	press(&panel, BUTTON(SAVE));
-	CHECK(fake_flash_ops == before && panel.store_state == POCKET_STORE_OCCUPIED, "the question first");
-	press(&panel, BUTTON(SAVE));
-	CHECK(panel.store_state == POCKET_STORE_OK && fake_flash_ops == before + 2, "the second press erases what was in the way: %ld", fake_flash_ops - before);
-	CHECK(!strstr((char*)panel.notice, "SAVED"), "and saves nothing: %s", panel.notice);
+	CHECK(panel.store_state == POCKET_STORE_OK && fake_flash_ops == opened + 2, "stopped, opening PROJECTS erases those sectors: %ld", fake_flash_ops - opened);
+	uint8_t kept = 0;
+	pocket_store_peek(0, 0, &kept, 1);
+	CHECK(!kept, "and saves nothing");
+	for (unsigned line = 1; line < 12; line++) pocket_panel_draw_band(&panel, NULL, line, band);
 	press(&panel, BUTTON(SAVE));
 	CHECK(strstr((char*)panel.notice, "SAVED"), "the next press saves: %s", panel.notice);
 	press(&panel, BUTTON(HOME));

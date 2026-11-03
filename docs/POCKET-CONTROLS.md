@@ -16,7 +16,7 @@ none, so use the mouse.
    seed. To choose a character first, turn PRESETS `↑ ↓`.
 2. **Generate a pattern.** Press ARP `9`. ALGORITHM `, .` chooses the style first, if you want one.
 3. **Press PLAY** `Space`. Leave it running: everything below works while it plays.
-4. **Switch keyboard modes.** SCL `2` changes KEYS: DRUM to KEYS: PITCH. In DRUM, keys 1 to 9 are the
+4. **Switch keyboard modes.** SEL `2` changes KEYS: DRUM to KEYS: PITCH. In DRUM, keys 1 to 9 are the
    nine sounds, and 10 to 18 and 19 to 27 are the same nine in variations. In PITCH every key plays the
    selected voice, and OCT− `Z` and OCT+ `X` change the octave.
 5. **Record notes.** Press REC `R`. Playing, what you hit lands on the nearest step. Stopped, what
@@ -41,7 +41,7 @@ Every control below works on every page, unless it says otherwise.
 | Control | Action | Held SAVE + it |
 |---|---|---|
 | **Keys** | play: DRUM or PITCH, below. On PATTERN, the steps | |
-| **SCL** | KEYS: DRUM or KEYS: PITCH | |
+| **SEL** (SCL in the SDK) | KEYS: DRUM or KEYS: PITCH | |
 | **OCT− / OCT+** | PITCH: octave, −3 to +3. DRUM: how hard the keys hit, 40, 70, 100 or 127. On PATTERN: the previous or next page, round the pattern. With SEQ held: [copy and paste a page](#copying-a-page) | OCT−: undo. OCT+: redo. One history of kits and patterns |
 | **PLAY** | start or stop | |
 | **REC** | recording on or off | |
@@ -65,7 +65,7 @@ Every control below works on every page, unless it says otherwise.
 | KNOB 3 | swing | its condition | | length, a page at a time | filter | | | the letter |
 | KNOB 4 | selected step, across pages | its variation | a page at a time | | drive | | | |
 
-Lights: PLAY playing, REC recording, SCL in PITCH, SAVE on a locked track, SEQ on PATTERN, and on
+Lights: PLAY playing, REC recording, SEL in PITCH, SAVE on a locked track, SEQ on PATTERN, and on
 PATTERN the keys ([step keys](#the-keyboard-on-seq-step-keys)).
 
 ### The FM-1 is not what was asked for in one respect
@@ -87,7 +87,7 @@ set, with OCT in DRUM or KEY VEL on GLOBAL. MIDI notes keep their own velocity.
 | OCT− / OCT+ changed the page | the page buttons; every page has one |
 | REC toggled the selected step | keys, with REC on and stopped; on PATTERN, a white key, stopped or playing |
 | ALGORITHM moved the step | KNOB 4 |
-| SCL put the knobs on the generator | GLOBAL has DENSITY, COMPLEX, SEED and MUTATE. The style is on ALGORITHM |
+| SEL put the knobs on the generator | GLOBAL has DENSITY, COMPLEX, SEED and MUTATE. The style is on ALGORITHM |
 | KNOB 4 set the mutation strength | GLOBAL's MUTATE |
 | SAVE+KNOB 3 set the length | SEQ+KNOB 3, from any page: SEQ opens PATTERN and stays down |
 | ENV undid the pattern | SAVE+OCT− |
@@ -240,7 +240,7 @@ byte-identical after every variation, and the next plain hit is the plain sound.
 OCT sets the keys' velocity rather than switching banks, as before.
 
 With FOLLOW on (the default), the selected voice follows the last DRUM key or MIDI note, so a hit
-selects what SAVE+ENV and SAVE+ARP act on. SCL never changes it.
+selects what SAVE+ENV and SAVE+ARP act on. SEL never changes it.
 
 ### PITCH
 
@@ -424,7 +424,7 @@ power-off: SETTINGS SAVED. Any project save stores them too. TEMPO to WILD belon
 
 | Row | Values | |
 |---|---|---|
-| KEYS | DRUM, PITCH | as SCL |
+| KEYS | DRUM, PITCH | as SEL |
 | OCTAVE | −3 to 3 | as OCT in PITCH |
 | KEY VEL | 1-127 | the keys' velocity |
 | FOLLOW | OFF, ON | the selection follows hits |
@@ -476,8 +476,12 @@ has not been seen**.
 **0.7.1, length on SEQ+KNOB 3: 437,532 bytes, 16,389 free, the margin kept by 5 bytes.** Heap 110,092.
 The next feature needs flash found for it first.
 
+**0.9.3, names that show their place, and no question before erasing what V15 left: 437,500 bytes, 16,421
+free, the margin kept by 37 bytes.** Heap 109,164. The question's text paid for most of it. The next feature
+needs flash found for it first.
+
 **0.9.2, GLOBAL's settings kept after a power-off and project names: 437,468 bytes, 16,453 free, the margin
-kept by 69 bytes.** Heap 109,164. The next feature needs flash found for it first.
+kept by 69 bytes.** Heap 109,164.
 
 **0.9.1, the keys and MIDI in the screen's order, OCT+ loads, OCT− erases: 436,572 bytes, 17,349 free, the margin
 kept by 965 bytes.** Reading saves from 0.5.0 went to pay for it: no device has any.

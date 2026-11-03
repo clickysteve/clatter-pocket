@@ -615,15 +615,6 @@ static void name_letter(struct pocket_panel* panel, int by)
 	*c = letters[wrapped(at + by, (int)sizeof letters - 1)];
 }
 
-static void store_open(struct pocket_panel* panel)
-{
-	panel->store_armed = 0;
-	panel->store_state = (int8_t)pocket_store_open();
-	go(panel, POCKET_PAGE_STORE);
-	panel->dirty |= BODY_BANDS;
-	if (panel->store_state == POCKET_STORE_DAMAGED) announce(panel, "SAVED DATA DAMAGED");
-}
-
 static void slot_say(struct pocket_panel* panel, const char* action)
 {
 	char b[8];
@@ -669,20 +660,27 @@ static void store_failed(struct pocket_panel* panel)
 	panel->dirty |= BODY_BANDS;
 }
 
-/* FLASH IN USE: the player's to give up, as a second press, and stopped, as any erase. */
-static void store_claim(struct pocket_panel* panel)
+/* FLASH IN USE: what another firmware left in our sectors, as V15 does, is erased without asking,
+ * stopped, as any erase. A sample bank is never claimed. 1 if the store is open. */
+static int store_claim(struct pocket_panel* panel)
 {
-	if (pocket_seq_playing())
+	if (panel->store_state == POCKET_STORE_OCCUPIED && !pocket_seq_playing())
 	{
-		announce(panel, "STOP TO SAVE");
-		return;
+		panel->store_state = (int8_t)pocket_store_claim();
+		if (panel->store_state < 0) store_failed(panel);
+		panel->dirty |= BODY_BANDS;
 	}
-	if (!store_confirmed(panel, "ERASE 4 SECTORS: SAVE AGAIN", 0)) return;
+	return panel->store_state >= 0;
+}
+
+static void store_open(struct pocket_panel* panel)
+{
 	panel->store_armed = 0;
-	panel->store_state = (int8_t)pocket_store_claim();
-	if (panel->store_state < 0) store_failed(panel);
-	else announce(panel, "FLASH ERASED");
+	panel->store_state = (int8_t)pocket_store_open();
+	store_claim(panel);
+	go(panel, POCKET_PAGE_STORE);
 	panel->dirty |= BODY_BANDS;
+	if (panel->store_state == POCKET_STORE_DAMAGED) announce(panel, "SAVED DATA DAMAGED");
 }
 
 /* Every save carries GLOBAL's settings of how you play, in its sector's header: the panel's eight
@@ -696,15 +694,10 @@ static int store_commit(const struct pocket_panel* panel)
 static void store_save(struct pocket_panel* panel)
 {
 	const unsigned slot = panel->store_slot;
-	if (panel->store_state == POCKET_STORE_OCCUPIED)
-	{
-		store_claim(panel); /* and no more: the press said erase, not save */
-		return;
-	}
-	if (panel->store_state < 0) return;
+	if (panel->store_state < 0 && panel->store_state != POCKET_STORE_OCCUPIED) return;
 	if (pocket_seq_playing())
 		announce(panel, "STOP TO SAVE");
-	else
+	else if (store_claim(panel))
 	{
 		struct project* p = (struct project*)pocket_store_project(slot);
 		if (!p)
@@ -1856,16 +1849,15 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 			line_text(px, panel->notice, ACCENT);
 		else if (panel->page == POCKET_PAGE_STORE)
 		{
-			/* the name the next save writes, and how to change it */
+			/* the name the next save writes, a place a dot, and the place KNOB 3 changes in orange */
 			char* d = append(b, "NAME ");
-			for (unsigned i = 0; i < POCKET_NAME_CHARS; i++)
-			{
-				if (i == panel->name_at) *d++ = '[';
-				*d++ = panel->name[i] > ' ' ? panel->name[i] : '_';
-				if (i == panel->name_at) *d++ = ']';
-			}
-			append(d, "  K2 K3 EDIT");
+			for (unsigned i = 0; i < POCKET_NAME_CHARS; i++) *d++ = panel->name[i] > ' ' ? panel->name[i] : '.';
+			append(d, " K2 MOVE K3 A-Z");
 			line_text(px, b, INK);
+			const int x = MARGIN + (5 + panel->name_at) * ADVANCE;
+			fill(px, x - 1, TEXT_Y - 2, ADVANCE, 14, ACCENT);
+			b[5 + panel->name_at + 1] = 0;
+			text(px, x, TEXT_Y, &b[5 + panel->name_at], PAPER);
 		}
 		else
 		{

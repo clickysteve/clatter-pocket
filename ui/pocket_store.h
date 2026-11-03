@@ -13,9 +13,9 @@
  * sector it replaces becomes free. So the copy before stays whole until the new one is, and a power
  * cut at any moment loses at most the save in progress. The records' contents are the caller's.
  *
- * Nothing that is not ours is erased or written unless the player says so: a sector is used only if
+ * Nothing that is not ours is erased or written until PROJECTS opens: a sector is used only if
  * it is blank, or is one of ours, and a store whose sectors hold anything else refuses to open until
- * pocket_store_claim, which a second press on the page asks for. On a used FM-1 these sectors can hold
+ * pocket_store_claim, which opening PROJECTS, stopped, calls. On a used FM-1 these sectors can hold
  * what stock V15 left there. A sample bank is never claimed.
  *
  * Every sector a save writes also carries GLOBAL's settings, in its header: what was last given to

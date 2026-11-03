@@ -730,21 +730,17 @@ async function storage(pkg) {
   m.run(200);
   check(!m.text().includes("LOADED"), "and loads nothing");
 
-  // someone else's data in our sectors: never touched
+  // someone else's data in our sectors, as V15 leaves: erased without asking when PROJECTS opens
   const foreign = new Uint8Array(SECTOR).fill(0x42);
   m = await fresh([[STORE, foreign]]);
   const held = m.flash();
+  check(changed(held, m.flash()).filter((a) => a >= USER).length === 0, "nothing is touched before PROJECTS opens");
   open(m);
-  shows(m, "FLASH IN USE: TAP SAVE", "data that is not ours closes the store");
-  m.tap(BUTTON.SAVE, 60);
-  m.run(300);
-  shows(m, "ERASE 4 SECTORS: SAVE AGAIN", "and asks");
-  check(changed(held, m.flash()).filter((a) => a >= USER).length === 0, "it stays as it was until the answer");
-  m.tap(BUTTON.SAVE, 60);
-  m.run(300);
   const given = changed(held, m.flash()).filter((a) => a >= USER);
-  check(given.length > 0 && given.every((a) => a >= STORE && a < STORE_END), "the answer erases those sectors and nothing else");
+  check(given.length > 0 && given.every((a) => a >= STORE && a < STORE_END), "opening PROJECTS erases those sectors and nothing else");
+  check(!m.text().includes("FLASH IN USE"), "and says nothing about it");
   shows(m, "1 --", "and the store opens");
+  shows(m, "K2 MOVE K3 A-Z", "the name line says which knob does what");
   m.tap(BUTTON.SAVE, 60);
   m.run(400);
   shows(m, "SAVED 1", "and a save works");
@@ -1776,7 +1772,7 @@ async function main() {
   systemPage(m);
   m.run(800);
   const first = m.text();
-  shows(m, "0.9.2 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
+  shows(m, "0.9.3 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
   const cpu = /CPU MEAN +([\d.]+)%/.exec(first), peak = /CPU PEAK +([\d.]+)%/.exec(first);
   check(cpu && Number(cpu[1]) > 0, `CPU mean is measured (${cpu?.[1]} %)`, first);
   check(peak && Number(peak[1]) >= Number(cpu?.[1]), `CPU peak (${peak?.[1]} %)`, first);
