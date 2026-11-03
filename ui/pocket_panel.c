@@ -1294,16 +1294,14 @@ static void step_keys(struct pocket_panel* panel, uint32_t pressed, uint32_t rel
 		}
 }
 
-int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_input* in)
+void pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_input* in)
 {
 	const uint32_t pressedButtons = in->buttons & ~panel->previous_buttons;
 	const uint32_t releasedButtons = panel->previous_buttons & ~in->buttons;
 	const uint32_t pressedKeys = in->keys & ~panel->previous_keys;
 	const uint32_t releasedKeys = panel->previous_keys & ~in->keys;
-	const int exit = POCKET_PANEL_TOGGLE(panel->previous_buttons, in->buttons);
 	panel->previous_buttons = in->buttons;
 	panel->previous_keys = in->keys;
-	if (exit) return 1;
 
 	const int save = (in->buttons & BTN(SAVE)) != 0;
 	unsigned turned = 0;
@@ -1336,7 +1334,6 @@ int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_inp
 		panel->entered = 0;
 		if (panel->auto_step) move_step(panel, panel->auto_step);
 	}
-	return 0;
 }
 
 /* ------------------------------------------------------------------ drawing */

@@ -161,16 +161,12 @@ struct pocket_panel {
 #define POCKET_BAND_ROWS 16
 #define POCKET_BANDS (POCKET_SCREEN_H / POCKET_BAND_ROWS)
 
-/* Exit/enter gesture: HOME held, ARP pressed. */
-#define POCKET_PANEL_TOGGLE(previous, now) \
-	(((now) & (1u << POCKET_BTN_HOME)) && ((now) & ~(previous) & (1u << POCKET_BTN_ARP)))
-
 void pocket_panel_init(struct pocket_panel* panel);
 /* The first pattern, once the sequencer is initialised and the engine runs. */
 void pocket_panel_start_sequencer(struct pocket_panel* panel);
 /* Apply one control poll: navigation, the transport, recording, generation, triggers on key
- * presses, parameter steps from encoders. Returns 1 when the exit gesture was made (the caller leaves Pocket mode). */
-int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_input* in);
+ * presses, parameter steps from encoders. */
+void pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_input* in);
 /* The parameter (PAR_*) behind control c for the selected trigger. */
 int pocket_panel_param(const struct pocket_panel* panel, int c);
 /* Each poll, with what pocket_midi_clock_poll returned: the measured tempo, if any, becomes the
