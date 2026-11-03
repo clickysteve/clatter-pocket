@@ -473,7 +473,8 @@ has not been seen**.
 **0.7.1, length on SEQ+KNOB 3: 437,532 bytes, 16,389 free, the margin kept by 5 bytes.** Heap 110,092.
 The next feature needs flash found for it first.
 
-**0.9.0, following MIDI clock: 437,212 bytes, 16,709 free, the margin kept by 325 bytes.** Heap 109,196.
+**0.9.0, following MIDI clock, and saving past what V15 left: 437,468 bytes, 16,453 free, the margin kept by
+69 bytes.** Heap 109,196. The next feature needs flash found for it first.
 
 **0.8.2, the voice buffer aligned: 436,412 bytes, 17,509 free, the margin kept by 1,125 bytes.** The
 first device test of 0.8.1 reset in a loop at the first audio block (HARDWARE.md, Faults). The fix adds
