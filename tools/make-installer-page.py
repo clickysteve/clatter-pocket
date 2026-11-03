@@ -10,9 +10,11 @@ The update protocol is M-VAVE's, unchanged: the page embeds fm1_open's sdk/WebUp
 sdk/I18n.js byte for byte (their SHA-256 are printed in the page) and only drives
 FM1Web.prepare, Updater.connect and Updater.install, as fm1_open's own workbench page does,
 with the package description that sdk/Build.ps1 -Package builds (same fields; no stock V15
-image: restore with M-VAVE's official workbench). It never uses the updater's force mode:
-it installs only over firmware that reports an fm1_open identity and update family (stock
-Open, or a CLATTER Pocket build), or resumes an interrupted install of this same package.
+image: restore with M-VAVE's official workbench). It installs only over firmware that reports an
+fm1_open identity and update family (stock Open, or a CLATTER Pocket build), or resumes in a loader.
+A real FM-1 has come back from the handover as ota-FM1C_0000000000000000, not the ota-FM-1_015 the
+updater waits for, and timed out: so after its own handover any ota- loader is accepted, and one
+found at Connect is reached with the updater's force mode, as M-VAVE's workbench reaches it.
 
 The page is NOT VERIFIED on hardware. FIRST-HARDWARE-TEST.md describes when to use it.
 Nothing here talks to a device; only the generated page does, when a person uses it.
@@ -105,7 +107,7 @@ const FM1_PACKAGE = {json.dumps(meta)};
   const $ = id => document.getElementById(id);
   const t = text => (globalThis.FM1I18n ? FM1I18n.t(String(text)) : String(text));
   const log = line => {{ $('log').textContent += t(line) + '\\n'; }};
-  let pkg, updater, device, busy = false, writing = false;
+  let pkg, updater, device, busy = false, writing = false, forced = false;
   const enable = () => {{
     $('connect').disabled = busy || !pkg;
     $('install').disabled = busy || !device || !device.ok || !$('backup').checked;
@@ -125,7 +127,15 @@ const FM1_PACKAGE = {json.dumps(meta)};
       if (!access.sysexEnabled) throw Error('Allow MIDI SysEx for this page.');
       if (updater) await updater.disconnect();
       updater = new FM1Web.Updater(access, pkg, (phase, percent) => log(t(phase) + (percent === undefined ? '' : ' ' + percent + ' %')));
-      const result = await updater.connect({{ force: false }});
+      const handover = updater.waitFor.bind(updater);
+      updater.waitFor = (identity, any) => handover(identity, any || identity === pkg.loaderIdentity);
+      forced = false;
+      let result = await updater.connect({{ force: false }});
+      if (result.migration && /^ota-/i.test(result.identity)) {{
+        await updater.disconnect();
+        result = await updater.connect({{ force: true }});
+        forced = true;
+      }}
       log('Connected: ' + result.identity);
       if (result.migration || result.legacy)
         log('Not installing: this FM-1 does not run fm1_open firmware. Install M-VAVE\\'s official Open firmware with the official workbench first.');
@@ -138,7 +148,7 @@ const FM1_PACKAGE = {json.dumps(meta)};
   $('install').onclick = async () => {{
     if (!confirm('Install CLATTER Pocket (UNVERIFIED)? Keep the FM-1 connected and powered until the page says it has finished.')) return;
     busy = true; writing = true; enable();
-    try {{ await updater.install({{ force: false }}); log('Installed and verified: the FM-1 reports this build.'); }}
+    try {{ await updater.install({{ force: forced }}); log('Installed and verified: the FM-1 reports this build.'); }}
     catch (error) {{ log('Install did not finish: ' + t(error.message)); log('Keep this page open; reconnect the same FM-1 and use Connect, then Install, to resume.'); }}
     finally {{ busy = false; writing = false; device = null; enable(); }}
   }};
