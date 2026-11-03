@@ -5,10 +5,15 @@
 // a first stage in front of it. The protocol is M-VAVE's sdk/WebUpdate.js, unchanged: this only
 // drives FM1Web.prepare, Updater.connect and Updater.install, as fm1_open's workbench does.
 //
-// CLATTER Pocket never uses the updater's force mode, so it installs only over firmware reporting
-// an fm1_open identity and update family, or resumes an interrupted install of this same package.
-// Force mode is used in one place: official Open over stock V15, which is the route M-VAVE's
-// manual gives, because stock V15 has no capability command to satisfy the normal route.
+// CLATTER Pocket installs only over firmware reporting an fm1_open identity and update family, or
+// resumes an interrupted install in the vendor's update loader. Force mode is used in two places:
+// official Open over stock V15, which is the route M-VAVE's manual gives, because stock V15 has no
+// capability command to satisfy the normal route; and a loader found at Connect under a name the
+// unforced route does not take, which force reaches as M-VAVE's workbench does.
+//
+// A real FM-1 came back from the handover as ota-FM1C_0000000000000000, not the ota-FM-1_015 the
+// updater waits for, and the install timed out. Why is not known. So after the updater's own
+// handover any ota- loader is taken, as tools/make-installer-page.py's page does.
 //
 // Copyright (C) 2026 The CLATTER contributors. SPDX-License-Identifier: GPL-3.0-only
 
@@ -55,6 +60,7 @@ export const FIRMWARE = Object.freeze({
   UNKNOWN: 'unknown',
 });
 const STOCK_IDENTITY = 'FM-1_015';
+const LOADER_NAME = /^ota-/i;
 
 /**
  * From the updater's normal, unforced connect. CLATTER Pocket reports Open's identity on purpose
@@ -62,6 +68,7 @@ const STOCK_IDENTITY = 'FM-1_015';
  */
 export function classify(result, clatter, open) {
   if (result.resume) return FIRMWARE.LOADER;
+  if (result.migration && LOADER_NAME.test(result.identity)) return FIRMWARE.LOADER;
   if (result.migration || result.legacy) return result.identity === STOCK_IDENTITY ? FIRMWARE.STOCK : FIRMWARE.UNKNOWN;
   if (result.same) return FIRMWARE.CLATTER;
   return result.current === open?.build_id ? FIRMWARE.OPEN : FIRMWARE.OPEN_COMPATIBLE;
@@ -99,12 +106,16 @@ export function pageMemory(storage, key = 'clatter-pocket-install') {
  */
 export class Session {
   constructor(FM1Web, access, packages, ui, translate = String, timing = {}, memory = pageMemory(globalThis.localStorage)) {
-    Object.assign(this, { FM1Web, access, packages, ui, t: translate, timing, memory, state: 'idle', firmware: null, failedStage: null });
+    Object.assign(this, { FM1Web, access, packages, ui, t: translate, timing, memory, state: 'idle', firmware: null, failedStage: null, forced: false });
     this.updater = this.updaterFor(packages.clatter);
   }
 
   updaterFor(pkg, access = this.access) {
-    return new this.FM1Web.Updater(access, pkg, (phase, percent) => this.ui.phase(this.t(phase), percent), this.timing);
+    const updater = new this.FM1Web.Updater(access, pkg, (phase, percent) => this.ui.phase(this.t(phase), percent), this.timing);
+    // After its own handover, any ota- loader: the one wait for the package's loader is widened.
+    const handover = updater.waitFor.bind(updater);
+    updater.waitFor = (identity, anyLoader) => handover(identity, anyLoader || identity === pkg.loaderIdentity);
+    return updater;
   }
 
   go(state, text) {
@@ -121,6 +132,7 @@ export class Session {
   async connect() {
     const { clatter, open } = this.packages;
     this.failedStage = null;
+    this.forced = false;
     this.go('connecting', 'Connecting…');
     let result;
     try {
@@ -139,7 +151,7 @@ export class Session {
     if (this.firmware === FIRMWARE.STOCK) this.go(open ? 'prepare' : 'blocked', open ? `Stock firmware detected: it reports ${result.identity}.` : NO_OPEN);
     else if (this.firmware === FIRMWARE.UNKNOWN) this.go('blocked', `${NOT_IDENTIFIED} It reports ${result.identity}.`);
     else if (this.firmware === FIRMWARE.CLATTER) this.go('blocked', 'This build is already installed.');
-    else if (this.firmware === FIRMWARE.LOADER) await this.inLoader();
+    else if (this.firmware === FIRMWARE.LOADER) await this.inLoader(!result.resume);
     else if (this.firmware === FIRMWARE.OPEN) this.go('ready', `Official Open ${open.release_version} detected. Ready to install over ${result.identity} (build ${build}).`);
     else this.go('ready', `Ready to install over ${result.identity} (build ${build}). This is fm1_open firmware, but not official Open ${open?.release_version ?? ''} or this release.`);
 
@@ -147,19 +159,25 @@ export class Session {
     return ['ready', 'prepare', 'recover'].includes(this.state);
   }
 
-  /** Resume what this page was writing. With no record of that, official Open is the safe one. */
-  async inLoader() {
+  /**
+   * Resume what this page was writing. With no record of that, official Open is the safe one.
+   * `renamed`: the loader reports a name the unforced route does not take, so it is reached by force.
+   */
+  async inLoader(renamed) {
     const { clatter, open } = this.packages, writing = this.memory.read();
-    if (writing?.stage === 'clatter' && writing.sha256 === clatter.sha256) {
+    const resuming = writing?.stage === 'clatter' && writing.sha256 === clatter.sha256;
+    if (resuming && !renamed) {
       this.go('ready', 'The FM-1 is in its update loader: Install resumes this package.');
       return;
     }
-    if (!open) { this.go('blocked', NO_OPEN); return; }
+    if (!resuming && !open) { this.go('blocked', NO_OPEN); return; }
     try {
       await this.updater.disconnect();
-      this.updater = this.updaterFor(open);
-      if (!(await this.updater.connect({ force: false })).resume) throw new Error('The FM-1 has left its update loader.');
-      this.go('recover', `The FM-1 is in its update loader, so an install was interrupted. This page will finish official Open ${open.release_version} first.`);
+      this.forced = renamed;
+      this.updater = this.updaterFor(resuming ? clatter : open, renamed ? fm1Ports(this.access) : this.access);
+      if (!(await this.updater.connect({ force: renamed })).resume) throw new Error('The FM-1 has left its update loader.');
+      if (resuming) this.go('ready', 'The FM-1 is in its update loader: Install resumes this package.');
+      else this.go('recover', `The FM-1 is in its update loader, so an install was interrupted. This page will finish official Open ${open.release_version} first.`);
     } catch (error) {
       this.fail('connect', `Connect failed: ${this.t(error.message)}`);
     }
@@ -174,7 +192,7 @@ export class Session {
     try {
       if (resuming) {
         this.memory.write({ stage: 'open', sha256: open.sha256 });
-        await this.updater.install({ force: false });
+        await this.updater.install({ force: this.forced });
       } else {
         // The connect just before this was unforced, and writes nothing either. Ask again now
         // that force is on: only the exact stock report may go on, not a loader or anything else.
@@ -210,7 +228,7 @@ export class Session {
     this.go('installing', 'Installing. Do not unplug the FM-1.');
     this.memory.write({ stage: 'clatter', sha256: this.packages.clatter.sha256 });
     try {
-      await this.updater.install({ force: false });
+      await this.updater.install({ force: this.forced });
     } catch (error) {
       this.fail('clatter', `Install did not finish: ${this.t(error.message)}`);
       return false;
