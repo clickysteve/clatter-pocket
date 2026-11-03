@@ -2,7 +2,8 @@
 
 The interface on the FM-1's own screen and controls. It is the real firmware's, not a
 mock-up: the screens below were read from the LCD of the emulated FM-1 running the package.
-**Nothing here has run on a device; the firmware stays UNVERIFIED.**
+**This interface has run on one real FM-1, at 0.9.0; the firmware stays UNVERIFIED
+(FIRST-HARDWARE-TEST.md).**
 
 ![Screens read from the emulated LCD](pocket-ui-emulator.png)
 
@@ -69,7 +70,7 @@ copy of M-VAVE's firmware it had kept: select another entry first.
   the margin, not a white bar.
 
 The panel is a colour display, so this is real orange, 0xFBE0 as the firmware has always written it.
-The emulator reads it back as RGB565. Nobody has seen it on a device, so its exact shade is unverified.
+The emulator reads it back as RGB565. Its exact shade on a device has not been measured.
 
 `ui/pocket_panel.c` is platform-independent; the same code runs in the host tests.
 
@@ -90,7 +91,7 @@ start screen: CLATTER POCKET, LXR DRUM MACHINE, the state, the version and the b
 ## Controls
 
 Encoder positions come from the emulator's panel (Felucca's `controls.jpg`) and fm1_open's use
-of them. They are not checked on a device.
+of them. They have not been checked one by one on a device.
 
 The whole control map is in [POCKET-CONTROLS.md](POCKET-CONTROLS.md). The earlier "ENC 1/2/3" and
 "ENC 7" labels were matrix indices: they were physically SELECT, ALGORITHM, KNOB 1 and PRESETS. **No
@@ -153,7 +154,7 @@ Limits of what this shows:
 - **The CPU figure, 27.9 % playing, is not a device measurement.** The emulator counts about one
   instruction per cycle and models no cache or Flash wait states.
 - The firmware update path was not exercised.
-- Timing, the real screen, knob directions and sound are for the hardware test.
+- Timing, the real screen and sound are the hardware test's: FIRST-HARDWARE-TEST.md has what one unit showed.
 
 ## Limitations
 

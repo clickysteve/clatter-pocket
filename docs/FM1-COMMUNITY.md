@@ -1,7 +1,8 @@
 # The FM-1 firmware community: what the website was built on
 
 Researched 2026-10-30. Sources are linked; **reported** means a project's own statement, not
-checked here. No device was used.
+checked here. No device was used for this research; what has been seen on one since is noted where
+it answers something, and is in FIRST-HARDWARE-TEST.md.
 
 ## How firmware is distributed
 
@@ -55,7 +56,7 @@ Checked 2026-10-31 against [m-vave/fm1_open](https://github.com/m-vave/fm1_open)
 | Can a browser fetch it? | No. Release downloads send no `Access-Control-Allow-Origin`. The API does, at 60 requests an hour per address, but its asset URLs lead to the same downloads |
 | How is the updater related? | The `WebUpdate.js` in the V14 workbench is byte-identical to the one pinned here |
 | Is the route documented? | Yes, in the manual inside the workbench, chapter 9: from another firmware such as `FM-1_015`, enable forced install, reconnect, confirm. It warns of lost data and of failed boots needing special tools |
-| Does stock need a native program? | No, by M-VAVE's client code and manual: USB-MIDI SysEx through Web MIDI, both stages. No workbench is needed for it. **Not yet seen on a device from here** |
+| Does stock need a native program? | No, by M-VAVE's client code and manual: USB-MIDI SysEx through Web MIDI, both stages. No workbench is needed for it. **Seen on one device:** 0.8.2 went on from stock through both stages in a browser |
 | What does the package say of itself? | `hardware_validated: false`. `sdk/Build.ps1` writes that for every package it builds, so it says nothing either way about V14 |
 
 M-VAVE's terms allow all this. The engine may be redistributed "as part of firmware" for FM-1 devices,
@@ -93,7 +94,7 @@ From [its submission page](https://thefirmwarehub.com/submit/):
 
 | Requirement | CLATTER Pocket |
 |---|---|
-| Tested on a real FM-1, installed from V15 and from another firmware, and leaving it again. "Emulator runs and builds don't count" | **Not met.** Nothing has run on a device |
+| Tested on a real FM-1, installed from V15 and from another firmware, and leaving it again. "Emulator runs and builds don't count" | **Partly met.** One real FM-1, installed from V15 through official Open: 0.9.0 passes audio, USB audio, MIDI, MIDI clock and saving. Leaving it again has not been tried, nor installing from another firmware |
 | A release with a `.fwsc`, containing the update loader | no release yet; the package has the loader |
 | Open licence, complete source public, in the repository at each tag | GPL-3.0-only; **the repository is private** |
 | A `FM-1_` identity no other firmware uses | **Not met.** CLATTER Pocket reports `FM-1_8000014`, official Open's, which is what lets the workbench treat it as Open. Changing it needs thought: it is also what the restore route depends on |

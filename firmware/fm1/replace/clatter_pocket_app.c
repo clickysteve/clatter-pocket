@@ -20,7 +20,8 @@
  * HOME at that moment (SAFE MODE) leaves the engine off: a way to reach the updater if the
  * engine misbehaves.
  *
- * NOT RUN ON HARDWARE (it runs in the FM-1 emulator: docs/POCKET-UI.md). See FIRST-HARDWARE-TEST.md.
+ * Runs on one real FM-1 (0.9.0: boot, audio, USB audio, MIDI, saving; FIRST-HARDWARE-TEST.md).
+ * Still UNVERIFIED: one unit, and leaving for official firmware has not been tried.
  *
  * Copyright (C) 2026 The CLATTER contributors
  * SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception

@@ -2,8 +2,8 @@
 
 A seven-track drum sequencer of up to 64 steps, on four pages of 16, with conditional steps and a seeded pattern generator, running in the firmware
 on the FM-1's own controls and screen. How to play it, the control map and the size are now in
-[POCKET-CONTROLS.md](POCKET-CONTROLS.md); this page is how the sequencer works. **Tested on the host and in the FM-1 emulator. Nothing here
-has run on a device; the firmware stays UNVERIFIED.**
+[POCKET-CONTROLS.md](POCKET-CONTROLS.md); this page is how the sequencer works. **Tested on the host and in the FM-1 emulator, and run on
+one real FM-1 at 0.9.0, MIDI clock included; the firmware stays UNVERIFIED.**
 
 ![PATTERN playing, four pages, and a two-page pattern, read from the emulated LCD](pocket-sequencer-emulator.png)
 

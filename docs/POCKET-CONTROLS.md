@@ -1,8 +1,8 @@
 # Playing CLATTER Pocket
 
 The FM-1's own controls, as a generative drum machine: two keyboard modes, recording, kits and
-rhythms made on the device. **Tested on the host and in the FM-1 emulator. Nothing here has run on a
-device; the firmware stays UNVERIFIED.**
+rhythms made on the device. **Tested on the host and in the FM-1 emulator, and run on one real
+FM-1 at 0.9.0; the firmware stays UNVERIFIED (FIRST-HARDWARE-TEST.md).**
 
 ![A new kit, PITCH mode, step entry and the scrolled GLOBAL page, read from the emulated LCD](pocket-controls-emulator.png)
 
@@ -172,8 +172,8 @@ reads, so there is no brightness to set and no bus traffic. Inactive steps are t
 | SEQ button | PATTERN |
 
 Dim steps are possible: Hortator modulates the LEDs from a hook in the 10 kHz scan interrupt. That is
-hardware timing and code in an interrupt that this firmware's Flash has no room to spare for and that nothing
-here can verify, so it is not done. Which page holds a pattern's end is not on the lamps; `PAGE 2/4` and
+hardware timing and code in an interrupt that this firmware's Flash has no room to spare for, so it is not
+done. Which page holds a pattern's end is not on the lamps; `PAGE 2/4` and
 `STEP 23/64` are on the screen.
 
 **Changing mode with a key down** does nothing when the key comes up: leaving PATTERN or pressing REC ends
@@ -639,4 +639,3 @@ not driven by hand. The website still offers 0.5.0.
 - No MIDI clock out, no MIDI output, no thru. MIDI clock in is followed: [POCKET-SEQUENCER.md](POCKET-SEQUENCER.md#following-midi-clock).
 - At high WILD a kit can be odd: that is the point. 1 voice of the 1,344 rendered rang past 2
   seconds. Kits have no LFOs or FX.
-- HOME+ARP stays the reserved exit gesture, so ARP does nothing while HOME is held.

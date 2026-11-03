@@ -3,8 +3,9 @@
 CLATTER Pocket saves 9 projects in the FM-1's user Flash, and they survive a restart. A project is the
 whole musical state: the kit and the pattern together.
 
-**Tested on the host, on a model of the Flash chip, and in the FM-1 emulator. Nothing here has run on
-a device, and a device's Flash is the one thing an emulator cannot stand in for: read
+**Works on one real FM-1, at 0.9.0:** the leftover V15 data was erased on the second press, a project
+saved, and it came back after a power-off. Also tested on the host, on a model of the Flash chip, and in
+the FM-1 emulator. One unit is not many, and an emulator cannot stand in for a device's Flash: read
 [What is not known](#what-is-not-known). The firmware stays UNVERIFIED.**
 
 ## To use it
@@ -117,8 +118,9 @@ the emulator. A blank-sector test alone would have passed them.
    SAVE`. Stopped, SAVE asks `ERASE 4 SECTORS: SAVE AGAIN`, and a second press erases what is in the way,
    those sectors only, and saves nothing. Until then they are untouched and the instrument is
    unaffected. This was needed on the first device, which had been on V15, whose settings area
-   runs through these sectors. What was there is not known. V15 is expected to rebuild its settings if
-   it is restored; that has not been tried.
+   runs through these sectors: FLASH IN USE came up there, and the erase and the first save worked.
+   What was there is not known. V15 is expected to rebuild its settings if it is restored; that has
+   not been tried.
 3. **The partition must be exactly the expected size**, or no sector here means what it should.
 4. **A sample bank reaching these sectors closes the store**, because a sample can contain a blank
    sector, so blank is not proof of free: `SAMPLES IN FLASH: SAVING OFF`. This one cannot be erased from here.
@@ -196,12 +198,12 @@ states are constructed, from what the host model produces.
 
 ## What is not known
 
-**None of this has run on a device.** The emulator's chip is an accurate model of a NOR part with
-instant erases and programs; a real one is slower, and its power-cut behaviour is not half a page.
+One device has shown that saving, the erase and reloading after a power-off work. The rest is still open.
+The emulator's chip is an accurate model of a NOR part with instant erases and programs; a real one
+is slower, and its power-cut behaviour is not half a page. Cutting power during a save has not been tried on a device.
 
-- **Whether these four sectors are blank on your unit.** If a unit's history left anything there,
-  saving turns itself off and says so. That is the safe failure, and nothing can be said for sure
-  until a device is looked at.
+- **Whether these four sectors are blank on your unit.** They were not on the first one, which had been
+  on V15. If a unit's history left anything there, saving says so and asks before erasing it.
 - **Audio during an erase.** The SDK says it is silenced. How long, and how it sounds, is unmeasured.
   A save now also rewrites the two other projects of its sector, as data, not as a longer erase.
 - **Whether the vendor's loader leaves these sectors alone** on updates, and on migrating to V15 or
@@ -212,7 +214,7 @@ instant erases and programs; a real one is slower, and its power-cut behaviour i
   author and in `WebUpdate.js`, not by M-VAVE.
 - The browser emulator keeps Flash per package, by its hash: a new build starts with no saves.
 
-FIRST-HARDWARE-TEST.md has the first device check, as its own step, after everything else.
+FIRST-HARDWARE-TEST.md has the device check, as its own step, after everything else.
 
 Cost: the store is 1,476 bytes of Flash and 4,146 of RAM, most of it one sector's buffer. A save's stack is 776 bytes through the SDK's driver and the RTOS.
 `tools/check-firmware.py` holds the placement.

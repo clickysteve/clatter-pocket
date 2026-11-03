@@ -100,8 +100,7 @@ workbench.
 
 A SETTINGS page, and more of SOUND and MIXER (first versions: docs/POCKET-UI.md), for 27 keys, 14 buttons, 7 encoders and
 240 × 240; documented input map; performance work; release packaging (`-Package` with a
-public source archive, GPL); decide whether CLATTER Pocket replaces or sits beside the stock
-instrument.
+public source archive, GPL).
 
 ## Later, if the budget allows
 

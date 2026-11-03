@@ -3,8 +3,10 @@
 What is known about the M-VAVE FM-1 as a target for CLATTER Pocket, and how it is known.
 **Verified** means read from the official SDK's source, headers, linker script or binaries
 (`third_party/fm1_open`, commit `4c7496d`, 2026-10-21). **Reported** means from product pages,
-reviews or secondary sources. **Unknown** means nobody here has checked it yet. No physical
-FM-1 was used.
+reviews or secondary sources. **Unknown** means nobody here has checked it yet. **On a device**
+means seen on the owner's one FM-1: CLATTER Pocket 0.9.0 started, played, took USB audio, MIDI notes
+and MIDI clock over USB, and saved and reloaded across a power-off (FIRST-HARDWARE-TEST.md). Nothing
+else in this file has been measured on it.
 
 ## The SDK
 
@@ -111,11 +113,12 @@ before any update: migration can erase it.
 ### Rules this project follows
 
 1. Nothing is flashed without the owner's explicit approval of that specific build.
-2. CLATTER Pocket builds keep the stock application, its USB-MIDI update path and the
-   bootloader/configuration untouched: CLATTER Pocket is added beside the instrument, starts
-   only on a deliberate gesture (HOME + ARP) and is never active at power-on. A fault inside
-   CLATTER Pocket can then be escaped by power-cycling, and the device can still be updated.
-   Do not make it start automatically until it has been validated on hardware.
+2. CLATTER Pocket replaces the stock instrument application, and keeps the USB-MIDI update path
+   and the bootloader/configuration untouched. It starts by itself at power-on: the first plan,
+   beside the stock instrument behind a gesture, does not fit the Flash. So the protection is
+   this: the engine starts 1.5 s after the updater and USB, a fault in it cannot stop them starting,
+   and holding HOME at that moment leaves it off (SAFE MODE). A build that loops can still be
+   updated, as 0.8.1 was once restored from a browser. SAFE MODE itself has not been tried on a device.
 3. The SDK stays byte-identical (checked by the build and by `firmware/fm1/preflight.sh`).
 4. Before the first flash: identify the unit (hardware revision, current firmware identity
    as the workbench reports it), export projects/voices/samples, confirm the workbench can

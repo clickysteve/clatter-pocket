@@ -32,8 +32,8 @@ On macOS the firmware's ELF section attributes are mapped to `annotate` (`Makefi
 
 **Status (2026-10-29):** the toolchain is installed and verified; the unmodified fm1_open
 builds and packages; **CLATTER Pocket replacing the stock instrument application builds and
-packages** (`--replace`, FM1-REPLACEMENT.md); CLATTER Pocket beside the stock instrument
-does not fit the flash layout. Nothing has been flashed.
+packages** (`--replace`, FM1-REPLACEMENT.md). On a device since 2026-11-02:
+FIRST-HARDWARE-TEST.md.
 
 ### Requirements
 
@@ -69,10 +69,9 @@ not need Code::Blocks.
 
 ```bash
 firmware/fm1/build.sh --stock          # the unmodified fm1_open, same toolchain and steps
-firmware/fm1/build.sh --prepare-only   # build/fm1/tree: fm1_open + patch + CLATTER Pocket sources
+firmware/fm1/build.sh --replace --prepare-only   # build/fm1-replace/tree: fm1_open + patch + CLATTER Pocket sources
 firmware/fm1/preflight.sh              # SDK manifest + stand-in compile of every touched file
-firmware/fm1/build.sh --replace --single-precision   # CLATTER Pocket as the instrument: packages
-firmware/fm1/build.sh --single-precision   # CLATTER Pocket beside the stock instrument (does not fit)
+firmware/fm1/build.sh --replace --single-precision   # CLATTER Pocket as the instrument: packages (make firmware)
 ```
 
 `--replace` removes fm1_open's instrument application (screen, projects, presets, samples,
@@ -99,18 +98,19 @@ double arithmetic in float; see ARCHITECTURE.md).
 
 What `build.sh` does:
 
-1. extracts the pinned fm1_open into `build/fm1/tree`, applies `firmware/fm1/fm1_open.patch`
-   (two hooks: `app/board/audio.c`, `app/screen.c`) and copies the adapter
-   (`firmware/fm1/app/clatter_pocket/`) and exactly the engine files the firmware links
-   (`pocket/`);
+1. extracts the pinned fm1_open into `build/fm1-replace/tree`, applies
+   `firmware/fm1/replace/fm1_open-replace.patch` (two hooks: `app/board/audio.c`,
+   `app/audio_output.c`), removes the instrument application, and copies
+   `firmware/fm1/replace/` and exactly the engine files the firmware links (`pocket/`);
 2. runs `firmware/fm1/Build-ClatterPocket.ps1 -FirmwareOnly`, which is **generated** from
-   fm1_open's `sdk/Build.ps1` by `tools/derive-fm1-build.py` with seven listed edits
-   (paths, Wine, CLATTER Pocket sources, linker placement, SRAM checks). Everything else,
+   fm1_open's `sdk/Build.ps1` by `tools/derive-fm1-build.py` with its listed edits
+   (paths, Wine, CLATTER Pocket sources, linker placement, SRAM checks, `-Oz` on the LCD unit).
+   **Edit the tool, not the generated script:** regenerating drops anything else. Everything else,
    including the hash checks, all compiler/linker flags, `Test-Firmware` and the packager, is
    upstream's;
-3. moves the package to `build/fm1/clatter-pocket-fm1-UNVERIFIED.fwsc` (the SDK's name for it,
-   `FM1_OFFICIAL_OPEN.fwsc`, is the same for stock builds, so it is not left behind) and copies
-   the firmware report to `build/fm1/firmware-report.json`.
+3. moves the package to `build/fm1-replace/clatter-pocket-fm1-replace-UNVERIFIED.fwsc` (the SDK's
+   name for it, `FM1_OFFICIAL_OPEN.fwsc`, is the same for stock builds, so it is not left behind)
+   and copies the firmware report to `build/fm1-replace/firmware-report.json`.
 
 `-FirmwareOnly` is the SDK's local-test mode; distributable packages (`-Package`) need a
 matching public source archive URL (GPL) and are not set up.
