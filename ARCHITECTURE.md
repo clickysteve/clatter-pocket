@@ -1,20 +1,18 @@
 # Architecture
 
 ```
- FM-1 (fm1_open V14, stock application + binary SDK)            CLATTER Pocket
+ FM-1 (fm1_open V14 board layer + binary SDK)                   CLATTER Pocket
  ─────────────────────────────────────────────────────          ─────────────────────────────────
  audio ISR  fm1_audio_irq (app/board/audio.c)            128 frames, Q23 stereo
-   fm1_engine_render ── stock instrument (binary)
-   clatter_pocket_fm1_render ─────────────────────────▶ pocket_lxr_render_q23 (accumulate)
+   clatter_pocket_render ─────────────────────────────▶ pocket_lxr_render_q23
    fm1_output_mix ── master gain, USB/BT in, USB rec        2 × 64-sample LXR blocks:
    copy to DMA half                                           drain ≤32 events, then the
                                                               firmware's block sequence,
- control task groove_screen_control (app/screen.c)            6 voices panned, Q12 master,
+ control task groove_screen_control (clatter_pocket_app.c)    6 voices panned, Q12 master,
    fm1_controls_read                                          DC blocker, Q23 saturation
    MASTER knob
-   clatter_pocket_fm1_control ──── HOME+ARP ──────────▶ pocket_panel_apply ──▶ event ring
-     (Pocket mode owns the panel; stock UI returns)     pocket_panel_draw_band ──▶ fm1_screen_blit
-   stock UI / draw / paint_flush
+   pocket_panel_apply ────────────────────────────────▶ event ring
+   paint                                                pocket_panel_draw_band ──▶ fm1_screen_blit
 ```
 
 Layers, each independent of the one above:
@@ -26,7 +24,7 @@ Layers, each independent of the one above:
 | Engine host | `engine/pocket_lxr.c/.h`, `engine/fx_off.c` / `fx_on.c`, `engine/pocket_params.h` (generated) | the two above |
 | Sequencer and generator | `seq/` | nothing (voices reached by a function pointer) |
 | Panel | `ui/pocket_panel.c/.h` | engine host and sequencer APIs only |
-| FM-1 adapter | `firmware/fm1/app/clatter_pocket/`, `fm1_open.patch`, `pocket_fm1_config.h` | SDK API |
+| FM-1 application | `firmware/fm1/replace/`, `pocket_fm1_config.h` | SDK API |
 | Host harness | `host/` | engine host, panel |
 
 ## Porting decisions
@@ -59,12 +57,12 @@ Layers, each independent of the one above:
   is a sample-and-hold; near rate 0 it holds a DC level for ever, which the LXR-02's
   AC-coupled outputs remove (test `test_decimator_hold`). It changes a kick's peak by 0.6 %.
 - **FX bus off.** The firmware's delay needs 64 KB (`FX_BUFFER`); the FM-1 build links
-  `engine/fx_off.c` (the bus exists, stays `FX_OFF`, FX parameters are kept in the kit). The
+  `engine/fx_off.c` (the bus exists and stays `FX_OFF`). The panel never sends the 12 FX
+  parameters: they keep their place in a saved project, so older saves load, and are saved as 0. The
   voices do not pass through the bus, so they render identically (both test variants).
 - **No allocation, no locks, no I/O** in the audio path; all state is static.
-- **Lazy start.** The engine initialises when Pocket mode is first entered and renders only
-  while Pocket mode is shown and for 3 s after (ring-out). Users who never press HOME+ARP get
-  the stock firmware's behaviour and CPU load.
+- **Late start.** The engine initialises in the control loop 1.5 s after the SDK has started the
+  updater, USB and audio, so a fault in it cannot stop those. HOME held at that moment leaves it off.
 - **Bug found in CLATTER's bridge.** `dispatchParam(127)` (`PAR_BANK_CHANGE`, sent by
   `clatter_load_init_kit`) produces CC 0, and the firmware's handler then writes
   `originalCcValues[65536]`, 64 KB past a 255-byte array. WebAssembly's flat memory hides it;
@@ -140,12 +138,9 @@ link (the build fails if the runtime heap drops below 48 KB).
 
 ## Capacity outlook (to be measured, in this order)
 
-1. one LXR voice set (six voices, seven triggers) beside the stock engine - the current build;
-2. the same with the stock engine idle vs playing;
-3. CLATTER Pocket as the only instrument (not calling `fm1_engine_render` needs care: the
-   stock UI waits on engine state);
-4. ten CLATTER tracks: tracks map onto the six voices (as in CLATTER); more simultaneous
+1. one LXR voice set (six voices, seven triggers) as the only instrument - the current build;
+2. ten CLATTER tracks: tracks map onto the six voices (as in CLATTER); more simultaneous
    sounds need more voice instances, each a fixed cost;
-5. modulation (the firmware's LFOs and velocity routing are already in);
-6. FX bus (64 KB);
-7. sample playback (only the user Flash partition; SEA-coded slots exist in the stock engine).
+3. modulation (the firmware's LFOs and velocity routing are already in);
+4. FX bus (64 KB);
+5. sample playback (only the user Flash partition; SEA-coded slots exist in the stock engine).

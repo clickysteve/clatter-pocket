@@ -54,7 +54,8 @@ The first report gave 479,232: that figure left out the boot area, BTIF and the 
 | 0.8.1: the logo on the start-up screen, the LCD driver at -Oz | 436,412 | 17,509 free |
 | 0.8.2: the voice buffer aligned, after the first device test | 436,412 | 17,509 free |
 | 0.9.0: following MIDI clock, saving past what V15 left | 437,468 | 16,453 free |
-| **0.9.1: keys and MIDI in the screen's order, OCT+ loads, OCT− erases** | **436,572** | **17,349 free** |
+| 0.9.1: keys and MIDI in the screen's order, OCT+ loads, OCT− erases | 436,572 | 17,349 free |
+| **0.9.2: GLOBAL kept after a power-off, project names, the FX parameters and the overlay gone** | **437,468** | **16,453 free** |
 
 The SDK's binary library (`libfm1_engine.a`) is a single pre-linked object. `--gc-sections`
 removes what nothing references any more, but the library still references its own

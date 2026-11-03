@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Checks the prepared FM-1 tree without the JieLi toolchain (run firmware/fm1/build.sh
-# --prepare-only first):
+# --replace --prepare-only first):
 #   1. every SDK file matches sdk/manifest.json and no file was added (the first thing
 #      Build-ClatterPocket.ps1 checks; the SDK must stay pristine);
 #   2. the patched application and the CLATTER Pocket sources compile for a stand-in 32-bit
@@ -11,8 +11,8 @@
 # happen only with the JieLi toolchain.
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/../.." && pwd)
-tree="$repo/build/fm1/tree"
-[[ -d "$tree/pocket" ]] || { echo "run firmware/fm1/build.sh --prepare-only first" >&2; exit 1; }
+tree="$repo/build/fm1-replace/tree"
+[[ -d "$tree/pocket" ]] || { echo "run firmware/fm1/build.sh --replace --prepare-only first" >&2; exit 1; }
 
 echo "== SDK manifest"
 python3 - "$tree" <<'EOF'
@@ -39,7 +39,7 @@ pocket_inc=(-I"$tree/pocket/lxr/shim" -I"$tree/pocket/lxr/shim/libc" -I"$tree/po
 	-I"$tree/pocket/engine" -I"$tree/pocket/ui" -I"$tree/sdk/include/libc")
 failed=0
 echo "== application files touched by CLATTER Pocket (SDK headers, -fsyntax-only)"
-for f in app/board/audio.c app/screen.c app/clatter_pocket/clatter_pocket_fm1.c; do
+for f in app/board/audio.c app/audio_output.c app/clatter_pocket/clatter_pocket_app.c; do
 	"$LLVM_BIN/clang" --target=armv7em-none-eabi -ffreestanding -fms-extensions -fsyntax-only -Werror=implicit-function-declaration \
 		"${sdk_inc[@]}" "$tree/$f" 2>&1 | grep -E "error" && failed=1 || echo "   ok  $f"
 done

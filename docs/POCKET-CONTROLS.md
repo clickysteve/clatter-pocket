@@ -1,8 +1,8 @@
 # Playing CLATTER Pocket
 
 The FM-1's own controls, as a generative drum machine: two keyboard modes, recording, kits and
-rhythms made on the device. **Tested on the host and in the FM-1 emulator. Nothing here has run on a
-device; the firmware stays UNVERIFIED.**
+rhythms made on the device. **Tested on the host and in the FM-1 emulator, and run on one real
+FM-1 at 0.9.0; the firmware stays UNVERIFIED (FIRST-HARDWARE-TEST.md).**
 
 ![A new kit, PITCH mode, step entry and the scrolled GLOBAL page, read from the emulated LCD](pocket-controls-emulator.png)
 
@@ -61,8 +61,8 @@ Every control below works on every page, unless it says otherwise.
 | Knob | PATTERN | PATTERN, step held | PATTERN, SAVE held | PATTERN, SEQ held | SOUND | MIXER | GLOBAL | PROJECTS |
 |---|---|---|---|---|---|---|---|---|
 | KNOB 1 | selected step's velocity | its velocity | its condition | | pitch | level | row | slot |
-| KNOB 2 | tempo (nothing while following MIDI clock) | its pitch | | | decay | pan | value | |
-| KNOB 3 | swing | its condition | | length, a page at a time | filter | | | |
+| KNOB 2 | tempo (nothing while following MIDI clock) | its pitch | | | decay | pan | value | the name's letter place |
+| KNOB 3 | swing | its condition | | length, a page at a time | filter | | | the letter |
 | KNOB 4 | selected step, across pages | its variation | a page at a time | | drive | | | |
 
 Lights: PLAY playing, REC recording, SCL in PITCH, SAVE on a locked track, SEQ on PATTERN, and on
@@ -172,8 +172,8 @@ reads, so there is no brightness to set and no bus traffic. Inactive steps are t
 | SEQ button | PATTERN |
 
 Dim steps are possible: Hortator modulates the LEDs from a hook in the 10 kHz scan interrupt. That is
-hardware timing and code in an interrupt that this firmware's Flash has no room to spare for and that nothing
-here can verify, so it is not done. Which page holds a pattern's end is not on the lamps; `PAGE 2/4` and
+hardware timing and code in an interrupt that this firmware's Flash has no room to spare for, so it is not
+done. Which page holds a pattern's end is not on the lamps; `PAGE 2/4` and
 `STEP 23/64` are on the screen.
 
 **Changing mode with a key down** does nothing when the key comes up: leaving PATTERN or pressing REC ends
@@ -417,8 +417,10 @@ time. The mutation and take counters do not: those keep moving, so the next one 
 ## GLOBAL
 
 GLO opens it; GLO again opens SYSTEM, the diagnostics, which are as they were. KNOB 1 picks a row,
-KNOB 2 changes it. Every row works, and is tested at both of its ends. These settings last until
-power-off.
+KNOB 2 changes it. Every row works, and is tested at both of its ends. A tap of **SAVE** here stores
+the eight playing settings, KEYS to AUTO STEP and the two MIDI rows, which then come back after a
+power-off: SETTINGS SAVED. Any project save stores them too. TEMPO to WILD belong to the project
+([POCKET-STORAGE.md](POCKET-STORAGE.md#globals-settings)). Only when stopped.
 
 | Row | Values | |
 |---|---|---|
@@ -440,7 +442,7 @@ power-off.
 | MIDI CH | ALL, 1-16 | input channel |
 | MIDI MAP | KEYS, GM | DRUM's note map |
 
-**Left out, because they would not work:** MIDI output and thru, a velocity curve, and a default tempo (these settings are not stored).
+**Left out, because they would not work:** MIDI output and thru, a velocity curve, and a default tempo (a project holds the tempo).
 
 ## The screen
 
@@ -473,6 +475,9 @@ has not been seen**.
 
 **0.7.1, length on SEQ+KNOB 3: 437,532 bytes, 16,389 free, the margin kept by 5 bytes.** Heap 110,092.
 The next feature needs flash found for it first.
+
+**0.9.2, GLOBAL's settings kept after a power-off and project names: 437,468 bytes, 16,453 free, the margin
+kept by 69 bytes.** Heap 109,164. The next feature needs flash found for it first.
 
 **0.9.1, the keys and MIDI in the screen's order, OCT+ loads, OCT− erases: 436,572 bytes, 17,349 free, the margin
 kept by 965 bytes.** Reading saves from 0.5.0 went to pay for it: no device has any.
@@ -624,8 +629,8 @@ not driven by hand. The website still offers 0.5.0.
 
 ## Known limitations
 
-- GLOBAL's playing preferences are not saved, and a restart returns the init kit and seed 1 until a
-  project is loaded: [POCKET-STORAGE.md](POCKET-STORAGE.md).
+- A restart returns the init kit and seed 1 until a project is loaded: [POCKET-STORAGE.md](POCKET-STORAGE.md).
+  GLOBAL's playing settings come back.
 - The keys have no velocity, and SELECT cannot be held: above.
 - Seven tracks: PERC shares a voice and a track with the high tom, CLAP with the snare, and neither
   sounds with its partner. CH and OH are one voice with a shared sound.
@@ -639,4 +644,3 @@ not driven by hand. The website still offers 0.5.0.
 - No MIDI clock out, no MIDI output, no thru. MIDI clock in is followed: [POCKET-SEQUENCER.md](POCKET-SEQUENCER.md#following-midi-clock).
 - At high WILD a kit can be odd: that is the point. 1 voice of the 1,344 rendered rang past 2
   seconds. Kits have no LFOs or FX.
-- HOME+ARP stays the reserved exit gesture, so ARP does nothing while HOME is held.

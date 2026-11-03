@@ -10,7 +10,7 @@ param(
     [switch]$FirmwareOnly,
     [string]$Toolchain = $env:FM1_PI32_TOOLCHAIN,
     [string]$SourceUrl = $env:FM1_SOURCE_URL,
-    # CLATTER Pocket: the prepared tree (fm1_open, firmware/fm1/fm1_open.patch, pocket/).
+    # CLATTER Pocket: the prepared tree (fm1_open, firmware/fm1/replace/, pocket/).
     [Parameter(Mandatory = $true)][string]$Root,
     # Run the Windows toolchain through Wine (macOS, Linux).
     [switch]$Wine,
@@ -20,10 +20,10 @@ param(
     # Compute the LXR's double-precision arithmetic in single precision.
     [switch]$SinglePrecision,
     # Build the unmodified fm1_open tree (no pocket/): the known-good comparison.
-    [switch]$Stock,
-    # CLATTER Pocket as the instrument: the stock instrument application is not in the tree.
-    [switch]$Replace
+    [switch]$Stock
 )
+# Anything else is CLATTER Pocket as the instrument: the stock application is not in the tree.
+$Replace = !$Stock
 $ErrorActionPreference = 'Stop'
 if ($FirmwareOnly -and $Package) { throw 'Choose -FirmwareOnly for local hardware tests or -Package for distribution, not both.' }
 $Profile = 'dx7'
@@ -195,7 +195,7 @@ function Test-Firmware {
         'fm1_usb_audio_read','fm1_bluetooth_audio_read','fm1_usb_audio_write','connectivity_audio_get_speaker_volume','connectivity_audio_get_mic_volume') + @($extra)
 
     # CLATTER Pocket: the audio hook, the engine host and the LXR's own TCM code and state.
-    $pocketHooks = if ($Replace) { @('clatter_pocket_render','clatter_pocket_output_level') } else { @('clatter_pocket_fm1_render') }
+    $pocketHooks = @('clatter_pocket_render','clatter_pocket_output_level')
     if (!$Stock) { $callbacks += @($pocketHooks) + @('pocket_lxr_render_q23','calcDrumVoiceSyncBlock','calcDrumVoiceAsync',
         'mixer_decimateBlock','SVF_recalcFreq','slopeEg2_calc','calcNextOscSampleBlock','sine_table','sqrtf',
         'voiceArray','snareVoice','cymbalVoice','hatVoice')

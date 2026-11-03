@@ -73,7 +73,7 @@ export class SimulatedFM1 {
   }
 
   reportedIdentity() {
-    if (this.mode === 'loader') return LOADER;
+    if (this.mode === 'loader') return this.loaderName ?? LOADER;
     if (this.fault === 'identity-changes' && this.log.includes('capability')) return 'FM-1_8000099';
     return this.identity;
   }

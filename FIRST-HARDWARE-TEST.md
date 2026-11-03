@@ -9,16 +9,19 @@ to stop.
 in a loop: `voiceData` was misaligned, and the first audio block faulted (HARDWARE.md, Faults). The owner
 restored V15 from a browser. 0.8.2, installed from stock through both stages, fixed the loop. On 0.9.0,
 audio, USB audio, MIDI notes, MIDI clock over USB, and saving after erasing what V15 left, all work, and a
-save survives a power cycle. Nothing else below has been recorded yet, and 0.9.1 has not run on a device.
+save survives a power cycle. 0.9.1 came back from the handover as `ota-FM1C_0000000000000000`, which
+the installer did not take for the loader, and it timed out twice; the offline page, changed to take any
+`ota-` loader, then installed it, and the keys, MIDI MAP and projects work. Nothing else below has been
+recorded yet, and 0.9.2 has not run on a device.
 **From a unit looping at the start screen:** power on holding HOME until SAFE MODE shows, then connect
 the installer. **UNVERIFIED**.
 
-Candidate: firmware 0.9.1, commit `902ce74`, SHA-256
-`1e306c717e7af822056d2817fab7b2b1f34b5f42e72cca2980b36ae00c3f2d14`.
+Candidate: firmware 0.9.2, commit `33798c6`, SHA-256
+`8561710440e4dce57b49557e970e29eb89b46a21d92d293369da43a5fcea1048`.
 
 **Install it from <https://clatter-pocket.allmyfriendsaresynths.com/installer/>**, which runs the steps
 below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-`57134077951c875df9afd99533bbd10ecb79dae816a88c8d0e5fe653c39574a5`.
+`ff1fa31aefa43ce2593dcd1728d734ffba203d726a081f94c0561521ccfd0cf9`.
 
 Both packages are produced by:
 

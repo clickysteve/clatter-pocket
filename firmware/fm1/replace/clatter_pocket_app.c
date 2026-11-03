@@ -8,7 +8,8 @@
  * The binary SDK's control loop calls the application through the groove_* hooks below.
  * CLATTER Pocket implements the panel, audio and MIDI hooks; the project, sample, transfer
  * and DX7-library hooks are inert. The only code that reaches the user Flash partition is
- * ui/pocket_store.c, on a save page, in four sectors it has checked are blank or its own: the
+ * ui/pocket_store.c: it reads its four sectors once at start-up, for GLOBAL's settings, and
+ * writes only on a save, in four sectors it has checked are blank or its own: the
  * stock instrument's projects, samples and voices stay where they are, untouched, for
  * a later return to the stock firmware. Firmware updates are handled by the SDK before
  * fm1_app_sysex is called and are unaffected.
@@ -20,7 +21,8 @@
  * HOME at that moment (SAFE MODE) leaves the engine off: a way to reach the updater if the
  * engine misbehaves.
  *
- * NOT RUN ON HARDWARE (it runs in the FM-1 emulator: docs/POCKET-UI.md). See FIRST-HARDWARE-TEST.md.
+ * Runs on one real FM-1 (0.9.0: boot, audio, USB audio, MIDI, saving; FIRST-HARDWARE-TEST.md).
+ * Still UNVERIFIED: one unit, and leaving for official firmware has not been tried.
  *
  * Copyright (C) 2026 The CLATTER contributors
  * SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception
@@ -216,6 +218,7 @@ static void start(uint32_t now, const struct fm1_controls* controls)
 	/* the sequencer's clock is the engine's block count, at the real output rate */
 	pocket_seq_init(FM1_AUDIO_HARDWARE_RATE, POCKET_LXR_BLOCK, pocket_lxr_trigger_now);
 	pocket_panel_start_sequencer(&panel);
+	pocket_panel_restore_settings(&panel); /* the one start-up read of Flash: our sectors, after the engine */
 	pocket_lxr_set_block_hook(pocket_seq_block);
 	block_ticks = (uint32_t)((uint64_t)fm1_device_clock() * FM1_BLOCK_FRAMES / FM1_AUDIO_HARDWARE_RATE);
 	fm1_device_fence();
@@ -268,7 +271,7 @@ void groove_screen_control(void)
 		in.keys = controls.keys;
 		in.buttons = controls.buttons;
 		for (unsigned i = 0; i < POCKET_ENCODERS; i++) in.encoders[i] = controls.encoders[i];
-		(void)pocket_panel_apply(&panel, &in); /* HOME+ARP has nowhere to go back to */
+		pocket_panel_apply(&panel, &in);
 		show_leds(0, 14U, pocket_panel_leds(&panel), &shown_leds);
 		show_leds(14U, POCKET_KEYS, pocket_panel_key_leds(&panel), &shown_key_leds);
 		pocket_panel_clock(&panel, pocket_midi_clock_poll(now));

@@ -37,7 +37,7 @@ static const char pageFooters[POCKET_PAGES - 1][30] = { /* SOUND's serves MIXER 
 	"ENV KIT ARP GEN LFO MUTATE",
 	"K1 VEL K2 BPM K3 SWG K4 STEP",
 	"SEL VOICE  KNOBS EDIT",
-	"K1 ROW K2 VALUE GLO SYSTEM",
+	"K1 ROW K2 VALUE SAVE KEEPS",
 	"GLO BACK  BOOT+HOME SAFE",
 	"SAVE  OCT+ LOAD  OCT- ERASE"
 };
@@ -90,6 +90,10 @@ enum { L_TRANSPORT = 0, L_RULER = 1, L_GRID = 2, L_GRID_LAST = 6, L_LEGEND = 7, 
 /* A kit is applied a little at a time, from here, while everything else keeps running. */
 #define KIT_PER_POLL 12
 static uint8_t kitTarget[POCKET_SOUND_PARAMS], kitNext[POCKET_SOUND_PARAMS];
+/* The LXR's 12 FX parameters are not in this build. They keep their place in a kit and a saved
+ * project, so every save loads, but here they are always 0: nothing sends them to the engine,
+ * and a save writes 0 where they were. */
+#define KIT_FX(p) ((p) >= POCKET_PAR_FX_TYPE && (p) <= POCKET_PAR_FX_DELAY_TYPE)
 
 /* Actions that continue while they are the last thing done: a tag each. */
 enum { MERGE_NONE, MERGE_ENTRY, MERGE_TAKE, MERGE_BROWSE, MERGE_LENGTH, MERGE_PARAM, MERGE_CELL = MERGE_PARAM + POCKET_SOUND_PARAMS };
@@ -267,7 +271,8 @@ static void limit_step(struct pocket_panel* panel)
 static void kit_sync(const struct pocket_panel* panel)
 {
 	if (panel->kit_cursor) return;
-	for (int p = 1; p < POCKET_SOUND_PARAMS; p++) kitTarget[p] = (uint8_t)pocket_lxr_get_param(p);
+	for (int p = 1; p < POCKET_SOUND_PARAMS; p++)
+		if (!KIT_FX(p)) kitTarget[p] = (uint8_t)pocket_lxr_get_param(p);
 }
 
 static void replay_word(void* context, unsigned kind, unsigned index, uint32_t value)
@@ -468,6 +473,7 @@ static void say_kit(struct pocket_panel* panel)
 /* kitNext is the new kit: what differs goes to the history, and it is applied from here. */
 static void kit_commit(struct pocket_panel* panel)
 {
+	for (int p = POCKET_PAR_FX_TYPE; p <= POCKET_PAR_FX_DELAY_TYPE; p++) kitNext[p] = 0;
 	for (int p = 1; p < POCKET_SOUND_PARAMS; p++)
 		if (kitNext[p] != kitTarget[p])
 		{
@@ -547,7 +553,7 @@ static void kit_pump(struct pocket_panel* panel)
 	if (!p) return;
 	for (; p < POCKET_SOUND_PARAMS && sent < KIT_PER_POLL; p++)
 	{
-		if (kitTarget[p] == pocket_lxr_get_param(p)) continue;
+		if (KIT_FX(p) || kitTarget[p] == pocket_lxr_get_param(p)) continue;
 		if (pocket_lxr_set_param(p, kitTarget[p])) break;
 		sent++;
 	}
@@ -582,8 +588,32 @@ struct project {
 	struct saved_rhythm rhythm;
 	struct saved_sound sound;
 	uint8_t cells[(PROJECT_STEPS * CELL_BITS + 7u) / 8u];
+	char name[POCKET_NAME_CHARS]; /* zero in a save from before 0.9.2: no name */
 };
 _Static_assert(sizeof(struct project) <= POCKET_STORE_PROJECT_BYTES, "a project");
+
+/* A name's letters as they may be shown, anything else a space. 1 if any letter is not a space. */
+static int name_clean(char* to, const char* from)
+{
+	int any = 0;
+	for (unsigned i = 0; i < POCKET_NAME_CHARS; i++)
+	{
+		const char c = from[i];
+		to[i] = (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' ? c : ' ';
+		any |= to[i] != ' ';
+	}
+	return any;
+}
+
+/* KNOB 3 on PROJECTS: the letter at the cursor, through a space, A-Z, 0-9 and -. */
+static void name_letter(struct pocket_panel* panel, int by)
+{
+	static const char letters[] = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-";
+	char* c = &panel->name[panel->name_at];
+	int at = 0;
+	while (letters[at] && letters[at] != *c) at++;
+	*c = letters[wrapped(at + by, (int)sizeof letters - 1)];
+}
 
 static void store_open(struct pocket_panel* panel)
 {
@@ -655,6 +685,14 @@ static void store_claim(struct pocket_panel* panel)
 	panel->dirty |= BODY_BANDS;
 }
 
+/* Every save carries GLOBAL's settings of how you play, in its sector's header: the panel's eight
+ * bytes from key_mode, which are GLOBAL's first six rows and its last two. */
+static int store_commit(const struct pocket_panel* panel)
+{
+	pocket_store_set_settings((const uint8_t*)&panel->key_mode);
+	return pocket_store_commit();
+}
+
 static void store_save(struct pocket_panel* panel)
 {
 	const unsigned slot = panel->store_slot;
@@ -681,6 +719,7 @@ static void store_save(struct pocket_panel* panel)
 		const struct saved_rhythm rhythm = { 1, (uint8_t)pocket_seq_swing(), (uint8_t)panel->density, (uint8_t)panel->complexity, (uint8_t)panel->style,
 			(uint8_t)panel->mutate_strength, panel->locks, pattern->last_page, panel->seed, (uint16_t)pocket_seq_tempo() };
 		p->rhythm = rhythm;
+		for (unsigned i = 0; i < POCKET_NAME_CHARS; i++) p->name[i] = panel->name[i];
 		p->sound.head.used = 1;
 		p->sound.head.kit = panel->kit;
 		p->sound.head.generated = panel->kit_generated;
@@ -691,7 +730,7 @@ static void store_save(struct pocket_panel* panel)
 		for (int k = 1; k < POCKET_SOUND_PARAMS; k++) p->sound.params[k] = kitTarget[k];
 		for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
 			for (unsigned i = 0; i < POCKET_SEQ_MAX_STEPS; i++) cell_write(p->cells, (t * POCKET_SEQ_MAX_STEPS + i) * CELL_BITS, pattern->cell[t][i]);
-		if (pocket_store_commit() == POCKET_STORE_OK) slot_say(panel, "SAVED ");
+		if (store_commit(panel) == POCKET_STORE_OK) slot_say(panel, "SAVED ");
 		else store_failed(panel);
 	}
 }
@@ -715,7 +754,7 @@ static void store_erase(struct pocket_panel* panel)
 	if (!record[0] || !store_confirmed(panel, "ERASE: OCT- AGAIN", STORE_ERASING)) return;
 	panel->store_armed = 0;
 	for (unsigned i = 0; i < POCKET_STORE_PROJECT_BYTES; i++) record[i] = 0;
-	if (pocket_store_commit() != POCKET_STORE_OK)
+	if (store_commit(panel) != POCKET_STORE_OK)
 	{
 		store_failed(panel);
 		return;
@@ -770,6 +809,7 @@ static void store_load(struct pocket_panel* panel)
 	next->last_page = p->rhythm.last_page & 3u;
 	load_rhythm(panel, &p->rhythm);
 	load_sound(panel, &p->sound);
+	name_clean(panel->name, p->name);
 	action_end(panel);
 	slot_say(panel, "LOADED ");
 }
@@ -970,6 +1010,37 @@ static void row_text(const struct pocket_panel* panel, int row, char* b)
 	else append_number(b, (uint32_t)v);
 }
 
+/* The eight that are how you play, not what was played, and survive a power-off (store_commit).
+ * Range-checked as they come back. */
+#define KEPT_ROW(i) ((i) < 6u ? (i) : (i) + ROW_MIDI_CHANNEL - 6u)
+_Static_assert(offsetof(struct pocket_panel, midi_map) == offsetof(struct pocket_panel, key_mode) + POCKET_STORE_SETTINGS - 1u &&
+               ROW_AUTO_STEP == 5 && ROW_MIDI_MAP == ROW_MIDI_CHANNEL + 1, "GLOBAL's kept settings");
+
+void pocket_panel_restore_settings(struct pocket_panel* panel)
+{
+	uint8_t b[POCKET_STORE_SETTINGS + 1];
+	if (!pocket_store_settings(b)) return;
+	for (unsigned i = 0; i < POCKET_STORE_SETTINGS; i++)
+	{
+		const struct row* r = &rows[KEPT_ROW(i)];
+		const int v = (int8_t)b[i];
+		if (v >= r->lo && v <= r->hi) (&panel->key_mode)[i] = (int8_t)v;
+	}
+	panel->dirty = ALL_BANDS;
+}
+
+/* SAVE, on GLOBAL: the settings alone, into the newest page again. Stopped, as any save. */
+static void settings_save(struct pocket_panel* panel)
+{
+	if (pocket_seq_playing())
+	{
+		announce(panel, "STOP TO SAVE");
+		return;
+	}
+	pocket_store_set_settings((const uint8_t*)&panel->key_mode);
+	announce(panel, pocket_store_commit_settings() >= 0 ? "SETTINGS SAVED" : "SAVING OFF: SEE PROJECTS");
+}
+
 static void move_step(struct pocket_panel* panel, int by)
 {
 	panel->step = (uint8_t)wrapped(panel->step + by, (int)POCKET_PATTERN_STEPS(pocket_seq_pattern()));
@@ -1067,6 +1138,9 @@ static void page_knobs(struct pocket_panel* panel, const int16_t* knob, int save
 		break;
 	case POCKET_PAGE_STORE:
 		if (knob[0]) move_slot(panel, knob[0]);
+		if (knob[1]) panel->name_at = (uint8_t)limited(panel->name_at + knob[1], 0, POCKET_NAME_CHARS - 1);
+		if (knob[2]) name_letter(panel, knob[2]);
+		panel->dirty |= 1u << B_STATE;
 		break;
 	case POCKET_PAGE_GLOBAL:
 		if (knob[0])
@@ -1208,6 +1282,7 @@ static void buttons(struct pocket_panel* panel, uint32_t pressed, uint32_t relea
 	{
 		panel->save_down = 0;
 		if (!panel->save_chorded && panel->page == POCKET_PAGE_STORE) store_save(panel);
+		else if (!panel->save_chorded && panel->page == POCKET_PAGE_GLOBAL) settings_save(panel);
 		else if (!panel->save_chorded) store_open(panel);
 	}
 	if ((pressed & BTN(FX)) && save)
@@ -1294,16 +1369,14 @@ static void step_keys(struct pocket_panel* panel, uint32_t pressed, uint32_t rel
 		}
 }
 
-int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_input* in)
+void pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_input* in)
 {
 	const uint32_t pressedButtons = in->buttons & ~panel->previous_buttons;
 	const uint32_t releasedButtons = panel->previous_buttons & ~in->buttons;
 	const uint32_t pressedKeys = in->keys & ~panel->previous_keys;
 	const uint32_t releasedKeys = panel->previous_keys & ~in->keys;
-	const int exit = POCKET_PANEL_TOGGLE(panel->previous_buttons, in->buttons);
 	panel->previous_buttons = in->buttons;
 	panel->previous_keys = in->keys;
-	if (exit) return 1;
 
 	const int save = (in->buttons & BTN(SAVE)) != 0;
 	unsigned turned = 0;
@@ -1336,7 +1409,6 @@ int pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_inp
 		panel->entered = 0;
 		if (panel->auto_step) move_step(panel, panel->auto_step);
 	}
-	return 0;
 }
 
 /* ------------------------------------------------------------------ drawing */
@@ -1672,11 +1744,14 @@ static void draw_store(const struct pocket_panel* panel, unsigned line, uint16_t
 	struct saved_head head;
 	d = number(d, (uint32_t)slot + 1u, 2) + 2;
 	d = append(d, " ");
-	pocket_store_peek((unsigned)slot, &head, sizeof head);
+	pocket_store_peek((unsigned)slot, 0, &head, sizeof head);
 	if (!head.rhythm.used) append(d, "--");
 	else
 	{
-		sound_text(d, head.sound.kit, head.sound.generated, head.sound.seed, head.sound.edited);
+		char name[POCKET_NAME_CHARS + 1] = { 0 };
+		pocket_store_peek((unsigned)slot, offsetof(struct project, name), name, POCKET_NAME_CHARS);
+		if (name_clean(name, name)) append(d, name);
+		else sound_text(d, head.sound.kit, head.sound.generated, head.sound.seed, head.sound.edited);
 		while (*d) d++;
 		d = append_number(append(d, " "), head.rhythm.tempo);
 		if (head.rhythm.last_page) append_number(append(d, " "), ((head.rhythm.last_page & 3u) + 1u) * POCKET_SEQ_STEPS);
@@ -1779,6 +1854,19 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 		}
 		else if (panel->notice_ms)
 			line_text(px, panel->notice, ACCENT);
+		else if (panel->page == POCKET_PAGE_STORE)
+		{
+			/* the name the next save writes, and how to change it */
+			char* d = append(b, "NAME ");
+			for (unsigned i = 0; i < POCKET_NAME_CHARS; i++)
+			{
+				if (i == panel->name_at) *d++ = '[';
+				*d++ = panel->name[i] > ' ' ? panel->name[i] : '_';
+				if (i == panel->name_at) *d++ = ']';
+			}
+			append(d, "  K2 K3 EDIT");
+			line_text(px, b, INK);
+		}
 		else
 		{
 			const int steps = keys_are_steps(panel);

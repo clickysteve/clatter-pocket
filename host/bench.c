@@ -8,7 +8,7 @@
  * reports the time per block on THIS machine. It is a relative measure (which scenario costs
  * what, whether a change made the engine slower); it says nothing direct about the FM-1,
  * whose CPU, FPU, caches and memory differ. Device timing comes from the firmware's own
- * counters (firmware/fm1/clatter_pocket_fm1.c).
+ * counters (firmware/fm1/replace/clatter_pocket_app.c).
  */
 #include <stdio.h>
 #include <stdlib.h>

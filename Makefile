@@ -174,7 +174,7 @@ emu-strict:
 	tools/emu-strict.sh
 
 firmware:
-	firmware/fm1/build.sh
+	firmware/fm1/build.sh --replace --single-precision
 
 site:
 	node tools/build-site.mjs

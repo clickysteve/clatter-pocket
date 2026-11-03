@@ -3,8 +3,9 @@
 CLATTER Pocket saves 9 projects in the FM-1's user Flash, and they survive a restart. A project is the
 whole musical state: the kit and the pattern together.
 
-**Tested on the host, on a model of the Flash chip, and in the FM-1 emulator. Nothing here has run on
-a device, and a device's Flash is the one thing an emulator cannot stand in for: read
+**Works on one real FM-1, at 0.9.0:** the leftover V15 data was erased on the second press, a project
+saved, and it came back after a power-off. Also tested on the host, on a model of the Flash chip, and in
+the FM-1 emulator. One unit is not many, and an emulator cannot stand in for a device's Flash: read
 [What is not known](#what-is-not-known). The firmware stays UNVERIFIED.**
 
 ## To use it
@@ -13,6 +14,7 @@ a device, and a device's Flash is the one thing an emulator cannot stand in for:
 |---|---|
 | Tap **SAVE** | opens PROJECTS. In the browser emulator, `8` |
 | **SELECT** or KNOB 1 | choose a slot |
+| **KNOB 2**, **KNOB 3** | name the project: KNOB 2 picks the letter's place, KNOB 3 the letter (a space, A-Z, 0-9, -). The status line shows the name, `NAME AB[C]_____  K2 K3 EDIT`, with the place in brackets. A save writes it, and the slot's row shows it in place of the kit. A load brings it back; a restart starts with none |
 | Tap **SAVE** again | store here. On a slot in use it asks first: tap again within 3 seconds, while OVERWRITE: SAVE AGAIN shows. Only when stopped: STOP TO SAVE otherwise. It says SAVED 3 |
 | **OCT+** | load this slot, also while a pattern plays |
 | **OCT−** | erase this slot. It asks first: press again while ERASE: OCT- AGAIN shows. Only when stopped |
@@ -30,9 +32,25 @@ A load is one undo: SAVE+OCT− takes all of it back, kit, pattern and settings,
 | Length | how many pages play |
 | Tempo and swing | |
 | The generator | DENSITY, COMPLEX, SEED, STYLE, MUTATE, the track locks |
+| Its name | 8 letters, in bytes every save before 0.9.2 left zero: those have none, and show their kit. A letter that is not one is a space |
 
-GLOBAL's playing preferences (key velocity, FOLLOW, QUANTISE, AUTO STEP, MIDI) are not part of a
-project: they are how you play, not what was played.
+GLOBAL's playing settings are not part of a project: they are how you play, not what was played.
+They survive a power-off on their own terms, below.
+
+## GLOBAL's settings
+
+KEYS, OCTAVE, KEY VEL, FOLLOW, QUANTISE, AUTO STEP, MIDI CH and MIDI MAP come back after a power-off.
+TEMPO, SWING, LENGTH and the generator rows are the project's, and come back with a load.
+
+| | |
+|---|---|
+| Stored | with every project save or erase, and alone by a tap of **SAVE on GLOBAL** (SETTINGS SAVED). Only when stopped, as any save |
+| Where | in the header of the sector the save writes: the 12 bytes every firmware before 0.9.2 wrote as zero, under the sector's CRC. No format change: every save from before loads, and holds no settings |
+| SAVE on GLOBAL | writes the newest page again, through the same steps as a project save: at most one erase, and a power cut loses only this |
+| Read | once, at start-up, after the engine is running, and never in SAFE MODE: the newest good sector's settings. Anything foreign, damaged, from before 0.9.2, or out of range means the default, and says nothing |
+| Not stored | when the store is closed: FLASH IN USE says to open PROJECTS, and nothing is written |
+
+Not yet on a device: 0.9.2 has not run on one.
 
 ## How many, and why nine
 
@@ -44,7 +62,8 @@ below proved safe. A project cannot be smaller than its worst case, every step o
 | The kit | 247 and a header of 8: 256 with the old slot's padding |
 | Tempo, swing, generator, length | 12 |
 | 448 steps at 19 bits (velocity 7, note or variation 8, condition 4) | 1,064 |
-| **A project** | **1,332, in a record of 1,354** |
+| A name | 8 |
+| **A project** | **1,340, in a record of 1,354** |
 | A sector's header | 32 |
 
 Three fit a sector, 32 + 3 × 1,354 = 4,094 bytes. One sector must always be free for a save to go to,
@@ -110,15 +129,20 @@ the emulator. A blank-sector test alone would have passed them.
 
 ### The rules the code keeps
 
-1. **Nothing happens until asked.** No Flash access at start-up, in SAFE MODE, or at all until PROJECTS
-   opens. Undo and redo never touch it. `check-firmware.py` and the emulator tests hold this.
+1. **Nothing is written until asked; one bounded read of our sectors at start-up.** At the end of
+   start-up, after the engine is running and never in SAFE MODE, the firmware reads our four
+   sectors, and nothing else, for GLOBAL's settings. A read cannot change anything, it uses the same
+   driver PROJECTS uses, the updater and audio are already up, and a bad sector only means the
+   defaults. Otherwise no Flash access until PROJECTS opens, or SAVE on GLOBAL. Undo and redo never
+   touch it. `check-firmware.py` and the emulator tests hold this.
 2. **Only blank or ours, unless the player says otherwise.** Opening the store reads all four sectors.
    Anything that is neither all 0xFF nor carrying one of our magic numbers closes it: `FLASH IN USE: TAP
    SAVE`. Stopped, SAVE asks `ERASE 4 SECTORS: SAVE AGAIN`, and a second press erases what is in the way,
    those sectors only, and saves nothing. Until then they are untouched and the instrument is
    unaffected. This was needed on the first device, which had been on V15, whose settings area
-   runs through these sectors. What was there is not known. V15 is expected to rebuild its settings if
-   it is restored; that has not been tried.
+   runs through these sectors: FLASH IN USE came up there, and the erase and the first save worked.
+   What was there is not known. V15 is expected to rebuild its settings if it is restored; that has
+   not been tried.
 3. **The partition must be exactly the expected size**, or no sector here means what it should.
 4. **A sample bank reaching these sectors closes the store**, because a sample can contain a blank
    sector, so blank is not proof of free: `SAMPLES IN FLASH: SAVING OFF`. This one cannot be erased from here.
@@ -196,12 +220,12 @@ states are constructed, from what the host model produces.
 
 ## What is not known
 
-**None of this has run on a device.** The emulator's chip is an accurate model of a NOR part with
-instant erases and programs; a real one is slower, and its power-cut behaviour is not half a page.
+One device has shown that saving, the erase and reloading after a power-off work. The rest is still open.
+The emulator's chip is an accurate model of a NOR part with instant erases and programs; a real one
+is slower, and its power-cut behaviour is not half a page. Cutting power during a save has not been tried on a device.
 
-- **Whether these four sectors are blank on your unit.** If a unit's history left anything there,
-  saving turns itself off and says so. That is the safe failure, and nothing can be said for sure
-  until a device is looked at.
+- **Whether these four sectors are blank on your unit.** They were not on the first one, which had been
+  on V15. If a unit's history left anything there, saving says so and asks before erasing it.
 - **Audio during an erase.** The SDK says it is silenced. How long, and how it sounds, is unmeasured.
   A save now also rewrites the two other projects of its sector, as data, not as a longer erase.
 - **Whether the vendor's loader leaves these sectors alone** on updates, and on migrating to V15 or
@@ -212,7 +236,7 @@ instant erases and programs; a real one is slower, and its power-cut behaviour i
   author and in `WebUpdate.js`, not by M-VAVE.
 - The browser emulator keeps Flash per package, by its hash: a new build starts with no saves.
 
-FIRST-HARDWARE-TEST.md has the first device check, as its own step, after everything else.
+FIRST-HARDWARE-TEST.md has the device check, as its own step, after everything else.
 
 Cost: the store is 1,476 bytes of Flash and 4,146 of RAM, most of it one sector's buffer. A save's stack is 776 bytes through the SDK's driver and the RTOS.
 `tools/check-firmware.py` holds the placement.

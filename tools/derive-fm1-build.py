@@ -25,8 +25,8 @@ The edits:
      stock fm1_open V14 layout exactly (image end and VM start 471,040, VM 32,768 bytes, BTIF
      503,808, user partition 507,904), and check the result. Package.cs otherwise starts the
      VM (system settings, Bluetooth pairings) wherever a smaller image ends;
-  8. -Replace (CLATTER Pocket instead of the stock instrument, build.sh --replace): the
-     firmware checks keep every platform requirement (startup, registration tables, RTOS
+  8. replacement mode (every CLATTER Pocket build: the stock instrument application is not
+     in the tree): the firmware checks keep every platform requirement (startup, registration tables, RTOS
      ABI, Bluetooth, USB MIDI, update, heap, panel scan, the platform audio path and
      CLATTER Pocket's audio path in SRAM); stock-instrument symbols (the synth.json SRAM
      contract, the engine's render/level/sequencer entry points, its hash-named internals
@@ -62,7 +62,7 @@ edit("""    [string]$Toolchain = $env:FM1_PI32_TOOLCHAIN,
     [string]$SourceUrl = $env:FM1_SOURCE_URL
 )""", """    [string]$Toolchain = $env:FM1_PI32_TOOLCHAIN,
     [string]$SourceUrl = $env:FM1_SOURCE_URL,
-    # CLATTER Pocket: the prepared tree (fm1_open, firmware/fm1/fm1_open.patch, pocket/).
+    # CLATTER Pocket: the prepared tree (fm1_open, firmware/fm1/replace/, pocket/).
     [Parameter(Mandatory = $true)][string]$Root,
     # Run the Windows toolchain through Wine (macOS, Linux).
     [switch]$Wine,
@@ -72,10 +72,10 @@ edit("""    [string]$Toolchain = $env:FM1_PI32_TOOLCHAIN,
     # Compute the LXR's double-precision arithmetic in single precision.
     [switch]$SinglePrecision,
     # Build the unmodified fm1_open tree (no pocket/): the known-good comparison.
-    [switch]$Stock,
-    # CLATTER Pocket as the instrument: the stock instrument application is not in the tree.
-    [switch]$Replace
-)""")
+    [switch]$Stock
+)
+# Anything else is CLATTER Pocket as the instrument: the stock application is not in the tree.
+$Replace = !$Stock""")
 
 # 2. paths
 edit("$root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))",
@@ -190,6 +190,9 @@ edit("""        if ($source -in @('app/screen.c','app/transfer.c','app/midi_rout
      """        # CLATTER Pocket -Replace: its application unit holds the SDK entry points (MIDI,
         # SysEx) that the replaced units held; same treatment, and -Oz as app/screen.c.
         if ($source -in @('app/screen.c','app/transfer.c','app/midi_router.c','app/clatter_pocket/clatter_pocket_app.c')) {""")
+edit("""        if ($source -eq 'app/board/panel.c') { $options += @('-fno-lto','-fno-pic') }""",
+     """        # -Oz: the panel unit holds the LCD driver (lcd.inc), 3,204 bytes at -O2 and 1,688 at -Oz
+        if ($source -eq 'app/board/panel.c') { $options += @('-fno-lto','-fno-pic','-Oz') }""")
 edit("""        if ($source -eq 'app/screen.c') { $options += '-fno-inline-functions' }""",
      """        if ($source -eq 'app/screen.c') { $options += '-fno-inline-functions' }
         if ($source -eq 'app/clatter_pocket/clatter_pocket_app.c') { $options += '-Oz' }""")
@@ -231,7 +234,7 @@ edit("""        application_callbacks_verified=$true; board_validation='not perf
 # 6. Test-Firmware: the CLATTER Pocket audio path in internal SRAM
 edit("""    foreach ($name in @($synth.sram_optional) + @($synth.native_sram_optional)) {""",
      """    # CLATTER Pocket: the audio hook, the engine host and the LXR's own TCM code and state.
-    $pocketHooks = if ($Replace) { @('clatter_pocket_render','clatter_pocket_output_level') } else { @('clatter_pocket_fm1_render') }
+    $pocketHooks = @('clatter_pocket_render','clatter_pocket_output_level')
     if (!$Stock) { $callbacks += @($pocketHooks) + @('pocket_lxr_render_q23','calcDrumVoiceSyncBlock','calcDrumVoiceAsync',
         'mixer_decimateBlock','SVF_recalcFreq','slopeEg2_calc','calcNextOscSampleBlock','sine_table','sqrtf',
         'voiceArray','snareVoice','cymbalVoice','hatVoice')

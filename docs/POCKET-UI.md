@@ -2,7 +2,8 @@
 
 The interface on the FM-1's own screen and controls. It is the real firmware's, not a
 mock-up: the screens below were read from the LCD of the emulated FM-1 running the package.
-**Nothing here has run on a device; the firmware stays UNVERIFIED.**
+**This interface has run on one real FM-1, at 0.9.0; the firmware stays UNVERIFIED
+(FIRST-HARDWARE-TEST.md).**
 
 ![Screens read from the emulated LCD](pocket-ui-emulator.png)
 
@@ -69,7 +70,7 @@ copy of M-VAVE's firmware it had kept: select another entry first.
   the margin, not a white bar.
 
 The panel is a colour display, so this is real orange, 0xFBE0 as the firmware has always written it.
-The emulator reads it back as RGB565. Nobody has seen it on a device, so its exact shade is unverified.
+The emulator reads it back as RGB565. Its exact shade on a device has not been measured.
 
 `ui/pocket_panel.c` is platform-independent; the same code runs in the host tests.
 
@@ -90,7 +91,7 @@ start screen: CLATTER POCKET, LXR DRUM MACHINE, the state, the version and the b
 ## Controls
 
 Encoder positions come from the emulator's panel (Felucca's `controls.jpg`) and fm1_open's use
-of them. They are not checked on a device.
+of them. They have not been checked one by one on a device.
 
 The whole control map is in [POCKET-CONTROLS.md](POCKET-CONTROLS.md). The earlier "ENC 1/2/3" and
 "ENC 7" labels were matrix indices: they were physically SELECT, ALGORITHM, KNOB 1 and PRESETS. **No
@@ -115,8 +116,11 @@ act afterwards. So HOME's page function cannot reach SAFE MODE, or the reverse.
   and drive; each has its own decay.
 - **MIXER**: LEVEL and PAN of the selected voice, MASTER (shown; set by the pot), a level bar
   per voice. The LXR's pan is taken at each trigger, so a move is heard on the next hit.
-- **GLOBAL**: the settings, 18 rows of which 8 show (POCKET-CONTROLS.md). GLO opens it.
-- **PROJECTS**: a tap of SAVE, 9 slots ([POCKET-STORAGE.md](POCKET-STORAGE.md)).
+- **GLOBAL**: the settings, 18 rows of which 8 show (POCKET-CONTROLS.md). GLO opens it. A tap of
+  SAVE here stores the eight playing settings for after a power-off: SETTINGS SAVED, and the footer
+  says SAVE KEEPS.
+- **PROJECTS**: a tap of SAVE, 9 slots, a slot's name or kit, tempo and length. The status line is the
+  name the next save writes, and says K2 K3 EDIT ([POCKET-STORAGE.md](POCKET-STORAGE.md)).
 - **SYSTEM**: GLO from GLOBAL. Version, build, CPU mean and peak, FAULTS, and how to reach SAFE MODE.
 
 FAULTS is audio overruns plus engine events dropped since start: 0 is the only good number. An overrun also
@@ -153,7 +157,7 @@ Limits of what this shows:
 - **The CPU figure, 27.9 % playing, is not a device measurement.** The emulator counts about one
   instruction per cycle and models no cache or Flash wait states.
 - The firmware update path was not exercised.
-- Timing, the real screen, knob directions and sound are for the hardware test.
+- Timing, the real screen and sound are the hardware test's: FIRST-HARDWARE-TEST.md has what one unit showed.
 
 ## Limitations
 

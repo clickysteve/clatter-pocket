@@ -349,13 +349,18 @@ test('nothing installs before Connect has found a device', async () => {
   assert.equal(device.writes, 0);
 });
 
-test('force mode appears only in Stage 1, and only with official Open', () => {
+test('force mode: official Open over stock, and a loader the unforced route does not name', () => {
   const source = readFileSync(join(root, 'site/installer/driver.js'), 'utf8');
   assert.equal(source.match(/force:\s*true/g).length, 2, 'one connect and one install');
   const stage = source.slice(source.indexOf('async installOpen('), source.indexOf('/** Stage 2: CLATTER Pocket. */'));
   assert.equal(stage.match(/force:\s*true/g).length, 2);
   assert.match(stage, /this\.updaterFor\(open, fm1Ports\(this\.access\)\)/);
-  assert.match(source.slice(source.indexOf('/** Stage 2: CLATTER Pocket. */')), /install\(\{ force: false \}\)/);
+  // Otherwise force follows `forced`, which only a renamed loader found at Connect sets.
+  assert.deepEqual(source.match(/this\.forced = [^;]+;/g), ['this.forced = false;', 'this.forced = renamed;']);
+  const loader = source.slice(source.indexOf('async inLoader('), source.indexOf('/** Stage 1'));
+  assert.match(loader, /renamed \? fm1Ports\(this\.access\) : this\.access/);
+  assert.match(loader, /connect\(\{ force: renamed \}\)/);
+  assert.match(source.slice(source.indexOf('/** Stage 2: CLATTER Pocket. */')), /install\(\{ force: this\.forced \}\)/);
   assert.match(page('installer/index.html'), /id="install"[^>]*>INSTALL CLATTER POCKET/);
   assert.match(page('installer/index.html'), /id="install-open"[^>]*>INSTALL OPEN FIRMWARE/);
 });
@@ -396,6 +401,66 @@ test('an interrupted install resumes from the loader', async () => {
   assert.equal(device.log.includes('arm'), false);
   same(device.written, pkg.image);
   assert.equal(memory.read(), null);
+});
+
+// A real FM-1 came back from the handover under this name, and the page waited for ota-FM-1_015.
+const RENAMED = 'ota-FM1C_0000000000000000';
+
+test('the loader comes back under another ota- name: the install still completes', async () => {
+  const { device, events, session } = openRig({ newBuild: pkg.build_id, loaderName: RENAMED });
+  assert.equal(await session.connect(), true);
+  assert.equal(await session.install(true), true);
+  assert.deepEqual(events.states, ['connecting', 'ready', 'installing', 'done']);
+  same(device.written, pkg.image);
+  assert.equal(device.build, pkg.build_id);
+});
+
+test('both stages from stock, with the loader under another ota- name', async () => {
+  const { device, session } = stockRig({ loaderName: RENAMED });
+  await session.connect();
+  assert.equal(await session.installOpen(true), true);
+  same(device.written, openPkg.image);
+  assert.equal(await session.install(true), true);
+  same(device.written, pkg.image);
+  assert.equal(device.build, pkg.build_id);
+});
+
+test('in a renamed loader at Connect, with a record of CLATTER Pocket: it resumes by force', async () => {
+  const memory = openStorage();
+  memory.write({ stage: 'clatter', sha256: pkg.sha256 });
+  const { device, session } = rig({ mode: 'loader', loaderName: RENAMED }, memory);
+  assert.equal(await session.connect(), true);
+  assert.equal(session.state, 'ready');
+  assert.equal(session.firmware, FIRMWARE.LOADER);
+  assert.equal(session.forced, true);
+  assert.equal(device.writes, 0, 'Connect writes nothing');
+  assert.equal(await session.install(true), true);
+  assert.equal(device.log.includes('arm'), false);
+  same(device.written, pkg.image);
+  assert.equal(memory.read(), null);
+});
+
+test('in a renamed loader at Connect, with no record: official Open, by force', async () => {
+  const { device, session } = stockRig({ mode: 'loader', loaderName: RENAMED }, openStorage());
+  assert.equal(await session.connect(), true);
+  assert.equal(session.state, 'recover');
+  assert.equal(session.forced, true);
+  await assert.rejects(session.install(true), /No device is ready/);
+  assert.equal(await session.installOpen(true), true);
+  same(device.written, openPkg.image);
+  assert.equal(device.identity, openPkg.product);
+  assert.equal(session.forced, false, 'Stage 2 goes the normal route');
+});
+
+test('a renamed loader does not open force to other MIDI devices', async () => {
+  const memory = openStorage();
+  memory.write({ stage: 'clatter', sha256: pkg.sha256 });
+  const { access, device, session } = rig({ mode: 'loader', loaderName: RENAMED }, memory);
+  const other = new SimulatedFM1(FM1Web, access, { name: 'Other Synth', imageBytes: 0 });
+  await session.connect();
+  assert.equal(await session.install(true), true);
+  assert.deepEqual(other.log.filter(x => x !== 'identity'), []);
+  same(device.written, pkg.image);
 });
 
 test('unplugged while writing: it stops, says so, and resumes when reconnected', async () => {
@@ -607,6 +672,7 @@ test('detection names each kind of firmware from the protocol alone', () => {
   is({ identity: 'FM-1_8123456', migration: true }, FIRMWARE.UNKNOWN);
   is({ identity: 'SOMETHING-ELSE', migration: true }, FIRMWARE.UNKNOWN);
   is({ identity: 'ota-FM-1_015', resume: true }, FIRMWARE.LOADER);
+  is({ identity: 'ota-FM1C_0000000000000000', migration: true }, FIRMWARE.LOADER);
   is({ identity: 'FM-1_8000014', current: openPkg.build_id }, FIRMWARE.OPEN);
   is({ identity: 'FM-1_8000014', current: pkg.build_id, same: true }, FIRMWARE.CLATTER);
   is({ identity: 'FM-1_8000014', current: 'c'.repeat(64) }, FIRMWARE.OPEN_COMPATIBLE);
