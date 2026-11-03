@@ -108,7 +108,8 @@ Connect classifies the FM-1 from what the protocol reports, and writes nothing:
 | `ota-FM-1_015` | the vendor's loader: an install was interrupted | resume |
 | Anything else, or no capability reply | unknown | nothing |
 
-CLATTER Pocket reports Open's identity on purpose, so only the hash tells them apart.
+Since 1.0 CLATTER Pocket reports its own identity, `FM-1_8133700`. Builds before it reported Open's, so the
+hash is still what tells this release from another.
 
 **Stage 1 is M-VAVE's own route.** Its manual says that when a normal connect recognises another
 firmware, such as `FM-1_015`, you turn on forced install, reconnect, and confirm: stock has no
@@ -162,7 +163,7 @@ The gate (`site/installer/gate.mjs`) needs, for either kind: a release date and 
 with a `clatter-pocket-*.fwsc` name, SHA-256, build identity, loader hash, size, fm1_open identity and
 family 7; a record that the build was `--single-precision` and passed `check-firmware.py`,
 `check-audio-path.py` and the emulator suite; a pinned official Open from `m-vave/fm1_open` with the
-same identity, family and loader; and compatibility requirements.
+same family and loader; and compatibility requirements.
 
 What still stops an install, whatever the status:
 

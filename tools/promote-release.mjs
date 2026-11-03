@@ -49,7 +49,7 @@ if (!emu.includes(hash)) stop('the emulator log does not name this package');
 if (!emu.includes(`strict alignment: passed, ${hash}`)) stop('the log has no passing tools/emu-strict.sh run on this package');
 
 const version = /POCKET_FW_VERSION "([0-9.]+)/.exec(readFileSync(join(root, 'ui/pocket_panel.h'), 'utf8'))[1];
-if (!Buffer.from(appFromPackage(new Uint8Array(data))).includes(`${version} UNVERIFIED`)) stop(`the package does not report ${version} UNVERIFIED`);
+if (!Buffer.from(appFromPackage(new Uint8Array(data))).includes(version)) stop(`the package does not report ${version}`);
 
 const run = (...cmd) => spawnSync(cmd[0], cmd.slice(1), { cwd: root, encoding: 'utf8' });
 const firmware = run('python3', 'tools/check-firmware.py');

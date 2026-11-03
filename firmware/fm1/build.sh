@@ -68,6 +68,10 @@ else
 	done
 	mkdir -p "$tree/app/clatter_pocket"
 	cp "$here/replace/clatter_pocket_app.c" "$here/replace/clatter_pocket_app.h" "$tree/app/clatter_pocket/"
+	# CLATTER Pocket's own update identity, so the hub and installers can tell it from official Open.
+	# fm1_open's updater takes FM-1_8 and six digits (docs/FM1-COMMUNITY.md).
+	sed -i '' 's/^#define FM1_UPDATE_PRODUCT "FM-1_8000014"$/#define FM1_UPDATE_PRODUCT "FM-1_8133700"/' "$tree/app/version.h"
+	grep -q '^#define FM1_UPDATE_PRODUCT "FM-1_8133700"$' "$tree/app/version.h" || { echo "could not set the update identity" >&2; exit 1; }
 fi
 if [[ $stock == 0 ]]; then
 

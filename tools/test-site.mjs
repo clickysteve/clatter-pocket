@@ -116,7 +116,8 @@ test('official Open must come from M-VAVE, and be what CLATTER Pocket is built o
   assert.equal(open.repository, OPEN_REPOSITORY);
   assert.deepEqual(openRefusals(open, r.firmware), []);
   assert.deepEqual(openRefusals({ ...open, loaderSha256: 'e'.repeat(64) }, r.firmware), ['this firmware is not built on the pinned official Open firmware']);
-  assert.equal(open.product, r.firmware.product);
+  assert.equal(r.firmware.product, 'FM-1_8133700', 'its own identity, not Open\'s');
+  assert.notEqual(open.product, r.firmware.product);
   assert.equal(open.loaderSha256, r.firmware.loaderSha256);
   assert.equal(open.bytes, r.firmware.bytes, 'the flash layout is stock Open\'s, so the packages are the same size');
 });
@@ -748,11 +749,21 @@ test('another fm1_open build goes the normal route, and is not called official O
   assert.equal(wrote(device), false);
 });
 
-test('CLATTER Pocket and Open report one identity: the build tells them apart', async () => {
-  const { device, events, session } = rig({ build: pkg.build_id, identity: openPkg.product });
-  assert.equal(await session.connect(), false);
-  assert.equal(session.firmware, FIRMWARE.CLATTER);
-  assert.match(events.lines.at(-1), /already installed/);
+test('this release, under its own identity or Open\'s: the build tells it apart', async () => {
+  for (const identity of [pkg.product, openPkg.product]) {
+    const { device, events, session } = rig({ build: pkg.build_id, identity });
+    assert.equal(await session.connect(), false, identity);
+    assert.equal(session.firmware, FIRMWARE.CLATTER, identity);
+    assert.match(events.lines.at(-1), /already installed/, identity);
+    assert.equal(wrote(device), false, identity);
+  }
+});
+
+test('another CLATTER Pocket build is named, and can be installed over', async () => {
+  const { device, events, session } = rig({ build: 'c'.repeat(64), identity: pkg.product });
+  assert.equal(await session.connect(), true);
+  assert.equal(session.firmware, FIRMWARE.OPEN_COMPATIBLE);
+  assert.match(events.lines.at(-1), /Another CLATTER Pocket build detected/);
   assert.equal(wrote(device), false);
 });
 
@@ -916,7 +927,7 @@ test('the demo package is the promoted build, and the emulator reads it', async 
   assert.equal(catalog.firmwares.length, 1);
   assert.equal(catalog.default, 'clatter-pocket');
   const entry = catalog.firmwares[0];
-  assert.match(entry.version, /UNVERIFIED/);
+  assert.equal(entry.version, JSON.parse(readFileSync(join(root, 'site/release.json'), 'utf8')).version);
   assert.doesNotMatch(entry.package, /\.fwsc$/);
   const read = async url => new Response(readFileSync(join(root, 'site/demo/emu', url)));
   const got = await fetchPackage(entry, read);

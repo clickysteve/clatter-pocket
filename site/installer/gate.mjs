@@ -33,7 +33,8 @@ export const OPEN_REPOSITORY = 'm-vave/fm1_open';
 
 /**
  * Every reason the pinned official Open firmware may not be used with this firmware. CLATTER
- * Pocket is built on it: the update identity, family and loader must be the same.
+ * Pocket is built on it: the update family and loader must be the same. Since 1.0 its identity is
+ * its own, FM-1_8133700, which fm1_open's updater accepts as it does Open's.
  */
 export function openRefusals(open, fw) {
   if (!open || typeof open !== 'object') return ['no official Open firmware is pinned'];
@@ -49,7 +50,7 @@ export function openRefusals(open, fw) {
   if (!Number.isInteger(open.bytes) || open.bytes < 1024 || open.bytes > 2097152) no.push('official Open firmware has no plausible size');
   if (!PRODUCT.test(open.product ?? '')) no.push('official Open firmware has no fm1_open update identity');
   if (open.family !== 7) no.push('official Open firmware\'s update family is not 7');
-  if (fw && (open.product !== fw.product || open.family !== fw.family || open.loaderSha256 !== fw.loaderSha256))
+  if (fw && (open.family !== fw.family || open.loaderSha256 !== fw.loaderSha256))
     no.push('this firmware is not built on the pinned official Open firmware');
   return no;
 }

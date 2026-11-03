@@ -52,7 +52,7 @@ Checked 2026-10-31 against [m-vave/fm1_open](https://github.com/m-vave/fm1_open)
 |---|---|
 | Where is it published? | GitHub Releases, tags `V12` and `V14`. Each has a workbench page, a development kit and a `SHA256SUMS-Vn` |
 | Is the binary a release file? | **No.** Open's `.fwsc` exists only as base64 inside `FM1-Open-V14-Workbench.html` (`FM1_PACKAGE`). The development kit and the source tree hold stock V15, `FM-1_015.fwsc`, not Open |
-| Which is compatible? | V14: build `de48badc…`, identity `FM-1_8000014`, family 7, vendor loader `ef1f2db8…`. CLATTER Pocket shares that identity, family, loader and flash layout, and is built from `fm1_open` just after V14 |
+| Which is compatible? | V14: build `de48badc…`, identity `FM-1_8000014`, family 7, vendor loader `ef1f2db8…`. CLATTER Pocket shares its family, loader and flash layout, and is built from `fm1_open` just after V14. Until 0.9.4 it shared the identity too; since 1.0 it reports its own, `FM-1_8133700` |
 | Can a browser fetch it? | No. Release downloads send no `Access-Control-Allow-Origin`. The API does, at 60 requests an hour per address, but its asset URLs lead to the same downloads |
 | How is the updater related? | The `WebUpdate.js` in the V14 workbench is byte-identical to the one pinned here |
 | Is the route documented? | Yes, in the manual inside the workbench, chapter 9: from another firmware such as `FM-1_015`, enable forced install, reconnect, confirm. It warns of lost data and of failed boots needing special tools |
@@ -94,10 +94,11 @@ From [its submission page](https://thefirmwarehub.com/submit/):
 
 | Requirement | CLATTER Pocket |
 |---|---|
-| Tested on a real FM-1, installed from V15 and from another firmware, and leaving it again. "Emulator runs and builds don't count" | **Partly met.** One real FM-1, installed from V15 through official Open: 0.9.0 passes audio, USB audio, MIDI, MIDI clock and saving. Leaving it again has not been tried, nor installing from another firmware |
-| A release with a `.fwsc`, containing the update loader | no release yet; the package has the loader |
-| Open licence, complete source public, in the repository at each tag | GPL-3.0-only; **the repository is private** |
-| A `FM-1_` identity no other firmware uses | **Not met.** CLATTER Pocket reports `FM-1_8000014`, official Open's, which is what lets the workbench treat it as Open. Changing it needs thought: it is also what the restore route depends on |
+| Tested on a real FM-1, installed from V15 and from another firmware, and leaving it again. "Emulator runs and builds don't count" | **Met for 0.9.4** on one FM-1: installed from V15 through official Open and over earlier CLATTER Pocket builds, left for V15 and installed again ([report](https://github.com/clickysteve/clatter-pocket/issues/1)). 1.0's own identity needs the same once more |
+| A release with a `.fwsc`, containing the update loader | the package has the loader; the GitHub release comes with 1.0 |
+| Open licence, complete source public, in the repository at each tag | GPL-3.0-only, public |
+| A `FM-1_` identity no other firmware uses | **Met from 1.0:** `FM-1_8133700`, free on the hub when chosen. fm1_open's updater (`WebUpdate.js`, `openIdentity`) takes any `FM-1_8` and six digits as Open-family, so the workbench and the installer go on treating it as Open, and the way back is unchanged. The hub's own rule is `FM-1_` and 3 to 8 digits; the short ones belong to firmwares with their own loader |
+| An `fmhub.json` in the repository's root | in the root from 1.0 |
 
 Once these are met, a listing would put CLATTER Pocket in the Hub and, from there, in the public
 emulator's catalogue.

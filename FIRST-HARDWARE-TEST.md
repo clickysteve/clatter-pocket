@@ -226,7 +226,7 @@ in "Before installation".** docs/POCKET-STORAGE.md says what is and is not known
 ## Recovery
 
 1. **Normal restore.** Connect the **official M-VAVE workbench** and install official Open
-   (or V15). The FM-1 under CLATTER Pocket reports the fm1_open identity and family, so the
+   (or V15). The FM-1 under CLATTER Pocket reports an fm1_open identity (`FM-1_8133700` since 1.0) and family, so the
    workbench treats it as Open. Restore projects, samples and the DX7 library from the
    backups if needed. CLATTER Pocket writes the user partition only when a kit or pattern is
    saved, and only in four sectors it has found blank or its own (docs/POCKET-STORAGE.md), so the

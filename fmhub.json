@@ -1,0 +1,9 @@
+{
+  "what": "A generative drum machine on the LXR sound engine. Seven voices, kits grown from a seed in 16 characters, a 64-step sequencer with conditions and per-step pitch, patterns generated and mutated in 11 styles, MIDI notes and clock in, and nine named projects.",
+  "kinds": [
+    "drums"
+  ],
+  "play": "https://clatter-pocket.allmyfriendsaresynths.com/demo/",
+  "cheat": "https://github.com/clickysteve/clatter-pocket/blob/main/docs/POCKET-CONTROLS.md",
+  "image": "docs/card.png"
+}
