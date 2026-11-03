@@ -1179,17 +1179,23 @@ static void generate_button(struct pocket_panel* panel, int one_track)
 	say(panel, "NEW PATTERN ", pocket_gen_style_name((unsigned)panel->style));
 }
 
-static void mutate_button(struct pocket_panel* panel, int one_track)
+/* LFO mutates, SAVE+LFO one track (1), and SEQ+REC on PATTERN (2) clears every step of every page:
+ * each one change, whose undo is what was there. The length, tempo and kit stay. */
+static void mutate_button(struct pocket_panel* panel, int how)
 {
-	if (one_track && !track_free(panel)) return;
+	if (how == 1 && !track_free(panel)) return;
 	struct pocket_pattern* next = pocket_seq_edit_begin();
 	action_begin(panel, MERGE_NONE);
-	pocket_gen_mutate(next, ((uint32_t)panel->seed << 16) | panel->mutations++, (unsigned)panel->mutate_strength,
-	                  one_track ? POCKET_GEN_ALL_TRACKS & ~(1u << panel->trigger) : panel->locks);
+	if (how > 1)
+		for (uint8_t* b = (uint8_t*)next->cell; b < (uint8_t*)(next->cell + POCKET_SEQ_TRACKS); b++) *b = 0;
+	else
+		pocket_gen_mutate(next, ((uint32_t)panel->seed << 16) | panel->mutations++, (unsigned)panel->mutate_strength,
+		                  how ? POCKET_GEN_ALL_TRACKS & ~(1u << panel->trigger) : panel->locks);
 	pocket_seq_edit_commit();
 	pattern_changed(panel);
 	action_end(panel);
-	say(panel, "MUTATED ", one_track ? triggerNames[panel->trigger] : words[WORD_LOW + panel->mutate_strength]);
+	if (how > 1) say(panel, pageNames[POCKET_PAGE_PATTERN], " CLEARED");
+	else say(panel, "MUTATED ", how ? triggerNames[panel->trigger] : words[WORD_LOW + panel->mutate_strength]);
 }
 
 /* SEQ+OCT- and SEQ+OCT+. A copy is the page on screen, every track, and it stays until the next
@@ -1295,7 +1301,8 @@ static void buttons(struct pocket_panel* panel, uint32_t pressed, uint32_t relea
 		panel->key_mode = !panel->key_mode;
 		say(panel, "KEYS: ", words[WORD_DRUM + panel->key_mode]);
 	}
-	if (pressed & BTN(REC))
+	if ((pressed & BTN(REC)) && (panel->previous_buttons & BTN(SEQ))) mutate_button(panel, 2); /* SEQ held is PATTERN */
+	else if (pressed & BTN(REC))
 	{
 		panel->recording = !panel->recording;
 		steps_forget(panel);
@@ -1849,15 +1856,12 @@ void pocket_panel_draw_band(const struct pocket_panel* panel, const struct pocke
 			line_text(px, panel->notice, ACCENT);
 		else if (panel->page == POCKET_PAGE_STORE)
 		{
-			/* the name the next save writes, a place a dot, and the place KNOB 3 changes in orange */
+			/* the name the next save writes, a place a dot, and the place KNOB 3 changes on orange */
 			char* d = append(b, "NAME ");
 			for (unsigned i = 0; i < POCKET_NAME_CHARS; i++) *d++ = panel->name[i] > ' ' ? panel->name[i] : '.';
 			append(d, " K2 MOVE K3 A-Z");
+			fill(px, MARGIN - 1 + (5 + panel->name_at) * ADVANCE, TEXT_Y - 2, ADVANCE, 14, ACCENT);
 			line_text(px, b, INK);
-			const int x = MARGIN + (5 + panel->name_at) * ADVANCE;
-			fill(px, x - 1, TEXT_Y - 2, ADVANCE, 14, ACCENT);
-			b[5 + panel->name_at + 1] = 0;
-			text(px, x, TEXT_Y, &b[5 + panel->name_at], PAPER);
 		}
 		else
 		{

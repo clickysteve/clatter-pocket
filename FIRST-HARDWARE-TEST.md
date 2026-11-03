@@ -16,17 +16,19 @@ V15 through both stages of the live installer, passed start-up (start screen abo
 CPU 51.1 % mean and 51.3 % peak, FAULTS 0, cool), the audio and sequencer steps, MIDI clock over USB, the
 eight GLOBAL settings after a power-off, and saving and loading after a power cycle. Naming a project
 failed: the place was drawn in brackets the font does not have. The erase question confused. Both are
-changed in 0.9.3, which has not run on a device. Not recorded: SAFE MODE, Bluetooth, long runs, leaving
-for official firmware.
+changed in 0.9.3. 0.9.3, installed over 0.9.2 first time, passed start-up (CPU 51.1 % mean, 51.3 % peak,
+FAULTS 0), naming and keeping a name after a power-off, and MIDI notes. 0.9.4 adds SEQ+REC to clear a
+pattern and tames GLITCH's kick, and has not run on a device. Not recorded: SAFE MODE, Bluetooth, long
+runs, leaving for official firmware.
 **From a unit looping at the start screen:** power on holding HOME until SAFE MODE shows, then connect
 the installer. **UNVERIFIED**.
 
-Candidate: firmware 0.9.3, commit `2715bae`, SHA-256
-`d2eb62190986258aa041b9bf4e17496bf6c00cbcc3756e78f8ff2a998888c315`.
+Candidate: firmware 0.9.4, commit `4bb6526`, SHA-256
+`b0a037ef3490dc0026d7826a658dbc1e0f1f0687dcc622cce76fbf438875b4e4`.
 
 **Install it from <https://clatter-pocket.allmyfriendsaresynths.com/installer/>**, which runs the steps
 below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-`afbe884cacb0534e2bd1def7b2c73df1a577620b14119b666d39cb01e0c767fa`.
+`985f678b84076eb5b33d922e0d264aa56fcbd91ca0eaa1769d2de6d5b0c8f827`.
 
 Both packages are produced by:
 

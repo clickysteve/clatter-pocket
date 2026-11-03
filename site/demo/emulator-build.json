@@ -1,10 +1,10 @@
 {
   "note": "The firmware the browser demo runs. Emulator use only: not a release, not for flashing.",
-  "version": "0.9.3",
-  "commit": "2715bae",
+  "version": "0.9.4",
+  "commit": "4bb6526",
   "file": "clatter-pocket-emulator-only.bin",
   "bytes": 492084,
-  "sha256": "d2eb62190986258aa041b9bf4e17496bf6c00cbcc3756e78f8ff2a998888c315",
+  "sha256": "b0a037ef3490dc0026d7826a658dbc1e0f1f0687dcc622cce76fbf438875b4e4",
   "emulator": {
     "repository": "https://github.com/joakimeriksson/fm1-emu",
     "commit": "93cb7ee",

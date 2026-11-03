@@ -1569,6 +1569,20 @@ async function pageCopy(pkg) {
   undo(m);
   check(rows() === page1, "undone", rows());
 
+  // ---- SEQ+REC clears every page; one undo brings them back
+  m.chord(BUTTON.SEQ, BUTTON.REC);
+  m.run(200);
+  shows(m, "PATTERN CLEARED");
+  check(!m.text().includes("REC ON"), "and REC stays off");
+  check(m.grid().every((r) => r === OFF), "page 1 is empty", rows());
+  page(3);
+  check(m.grid().every((r) => r === OFF), "and page 4", rows());
+  shows(m, "PAGE 4/4", "the length is kept");
+  undo(m);
+  check(rows() === page4, "one undo: page 4 back", rows());
+  page(0);
+  check(rows() === page1, "and page 1", rows());
+
   // ---- saved, and a restart
   m.chordTurn(ENC.KNOB3, -2, BUTTON.SEQ);
   m.tap(BUTTON.SAVE, 60);
@@ -1772,7 +1786,7 @@ async function main() {
   systemPage(m);
   m.run(800);
   const first = m.text();
-  shows(m, "0.9.3 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
+  shows(m, "0.9.4 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
   const cpu = /CPU MEAN +([\d.]+)%/.exec(first), peak = /CPU PEAK +([\d.]+)%/.exec(first);
   check(cpu && Number(cpu[1]) > 0, `CPU mean is measured (${cpu?.[1]} %)`, first);
   check(peak && Number(peak[1]) >= Number(cpu?.[1]), `CPU peak (${peak?.[1]} %)`, first);

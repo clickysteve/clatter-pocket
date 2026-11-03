@@ -2379,6 +2379,24 @@ static void test_page_copy(void)
 			}
 		}
 
+	/* SEQ+REC clears the pattern: every page and track, one undo, and REC is left as it was */
+	pattern_of_pages();
+	pocket_seq_set_tempo(127);
+	before = *pocket_seq_pattern();
+	const int recording = panel.recording;
+	press2(&panel, BUTTON(SEQ), BUTTON(REC));
+	CHECK(!strcmp(panel.notice, "PATTERN CLEARED"), "%s", panel.notice);
+	CHECK(panel.recording == recording, "and REC is not touched");
+	expected = before;
+	memset(expected.cell, 0, sizeof expected.cell);
+	CHECK(!memcmp(&expected, pocket_seq_pattern(), sizeof expected), "every step off, the length kept");
+	CHECK(pocket_seq_tempo() == 127, "and the tempo");
+	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
+	CHECK(!memcmp(&before, pocket_seq_pattern(), sizeof before), "one undo brings it all back");
+	press(&panel, BUTTON(REC));
+	CHECK(panel.recording != recording, "REC alone is still REC");
+	press(&panel, BUTTON(REC));
+
 	/* it overwrites: a page's rests are pasted too */
 	pattern_of_pages();
 	clear_pattern();
