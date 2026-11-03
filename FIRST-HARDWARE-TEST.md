@@ -7,18 +7,18 @@ to stop.
 
 **Result so far, on one unit.** 0.8.1, the first version on a device, showed the start screen and reset
 in a loop: `voiceData` was misaligned, and the first audio block faulted (HARDWARE.md, Faults). The owner
-restored V15 from a browser. 0.8.2, installed from stock through both stages, fixed the loop, and audio
-and USB audio pass. PROJECTS said FLASH IN USE: SAVING OFF. On 0.9.0, boot, audio, USB audio, MIDI notes,
-MIDI clock over USB, the erase of what V15 left, and saving and reloading after a power-off all work on
-that unit. Not recorded yet: SAFE MODE, Bluetooth, a power cut during a save, and leaving for official
-firmware. 0.9.1 has not been on a device. **From a unit looping at the start screen:** power on holding HOME until SAFE MODE shows, then connect the installer. **UNVERIFIED**.
+restored V15 from a browser. 0.8.2, installed from stock through both stages, fixed the loop. On 0.9.0,
+audio, USB audio, MIDI notes, MIDI clock over USB, and saving after erasing what V15 left, all work, and a
+save survives a power cycle. Nothing else below has been recorded yet, and 0.9.1 has not run on a device.
+**From a unit looping at the start screen:** power on holding HOME until SAFE MODE shows, then connect
+the installer. **UNVERIFIED**.
 
-Candidate: firmware 0.9.0, commit `8606873`, SHA-256
-`de027b06b8b622a96d9f20ee8c0379a4dbde81c52c28763dfd25deb0d3f0a794`.
+Candidate: firmware 0.9.1, commit `902ce74`, SHA-256
+`1e306c717e7af822056d2817fab7b2b1f34b5f42e72cca2980b36ae00c3f2d14`.
 
 **Install it from <https://clatter-pocket.allmyfriendsaresynths.com/installer/>**, which runs the steps
 below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-`551023881bb938e169e9a7ba3144fd67005c8d8397cc8d94b3e6afd06398aa43`.
+`57134077951c875df9afd99533bbd10ecb79dae816a88c8d0e5fe653c39574a5`.
 
 Both packages are produced by:
 
