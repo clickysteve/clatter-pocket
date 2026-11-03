@@ -27,7 +27,7 @@ const message = data => Object.assign(new Event('midimessage'), { data });
 
 export class SimulatedFM1 {
   /**
-   * options: identity, build, family, state (capability state), imageBytes, name, mode, newBuild,
+   * options: identity, build, family, state (capability state), imageBytes, name, mode, newBuild, newIdentity,
    * protocol ('open' or 'stock'), images ([{ image, identity, build }]: what it can restart as),
    * and fault: what goes wrong (see where `this.fault` is read).
    */
@@ -162,6 +162,7 @@ export class SimulatedFM1 {
       this.mode = 'rebooted';
       this.build = booted?.build ?? this.newBuild ?? this.build;
       if (booted) Object.assign(this, { identity: booted.identity, protocol: 'open' });
+      else if (this.newIdentity) this.identity = this.newIdentity; /* a package reports its own identity */
       if (this.fault === 'boots-other') Object.assign(this, { identity: 'FM-1_8000014', build: 'ee'.repeat(32), protocol: 'open' });
       this.state = 0;
       this.plug();

@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "version": "0.9.4",
+  "version": "1.0.0",
   "status": "experimental",
   "installEnabled": true,
   "releaseDate": "2026-11-03",
   "firmware": {
-    "filename": "clatter-pocket-0.9.4-b0a037ef-UNVERIFIED.fwsc",
-    "sha256": "b0a037ef3490dc0026d7826a658dbc1e0f1f0687dcc622cce76fbf438875b4e4",
+    "filename": "clatter-pocket-1.0.0-4d661dae-UNVERIFIED.fwsc",
+    "sha256": "4d661dae903801385adc99abe3387474b059210f1c49037cef3ef1cacb6f5956",
     "bytes": 492084,
-    "buildId": "a76c781cf6a0208bf41d3571645f53c2311c94c74aa98a06a25941e4194ad46a",
+    "buildId": "f04ed788bd1deb3a6bc17b3383c4c7f754c334053386f56bb0e4f483a704d899",
     "loaderSha256": "ef1f2db89b011fa53e71df363f0122de0ea896618c53fb53e8da676322004541",
-    "product": "FM-1_8000014",
+    "product": "FM-1_8133700",
     "family": 7,
     "checks": {
-      "commit": "4bb6526",
+      "commit": "0b861a5",
       "singlePrecision": true,
       "firmwareChecks": true,
       "audioPath": true,
@@ -48,10 +48,10 @@
     ]
   },
   "notes": [
-    "Firmware 0.9.4 can clear a pattern: on PATTERN, hold SEQ and press REC. Every step of every page goes off, and the length, tempo and kit stay. SAVE+OCT− undoes it.",
-    "GLITCH's kick is a kick again. It had a siren's pitch sweep and two kinds of drive, and played 5 dB over the rest of its kit; now it is level with it. The kick in every kit now skips those extras, so NOISE's and ACID's kicks lose some filter drive too. The other kits are unchanged.",
-    "Copying a page, already there: pick a page with its black key, hold SEQ and press OCT− to copy, pick another page, hold SEQ and press OCT+ to paste.",
-    "0.9.3 runs on one unit: the install, start-up with FAULTS at 0, project names and MIDI notes. 0.9.4 has not run on a device: it is tested on the host and in the FM-1 emulator, including under the chip's alignment rule. Bluetooth, long runs and leaving for official firmware are untested.",
+    "CLATTER Pocket 1.0. The firmware is 0.9.4's, with a plain version number and its own identity, FM-1_8133700, so The Firmware Hub and installers can tell it from official Open. Installing it over Open or an earlier CLATTER Pocket, and leaving it for official firmware, work as before.",
+    "0.9.4 is verified on one FM-1: installed from V15 and over other firmware, patterns cleared and copied, its kits played, left for V15 and installed again. The report: https://github.com/clickysteve/clatter-pocket/issues/1. 1.0's own identity is being checked on the same unit before it is marked verified.",
+    "On PATTERN, hold SEQ and press REC to clear the pattern; SAVE+OCT− undoes it. Hold SEQ with OCT− to copy a page and OCT+ to paste it.",
+    "Untested on a device: Bluetooth MIDI and audio, DIN and TRS MIDI, SAFE MODE, and runs longer than a test session.",
     "If an FM-1 is restarting at the start-up screen: power on holding HOME until SAFE MODE shows, then connect the installer. This has not been tried on a device."
   ]
 }

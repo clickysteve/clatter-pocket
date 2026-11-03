@@ -63,8 +63,9 @@ const STOCK_IDENTITY = 'FM-1_015';
 const LOADER_NAME = /^ota-/i;
 
 /**
- * From the updater's normal, unforced connect. CLATTER Pocket reports Open's identity on purpose
- * (FM1-COMMUNITY.md), so only the build hash tells the two apart. Stock V15 has no hash to read.
+ * From the updater's normal, unforced connect. Since 1.0 CLATTER Pocket has its own identity,
+ * FM-1_8133700; before it reported Open's, so the build hash is what tells this release apart.
+ * Stock V15 has no hash to read.
  */
 export function classify(result, clatter, open) {
   if (result.resume) return FIRMWARE.LOADER;
@@ -153,6 +154,7 @@ export class Session {
     else if (this.firmware === FIRMWARE.CLATTER) this.go('blocked', 'This build is already installed.');
     else if (this.firmware === FIRMWARE.LOADER) await this.inLoader(!result.resume);
     else if (this.firmware === FIRMWARE.OPEN) this.go('ready', `Official Open ${open.release_version} detected. Ready to install over ${result.identity} (build ${build}).`);
+    else if (result.identity === clatter.product) this.go('ready', `Another CLATTER Pocket build detected. Ready to install over ${result.identity} (build ${build}).`);
     else this.go('ready', `Ready to install over ${result.identity} (build ${build}). This is fm1_open firmware, but not official Open ${open?.release_version ?? ''} or this release.`);
 
     if (this.state !== 'ready' && this.state !== 'recover') await this.updater.disconnect().catch(() => {});

@@ -1711,7 +1711,7 @@ async function main() {
   shows(m, "CLATTER POCKET", "start screen names CLATTER POCKET");
   shows(m, "LXR DRUM MACHINE");
   shows(m, "HOLD HOME NOW FOR SAFE MODE");
-  shows(m, "UNVERIFIED", "start screen says UNVERIFIED");
+  shows(m, "1.0.0", "start screen shows the version");
   const start = m.lcd();
   check(start[9 * 240 + 120] === ACCENT && start[29 * 240 + 120] === 0xf59e && start[22 * 240 + 112] === 0xffff, "start screen draws the emblem: orange disc, pink face, white glasses");
   m.png(`${out}/1-start.png`);
@@ -1786,7 +1786,7 @@ async function main() {
   systemPage(m);
   m.run(800);
   const first = m.text();
-  shows(m, "0.9.4 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
+  shows(m, "1.0.0", "SYSTEM shows the version");
   const cpu = /CPU MEAN +([\d.]+)%/.exec(first), peak = /CPU PEAK +([\d.]+)%/.exec(first);
   check(cpu && Number(cpu[1]) > 0, `CPU mean is measured (${cpu?.[1]} %)`, first);
   check(peak && Number(peak[1]) >= Number(cpu?.[1]), `CPU peak (${peak?.[1]} %)`, first);

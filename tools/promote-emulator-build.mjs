@@ -42,9 +42,9 @@ writeFileSync(join(emu, 'firmwares.json'), JSON.stringify({
   note: "CLATTER Pocket's demo: this one entry replaces fm1-emu's catalogue. Written by tools/promote-emulator-build.mjs.",
   default: 'clatter-pocket',
   firmwares: [{
-    id: 'clatter-pocket', name: 'CLATTER Pocket', version: `${version} UNVERIFIED`, author: 'The CLATTER contributors',
+    id: 'clatter-pocket', name: 'CLATTER Pocket', version, author: 'The CLATTER contributors',
     license: 'GPL-3.0-only',
-    about: 'A generative drum machine on the LXR sound engine. An emulator build: it has never run on a physical FM-1.',
+    about: 'A generative drum machine on the LXR sound engine, in the FM-1 emulator: the same package the installer puts on an FM-1.',
     repo: 'https://github.com/clickysteve/clatter-pocket', package: NAME, sha256: build.sha256,
   }],
 }, null, 2) + '\n');

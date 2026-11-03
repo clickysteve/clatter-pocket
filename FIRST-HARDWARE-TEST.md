@@ -18,17 +18,19 @@ eight GLOBAL settings after a power-off, and saving and loading after a power cy
 failed: the place was drawn in brackets the font does not have. The erase question confused. Both are
 changed in 0.9.3. 0.9.3, installed over 0.9.2 first time, passed start-up (CPU 51.1 % mean, 51.3 % peak,
 FAULTS 0), naming and keeping a name after a power-off, and MIDI notes. 0.9.4 adds SEQ+REC to clear a
-pattern and tames GLITCH's kick, and has not run on a device. Not recorded: SAFE MODE, Bluetooth, long
-runs, leaving for official firmware.
+pattern and tames GLITCH's kick: installed over 0.9.3 and again after V15 and Open, every remaining
+step passed ([report](https://github.com/clickysteve/clatter-pocket/issues/1)). 1.0.0 is 0.9.4 with a plain
+version and its own identity, `FM-1_8133700`, and has not run on a device. Not recorded: SAFE MODE,
+Bluetooth, long runs.
 **From a unit looping at the start screen:** power on holding HOME until SAFE MODE shows, then connect
 the installer. **UNVERIFIED**.
 
-Candidate: firmware 0.9.4, commit `4bb6526`, SHA-256
-`b0a037ef3490dc0026d7826a658dbc1e0f1f0687dcc622cce76fbf438875b4e4`.
+Candidate: firmware 1.0.0, commit `0b861a5`, identity `FM-1_8133700`, SHA-256
+`4d661dae903801385adc99abe3387474b059210f1c49037cef3ef1cacb6f5956`.
 
 **Install it from <https://clatter-pocket.allmyfriendsaresynths.com/installer/>**, which runs the steps
 below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-`985f678b84076eb5b33d922e0d264aa56fcbd91ca0eaa1769d2de6d5b0c8f827`.
+`c80d011a203cdb4c2e9b6ed850931cb137e56f71c4711207f49dd73d0f3ce95d`.
 
 Both packages are produced by:
 
@@ -226,7 +228,7 @@ in "Before installation".** docs/POCKET-STORAGE.md says what is and is not known
 ## Recovery
 
 1. **Normal restore.** Connect the **official M-VAVE workbench** and install official Open
-   (or V15). The FM-1 under CLATTER Pocket reports the fm1_open identity and family, so the
+   (or V15). The FM-1 under CLATTER Pocket reports an fm1_open identity (`FM-1_8133700` since 1.0) and family, so the
    workbench treats it as Open. Restore projects, samples and the DX7 library from the
    backups if needed. CLATTER Pocket writes the user partition only when a kit or pattern is
    saved, and only in four sectors it has found blank or its own (docs/POCKET-STORAGE.md), so the

@@ -21,8 +21,8 @@
  * HOME at that moment (SAFE MODE) leaves the engine off: a way to reach the updater if the
  * engine misbehaves.
  *
- * Runs on one real FM-1 (0.9.0: boot, audio, USB audio, MIDI, saving; FIRST-HARDWARE-TEST.md).
- * Still UNVERIFIED: one unit, and leaving for official firmware has not been tried.
+ * Runs on a real FM-1 (FIRST-HARDWARE-TEST.md): boot, audio, USB audio, MIDI, saving, and leaving
+ * for official firmware and coming back, on one unit.
  *
  * Copyright (C) 2026 The CLATTER contributors
  * SPDX-License-Identifier: GPL-3.0-only WITH GPL-3.0-linking-exception
