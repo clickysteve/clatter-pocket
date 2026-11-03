@@ -192,14 +192,13 @@ Three banks of nine keys, the same nine sounds in the same order. Key 1 is F3, t
 
 | Keys | Bank | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 to 9 | original | kick | snare | closed hat | open hat | low tom | high tom | cymbal | perc | clap |
+| 1 to 9 | original | kick | low tom | high tom | snare | cymbal | closed hat | open hat | perc | clap |
 | 10 to 18 | A | … A | | | | | | | | |
 | 19 to 27 | B | … B | | | | | | | | |
-| | Track | D1 | SN | CH | OH | D2 | D3 | CY | D3 | SN |
+| | Track | D1 | D2 | D3 | SN | CY | CH | OH | D3 | SN |
 
-The order is the drum machine's usual reading order: the backbeat under the first fingers, the hats next
-to it, toms then cymbal, and the two extra sounds last. MAIN and the other pages name what you played,
-KICK A or PERC B, beside the voice.
+The keys follow the screen: the seven tracks in the order of the cells, D1 to OH, and the two extra sounds
+last. MAIN and the other pages name what you played, KICK A or PERC B, beside the voice.
 
 **Nine sounds from seven triggers.** The LXR has **six voices and seven triggers**, and two more
 independent voices would be a new synthesis engine, so there are not nine independent instruments.
@@ -256,8 +255,10 @@ tonal.
 ### MIDI
 
 Note-ons take the same path as the keys, so they play and record the same way, at their own velocity.
-In PITCH, a note plays the selected voice. In DRUM, the General MIDI drum notes play their voices, or
-with MIDI MAP on KEYS, the 27 keys of the map above from F3, repeating past them.
+In PITCH, a note plays the selected voice. In DRUM, every note is a different sound, in the map above from
+C1 (note 36): 36 to 42 are D1, D2, D3, SN, CY, CH and OH, 43 perc, 44 clap, then 45 to 53 the A variations and
+54 to 62 the B, repeating past them. With MIDI MAP on GM, the General MIDI drum notes play their voices
+instead, several notes to a voice.
 
 ## Recording
 
@@ -437,7 +438,7 @@ power-off.
 | KIT SEED | 0-9999 | the next ENV |
 | WILD | 0-100 | the next ENV and SAVE+ENV |
 | MIDI CH | ALL, 1-16 | input channel |
-| MIDI MAP | GM, KEYS | DRUM's note map |
+| MIDI MAP | KEYS, GM | DRUM's note map |
 
 **Left out, because they would not work:** MIDI output and thru, a velocity curve, and a default tempo (these settings are not stored).
 
@@ -472,6 +473,9 @@ has not been seen**.
 
 **0.7.1, length on SEQ+KNOB 3: 437,532 bytes, 16,389 free, the margin kept by 5 bytes.** Heap 110,092.
 The next feature needs flash found for it first.
+
+**0.9.1, the keys and MIDI in the screen's order, OCT+ loads, OCT− erases: 436,572 bytes, 17,349 free, the margin
+kept by 965 bytes.** Reading saves from 0.5.0 went to pay for it: no device has any.
 
 **0.9.0, following MIDI clock, and saving past what V15 left: 437,468 bytes, 16,453 free, the margin kept by
 69 bytes.** Heap 109,196. The next feature needs flash found for it first.

@@ -7,17 +7,18 @@ to stop.
 
 **Result so far, on one unit.** 0.8.1, the first version on a device, showed the start screen and reset
 in a loop: `voiceData` was misaligned, and the first audio block faulted (HARDWARE.md, Faults). The owner
-restored V15 from a browser. 0.8.2, installed from stock through both stages, fixed the loop, and audio
-and USB audio pass. PROJECTS said FLASH IN USE: SAVING OFF, which 0.9.0 can get past when asked. Nothing
-else below has been recorded yet, and 0.9.0 has not run on a device. **From a unit looping at the
-start screen:** power on holding HOME until SAFE MODE shows, then connect the installer. **UNVERIFIED**.
+restored V15 from a browser. 0.8.2, installed from stock through both stages, fixed the loop. On 0.9.0,
+audio, USB audio, MIDI notes, MIDI clock over USB, and saving after erasing what V15 left, all work, and a
+save survives a power cycle. Nothing else below has been recorded yet, and 0.9.1 has not run on a device.
+**From a unit looping at the start screen:** power on holding HOME until SAFE MODE shows, then connect
+the installer. **UNVERIFIED**.
 
-Candidate: firmware 0.9.0, commit `8606873`, SHA-256
-`de027b06b8b622a96d9f20ee8c0379a4dbde81c52c28763dfd25deb0d3f0a794`.
+Candidate: firmware 0.9.1, commit `902ce74`, SHA-256
+`1e306c717e7af822056d2817fab7b2b1f34b5f42e72cca2980b36ae00c3f2d14`.
 
 **Install it from <https://clatter-pocket.allmyfriendsaresynths.com/installer/>**, which runs the steps
 below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-`551023881bb938e169e9a7ba3144fd67005c8d8397cc8d94b3e6afd06398aa43`.
+`57134077951c875df9afd99533bbd10ecb79dae816a88c8d0e5fe653c39574a5`.
 
 Both packages are produced by:
 
@@ -152,22 +153,17 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
 
 ## MIDI test
 
-1. **USB MIDI from the computer.** Send note-on 36, velocity 100, on any channel: DRUM 1;
+1. **USB MIDI from the computer.** Send note-on 36, velocity 100, on any channel: KICK, on DRUM 1;
    the MIDI line shows NOTE 36 DRUM 1, briefly inverted.
-2. Then:
-   - 38: SNARE;
-   - 42: CL HAT;
-   - 46: OP HAT;
-   - 49: CYMBAL;
-   - 45: DRUM 2;
-   - 48: DRUM 3.
+2. Then: 37 DRUM 2, 38 DRUM 3, 39 SNARE, 40 CYMBAL, 41 CL HAT, 42 OP HAT, 43 PERC, 44 CLAP. Every note
+   from 36 to 62 is a different sound. Set MIDI MAP to GM on GLOBAL for the General MIDI notes.
 
    Velocity changes the level. Note-offs and other messages count as MIDI but trigger
    nothing.
 3. **DIN or TRS MIDI**: the same notes. **BLE MIDI**: pair the computer or phone with the
    FM-1 (BLE Peripheral, as stock) and send the same notes.
 4. **Simultaneous and repeated:**
-   - send 36, 38 and 42 together;
+   - send 36, 39 and 41 together;
    - send a fast 16th-note pattern at 180 BPM for a minute.
 
    DROP should stay 0, XRUN should not rise, and the sound should not stutter.
@@ -210,7 +206,8 @@ in "Before installation".** docs/POCKET-STORAGE.md says what is and is not known
    tap again, and record whether the 9 empty slots appear. The other two are safe results and the end of
    this test: nothing has been written.
 2. Tap **SAVE** again, on slot 1. Record what is heard and how long the screen takes to show SAVED 1.
-3. Press ENV for another kit, then tap SAVE and press **OCT−**: the first kit is back.
+3. Press ENV for another kit, then tap SAVE and press **OCT+**: the first kit is back. Press **OCT−**
+   twice on a slot you do not need: it asks, then the slot is empty.
 4. Power off, power on, tap SAVE: slot 1 is listed, and loads.
 5. Install the same package again and check again: this is what shows whether an update leaves the
    sectors alone. Record the result either way.

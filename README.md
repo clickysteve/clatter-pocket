@@ -39,7 +39,7 @@ the stock instrument; it does not fit the flash.)
 | PLAY, REC | start or stop; recording on or off |
 | ENV, ARP, LFO | a new kit, a new pattern, mutate. Held SAVE: the selected voice only |
 | PRESETS, ALGORITHM | the kit, the pattern style |
-| SAVE, a tap | PROJECTS: choose a slot with SELECT, tap SAVE to store, OCT− to load |
+| SAVE, a tap | PROJECTS: choose a slot with SELECT, tap SAVE to store, OCT+ to load, OCT− to erase |
 | SAVE+FX | lock the selected track |
 | SELECT | select DRUM 1-3, SNARE, CYMBAL, CL HAT, OP HAT |
 | HOME, SEQ, EDIT, FX, GLO | pages: MAIN, PATTERN, SOUND, MIXER, GLOBAL then SYSTEM |
