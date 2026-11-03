@@ -13,8 +13,9 @@ a device, and a device's Flash is the one thing an emulator cannot stand in for:
 |---|---|
 | Tap **SAVE** | opens PROJECTS. In the browser emulator, `8` |
 | **SELECT** or KNOB 1 | choose a slot |
-| Tap **SAVE** again | store here. On a slot in use it asks first: tap again while OVERWRITE: SAVE AGAIN shows. Only when stopped: STOP TO SAVE otherwise. It says SAVED 3 |
-| **OCT−** | load this slot, also while a pattern plays |
+| Tap **SAVE** again | store here. On a slot in use it asks first: tap again within 3 seconds, while OVERWRITE: SAVE AGAIN shows. Only when stopped: STOP TO SAVE otherwise. It says SAVED 3 |
+| **OCT+** | load this slot, also while a pattern plays |
+| **OCT−** | erase this slot. It asks first: press again while ERASE: OCT- AGAIN shows. Only when stopped |
 | HOME, or any page button | leave. Keys, PLAY, ENV, ARP and LFO work here as everywhere |
 
 A tap is SAVE pressed and released with nothing else happening. Holding SAVE with another button, a
@@ -53,23 +54,10 @@ format packs them. A step has a note *or* a variation, not both: that is the bit
 
 ## Saves from before projects
 
-Firmware 0.5.0 wrote banks of 12 kits and 12 patterns to the same sectors. **They are not converted,
-and they are not overwritten.** Twenty-four old records do not fit nine projects, so no automatic
-conversion could keep them all.
-
-On a chip that has them:
-
-- each kind's current bank keeps its sector, untouched, byte for byte (`test_store`, 50 saves beside
-  them, and at every power cut);
-- its superseded copy, which no page could ever show, is what gives the projects their room;
-- PROJECTS lists them after the nine slots, OLD KIT 2, OLD PAT 3. OCT− loads one, an old pattern as one
-  page of 16 steps. A kit alone leaves the pattern; a pattern alone leaves the kit;
-- with both kinds present only slots 1 to 3 can save, and 4 to 9 say HELD BY OLD SAVES;
-- the last row, ERASE OLD SAVES, gives their sectors back. It asks first, and it is the only thing that
-  ever erases them. Load what you want into a project first: there is no way back.
-
-So the migration is manual and safe: load the kit, load the pattern, save the project. The cost is
-one sector of slots until you decide.
+Firmware 0.5.0 wrote banks of 12 kits and 12 patterns to these sectors, and firmware up to 0.9.0 could read
+them. 0.9.1 cannot: that code went to pay for erasing a project, because no real FM-1 has such a bank. The
+first firmware ever installed on a device was 0.8.1. To the store a bank now looks like anything else
+that is not its own: FLASH IN USE, and nothing happens to it unless the player says so.
 
 ## Is it safe to write to this device's Flash?
 
@@ -144,7 +132,7 @@ A sector holds three projects, a *page*, and a header saying which page it is an
 
 1. Read the page of the slot into RAM, and fill the slot.
 2. Choose a free sector: blank if there is one, otherwise the oldest that is nobody's current copy.
-   It is never a current copy, so never the sector last written, and never an old bank.
+   It is never a current copy, so never the sector last written.
 3. Erase it (unless it is blank).
 4. Write the whole sector, with the commit word left erased.
 5. Read it all back and check its CRC.
@@ -158,7 +146,7 @@ sector is what a power cut leaves, and says nothing; two, or none good, says SAV
 cannot be read shows as empty, and saving still works.
 
 A sector that is not ours is only ever overwritten in one case: a good sector of projects is on the
-chip, or a good old bank beside it, which is what a save cut off in its erase looks like. The first
+chip, which is what a save cut off in its erase looks like. The first
 save found all four blank or ours, and rule 4 is what would have shown anyone else taking one since.
 
 Values loaded are range-checked as well: a good CRC says what was written, not that it is sensible.

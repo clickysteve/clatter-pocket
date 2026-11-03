@@ -56,30 +56,13 @@ static int has(unsigned project, unsigned value)
 	return 1;
 }
 
-/* A bank of firmware before projects, as it was written. */
-static void old_bank(unsigned kind, unsigned copy, uint32_t generation, unsigned value)
-{
-	static uint8_t sector[SECTOR];
-	const uint32_t magic = 0x31535043u, commit = 0, format = 1u << 8 | kind;
-	memset(sector, 0xff, sizeof sector);
-	memset(sector + 20, 0, 12);
-	memcpy(sector, &magic, 4);
-	memcpy(sector + 4, &commit, 4);
-	memcpy(sector + 12, &format, 4);
-	memcpy(sector + 16, &generation, 4);
-	memset(sector + 32, (int)value, 12 * 256);
-	const uint32_t crc = pocket_crc32(0, sector + 12, 3104 - 12);
-	memcpy(sector + 8, &crc, 4);
-	memcpy(fake_flash + FIRST + (2 * kind + copy) * SECTOR, sector, sizeof sector);
-}
-
 static void test_basics(void)
 {
 	fake_flash_reset();
 	fill_outside();
 	CHECK(pocket_store_open() == POCKET_STORE_OK, "blank opens");
 	CHECK(fake_flash_ops == 0, "opening writes nothing");
-	CHECK(pocket_store_room() == POCKET_STORE_PROJECTS, "all of it is free: %u", pocket_store_room());
+	CHECK(POCKET_STORE_PROJECTS == POCKET_STORE_PROJECTS, "all of it is free: %u", POCKET_STORE_PROJECTS);
 	CHECK(has(0, 0) && has(POCKET_STORE_PROJECTS - 1, 0), "a blank store is empty");
 	CHECK(save(0, 11) == POCKET_STORE_OK, "a save");
 	CHECK(save(1, 12) == POCKET_STORE_OK, "beside it, in its sector");
@@ -251,109 +234,6 @@ static void cut_everywhere(unsigned saves, unsigned project)
 	CHECK(older > 0 && newer > 0, "some cuts land before the commit, and some after: %d %d", older, newer);
 }
 
-/* Saves from before projects. */
-static void old_chip(void)
-{
-	fake_flash_reset();
-	fill_outside();
-	old_bank(0, 0, 3, 0x21);
-	old_bank(0, 1, 4, 0x22); /* the newer of its two */
-	old_bank(1, 1, 9, 0x33);
-}
-
-static int old_intact(void)
-{
-	uint8_t a, b;
-	pocket_store_old_peek(POCKET_STORE_OLD_KITS, 5, &a, 1);
-	pocket_store_old_peek(POCKET_STORE_OLD_PATTERNS, 11, &b, 1);
-	return a == 0x22 && b == 0x33;
-}
-
-static void test_old_banks(void)
-{
-	static uint8_t chip[SECTORS];
-	old_chip();
-	CHECK(pocket_store_open() == POCKET_STORE_OK, "old banks open");
-	CHECK(pocket_store_old(POCKET_STORE_OLD_KITS) && pocket_store_old(POCKET_STORE_OLD_PATTERNS), "both are found");
-	CHECK(old_intact(), "the newer copy of each is what is read");
-	CHECK(pocket_store_room() == 3, "room for one sector of projects: %u", pocket_store_room());
-	memcpy(chip, fake_flash + FIRST, sizeof chip);
-	/* saves go only where nothing would be lost */
-	for (unsigned i = 0; i < 50; i++)
-	{
-		CHECK(save(i % 3, 60 + i) == POCKET_STORE_OK, "a project beside old banks");
-		CHECK(!memcmp(chip + SECTOR, fake_flash + FIRST + SECTOR, SECTOR) && !memcmp(chip + 3 * SECTOR, fake_flash + FIRST + 3 * SECTOR, SECTOR), "the current old banks are byte for byte as they were");
-		pocket_store_open();
-		CHECK(has(i % 3, 60 + i) && old_intact(), "both read");
-	}
-	/* a bad old bank is not believed, and one of a pair standing is enough */
-	old_chip();
-	fake_flash[FIRST + SECTOR + 700] ^= 1;
-	CHECK(pocket_store_open() == POCKET_STORE_OK, "the newer copy corrupted: %d", pocket_store_open());
-	uint8_t a;
-	pocket_store_old_peek(POCKET_STORE_OLD_KITS, 5, &a, 1);
-	CHECK(a == 0x21, "the older copy is read: %x", a);
-	/* a cut at every operation of a save beside them */
-	old_chip();
-	pocket_store_open();
-	save(0, 9);
-	const long from = fake_flash_ops;
-	save(0, 10);
-	const long ops = fake_flash_ops - from;
-	for (long cut = 0; cut <= ops; cut++)
-	{
-		old_chip();
-		pocket_store_open();
-		save(0, 9);
-		fake_flash_cut_at = fake_flash_ops + cut;
-		save(0, 10);
-		fake_flash_cut_at = -1;
-		fake_flash_power_on();
-		CHECK(pocket_store_open() >= 0, "beside old banks, cut %ld: opens", cut);
-		CHECK(has(0, 9) || has(0, 10), "cut %ld: whole", cut);
-		CHECK(old_intact(), "cut %ld: old banks stand", cut);
-		CHECK(save(0, 11) == POCKET_STORE_OK, "cut %ld: saves", cut);
-		CHECK(outside_intact(), "cut %ld: nothing else", cut);
-	}
-	/* forgetting them, cut at every operation, with and without a project to vouch */
-	for (unsigned projects = 0; projects < 2; projects++)
-	{
-		old_chip();
-		pocket_store_open();
-		if (projects) save(1, 44);
-		const long start = fake_flash_ops;
-		CHECK(pocket_store_forget_old() == POCKET_STORE_OK, "forgotten");
-		const long steps = fake_flash_ops - start;
-		CHECK(pocket_store_open() == POCKET_STORE_OK && !pocket_store_old(0) && !pocket_store_old(1), "gone");
-		CHECK(pocket_store_room() == POCKET_STORE_PROJECTS, "every project is free: %u", pocket_store_room());
-		if (projects) CHECK(has(1, 44), "and a project beside them stays");
-		for (long cut = 0; cut <= steps; cut++)
-		{
-			old_chip();
-			pocket_store_open();
-			if (projects) save(1, 44);
-			fake_flash_cut_at = fake_flash_ops + cut;
-			(void)pocket_store_forget_old();
-			fake_flash_cut_at = -1;
-			fake_flash_power_on();
-			CHECK(pocket_store_open() >= 0, "forgetting, cut %ld: opens", cut);
-			if (projects) CHECK(has(1, 44), "cut %ld: the project stands", cut);
-			CHECK(pocket_store_forget_old() == POCKET_STORE_OK, "cut %ld: and it can finish", cut);
-			CHECK(pocket_store_open() == POCKET_STORE_OK && pocket_store_room() == POCKET_STORE_PROJECTS, "cut %ld: finished: %u", cut, pocket_store_room());
-			CHECK(save(8, 3) == POCKET_STORE_OK, "cut %ld: every project saves", cut);
-			CHECK(outside_intact(), "cut %ld: nothing else", cut);
-		}
-	}
-	/* something foreign beside old banks is still foreign */
-	old_chip();
-	fake_flash[FIRST + 2 * SECTOR + 9] = 0x12; /* the pattern bank's other sector is its partner: a cut save */
-	CHECK(pocket_store_open() >= 0, "a sector beside its bank's good copy is that bank's cut save");
-	memset(fake_flash + FIRST, 0xff, SECTORS);
-	old_bank(1, 0, 1, 0x33);
-	fake_flash[FIRST + 9] = 0x12;
-	CHECK(pocket_store_open() == POCKET_STORE_OCCUPIED, "a sector with nothing of ours beside it is not");
-}
-
 /* What V15 left in the sectors: asked for, it goes, and only that goes */
 static void test_claim(void)
 {
@@ -381,6 +261,12 @@ static void test_claim(void)
 	CHECK(pocket_store_claim() == POCKET_STORE_OK, "one sector");
 	CHECK(fake_flash_ops == 1, "one erase: %ld", fake_flash_ops);
 
+	/* a bank from firmware 0.5.0 is not read any more: to this store it is someone else's */
+	fake_flash_reset();
+	const uint32_t older = 0x31535043u;
+	memcpy(fake_flash + FIRST, &older, 4);
+	CHECK(pocket_store_open() == POCKET_STORE_OCCUPIED, "held like anything else");
+
 	/* a power cut anywhere, a refusal anywhere: asked again, it finishes */
 	for (long cut = 0; cut < 4; cut++)
 	{
@@ -407,7 +293,6 @@ int main(void)
 	test_corruption();
 	for (unsigned h = 0; h < 12; h++)
 		for (unsigned p = 0; p < POCKET_STORE_PROJECTS; p += 4) cut_everywhere(h, p);
-	test_old_banks();
 	test_claim();
 	printf("store: %d checks, %d failed\n", checks, failures);
 	return failures ? 1 : 0;

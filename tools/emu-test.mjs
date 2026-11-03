@@ -41,10 +41,10 @@ const rowY = (t) => 97 + 11 * t;
 const PAPER = 0x0000, ACCENT = 0xfbe0;
 const TRACKS = 7, STEPS = 16;
 // the DRUM keys: the first bank's note of each track, D1 D2 D3 SN CY CH OH; key 0 is F3 (53)
-const DRUM_NOTE = [53, 57, 58, 54, 59, 55, 56];
+const DRUM_NOTE = [53, 54, 55, 56, 57, 58, 59];
 // the nine positions of a bank, and what each key is called on screen
-const BANK_TRACK = [0, 3, 5, 6, 1, 2, 4, 2, 3];
-const BANK_NAME = ["KICK", "SNARE", "CL HAT", "OP HAT", "LOW TOM", "HI TOM", "CYMBAL", "PERC", "CLAP"];
+const BANK_TRACK = [0, 1, 2, 3, 4, 5, 6, 2, 3];
+const BANK_NAME = ["KICK", "LOW TOM", "HI TOM", "SNARE", "CYMBAL", "CL HAT", "OP HAT", "PERC", "CLAP"];
 const NOTE = (n) => KEY(n - 53);
 const VOICE = ["DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "CL HAT", "OP HAT"];
 // GLOBAL's rows
@@ -520,7 +520,7 @@ async function performance(m) {
   m.tap(BUTTON.PLAY);
   m.run(1800);
 
-  // ---- MIDI follows the keyboard: DRUM's GM map, PITCH's notes, and it records
+  // ---- MIDI follows the keyboard: DRUM's map, PITCH's notes, and it records
   m.tap(BUTTON.SCL, 90);
   m.tap(BUTTON.REC, 90);
   m.midi(0x90, 72, 70);
@@ -564,19 +564,6 @@ const changed = (a, b) => {
   }
   return out;
 };
-// A bank of kits or patterns as firmware 0.5.0 wrote it.
-function oldBank(kind, generation, fill) {
-  const d = new Uint8Array(SECTOR).fill(255), v = new DataView(d.buffer);
-  d.fill(0, 20, 3104);
-  v.setUint32(0, 0x31535043, true);
-  v.setUint32(4, 0, true);
-  v.setUint32(12, 1 << 8 | kind, true);
-  v.setUint32(16, generation, true);
-  fill(d, 32);
-  v.setUint32(8, crc32(d.subarray(12, 3104)), true);
-  return d;
-}
-
 async function storage(pkg) {
   const fresh = async (sectors = []) => {
     const n = await new Machine().boot(pkg);
@@ -652,7 +639,7 @@ async function storage(pkg) {
   check(m.grid().join() !== page1, "ARP changes the pattern");
   m.tap(BUTTON.PLAY);
   m.tap(BUTTON.SAVE, 60);
-  m.tap(BUTTON.OCTDN, 60);
+  m.tap(BUTTON.OCTUP, 60);
   shows(m, "LOADED 1", "OCT- loads it");
   m.tap(BUTTON.SEQ, 90);
   m.run(800);
@@ -690,7 +677,7 @@ async function storage(pkg) {
   m.tap(BUTTON.SAVE, 60);
   m.run(300);
   shows(m, "1 CLASSIC 1 133 32", "after a restart the project is listed");
-  m.tap(BUTTON.OCTDN, 60);
+  m.tap(BUTTON.OCTUP, 60);
   m.run(800);
   check(sound(m).join() === kit.join(), "after a restart the kit loads", soundValues(m));
   m.tap(BUTTON.SEQ, 90); m.run(300);
@@ -718,7 +705,7 @@ async function storage(pkg) {
   open(m);
   shows(m, "1 CLASSIC 1", "a corrupted sector: the copy before it is used");
   check(!m.text().includes("2 CLASSIC"), "the damaged save is not shown", m.text());
-  m.tap(BUTTON.OCTDN, 60);
+  m.tap(BUTTON.OCTUP, 60);
   shows(m, "LOADED 1", "and loads");
   m.run(300);
   m.turn(ENC.KNOB1, 1);
@@ -739,70 +726,9 @@ async function storage(pkg) {
   open(m);
   shows(m, "SAVED DATA DAMAGED", "both copies corrupted: it says so");
   shows(m, "1 --", "and shows nothing it cannot trust");
-  m.tap(BUTTON.OCTDN, 60);
+  m.tap(BUTTON.OCTUP, 60);
   m.run(200);
   check(!m.text().includes("LOADED"), "and loads nothing");
-
-  // ---- saves from 0.5.0: found, loaded, untouched, and erased only when asked
-  const hostKitBytes = hostKit(3, 149, 50);
-  const oldKits = oldBank(0, 4, (d, at) => { // slot 2
-    d.set([1, 4, 1, 0, 149, 0, 66, 0], at + 256);
-    d.set(hostKitBytes.slice(0, 247).map((v) => v & 127), at + 256 + 8);
-  });
-  const oldPatterns = oldBank(1, 2, (d, at) => { // slot 3: a hit on step 6 of DRUM 2, at 140 BPM
-    d.set([1, 60, 50, 30, 0, 1, 0, 0, 9, 0, 140, 0], at + 2 * 256);
-    d.set([100, 0], at + 2 * 256 + 12 + 32 + 10);
-  });
-  m = await fresh([[STORE, oldKits], [STORE + 3 * SECTOR, oldPatterns]]);
-  const chip = m.flash();
-  open(m);
-  shows(m, "4 HELD BY OLD SAVES", "old saves hold their sectors, and it says so");
-  m.png(`${out}/page-projects-old.png`);
-  m.turn(ENC.SELECT, 10);
-  m.run(300);
-  shows(m, "OLD KIT 2 INDUSTRIAL 149", "an old kit is listed");
-  m.tap(BUTTON.OCTDN, 60);
-  shows(m, "LOADED", "and loads");
-  m.run(800);
-  check(sound(m).join() === [hostKitBytes[PAR.COARSE1], hostKitBytes[PAR.VELOD1], hostKitBytes[PAR.FILTER1], hostKitBytes[PAR.DRIVE1]].join(), "the old kit is on SOUND", soundValues(m));
-  m.tap(BUTTON.SAVE, 60);
-  m.run(200);
-  m.turn(ENC.SELECT, 13);
-  m.run(300);
-  shows(m, "OLD PAT 3 MACHINE 140", "an old pattern is listed");
-  m.tap(BUTTON.SAVE, 60);
-  shows(m, "OLD SAVES ONLY LOAD", "and is not written to");
-  m.run(1400);
-  m.tap(BUTTON.OCTDN, 60);
-  m.tap(BUTTON.SEQ, 90);
-  m.run(300);
-  shows(m, "140 BPM", "the old pattern loads, with its tempo");
-  check(m.grid()[1][5] === "1", "and its step", m.grid().join("\n"));
-  shows(m, "PAGE 1/1", "one page");
-  check(changed(chip, m.flash()).filter((a) => a >= USER).length === 0, "loading wrote nothing");
-  m.tap(BUTTON.SAVE, 60);
-  m.run(200);
-  m.turn(ENC.SELECT, -40);
-  m.tap(BUTTON.SAVE, 60);
-  m.run(300);
-  shows(m, "SAVED 1", "a project goes beside them");
-  const beside = m.flash();
-  check(beside.subarray(STORE, STORE + SECTOR).every((b, i) => b === chip[STORE + i]) && beside.subarray(STORE + 3 * SECTOR, STORE_END).every((b, i) => b === chip[STORE + 3 * SECTOR + i]), "and the old banks are byte for byte as they were");
-  m.turn(ENC.SELECT, 40);
-  m.run(300);
-  shows(m, "ERASE OLD SAVES", "erasing them is a row of its own");
-  m.tap(BUTTON.SAVE, 60);
-  shows(m, "ERASE OLD: SAVE AGAIN", "and asks");
-  check(m.flash().subarray(STORE, STORE + SECTOR).every((b, i) => b === chip[STORE + i]), "one press erases nothing");
-  m.tap(BUTTON.SAVE, 60);
-  shows(m, "OLD SAVES ERASED", "the second does");
-  m.run(300);
-  shows(m, "1 ", "the rows are projects again");
-  m.run(1400);
-  m.turn(ENC.SELECT, 8);
-  m.run(300);
-  shows(m, "9 --", "and every project is free");
-  check(!m.text().includes("HELD BY"), "nothing is held back", m.text());
 
   // someone else's data in our sectors: never touched
   const foreign = new Uint8Array(SECTOR).fill(0x42);
@@ -822,6 +748,14 @@ async function storage(pkg) {
   m.tap(BUTTON.SAVE, 60);
   m.run(400);
   shows(m, "SAVED 1", "and a save works");
+  m.run(1400);
+  m.tap(BUTTON.OCTDN, 60);
+  m.run(100);
+  shows(m, "ERASE: OCT- AGAIN", "OCT- asks");
+  m.tap(BUTTON.OCTDN, 60);
+  m.run(400);
+  shows(m, "ERASED 1", "and erases a project");
+  shows(m, "1 --", "and the slot is empty");
   // a sample bank long enough to reach them, even with them blank
   const bank = new Uint8Array(SECTOR).fill(255);
   new DataView(bank.buffer).setUint32(0, 0x53314d46, true);
@@ -849,7 +783,7 @@ async function storage(pkg) {
   m.tap(BUTTON.SAVE, 60);
   m.chord(BUTTON.SAVE, BUTTON.OCTDN);
   m.chord(BUTTON.SAVE, BUTTON.OCTUP);
-  m.tap(BUTTON.OCTDN, 60);
+  m.tap(BUTTON.OCTUP, 60);
   m.run(300);
   shows(m, "SAFE MODE - ENGINE OFF", "SAFE MODE ignores the save controls");
   check(changed(safe, m.flash()).filter((a) => a >= USER).length === 0, "and writes nothing");
@@ -1176,9 +1110,9 @@ async function sequencer(m) {
   m.turn(ENC.KNOB1, 8);
   m.tap(BUTTON.HOME, 90);
   m.run(200);
-  m.midi(0x99, 38, 120);
+  m.midi(0x99, 39, 120);
   m.run(90);
-  shows(m, "MIDI NOTE 38 SNARE", "MIDI still triggers over the sequence");
+  shows(m, "MIDI NOTE 39 SNARE", "MIDI still triggers over the sequence");
   systemPage(m);
   m.run(800);
   const sys = m.text();
@@ -1654,7 +1588,7 @@ async function pageCopy(pkg) {
   m.run(2500);
   m.tap(BUTTON.SAVE, 60);
   m.run(300);
-  m.tap(BUTTON.OCTDN, 60);
+  m.tap(BUTTON.OCTUP, 60);
   m.run(800);
   m.tap(BUTTON.SEQ, 90);
   m.run(300);
@@ -1828,9 +1762,9 @@ async function main() {
   m.tap(BUTTON.HOME, 90);
   m.run(600);
   m.takePeak();
-  m.midi(0x99, 38, 120);
+  m.midi(0x99, 39, 120);
   m.run(90);
-  shows(m, "MIDI NOTE 38 SNARE", "MIDI names the note and the voice");
+  shows(m, "MIDI NOTE 39 SNARE", "MIDI names the note and the voice");
   m.png(`${out}/midi-hit.png`);
   m.run(100);
   check(m.takePeak() > LOUD, "MIDI note-on sounds");
@@ -1842,7 +1776,7 @@ async function main() {
   systemPage(m);
   m.run(800);
   const first = m.text();
-  shows(m, "0.9.0 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
+  shows(m, "0.9.1 UNVERIFIED", "SYSTEM shows the version, UNVERIFIED");
   const cpu = /CPU MEAN +([\d.]+)%/.exec(first), peak = /CPU PEAK +([\d.]+)%/.exec(first);
   check(cpu && Number(cpu[1]) > 0, `CPU mean is measured (${cpu?.[1]} %)`, first);
   check(peak && Number(peak[1]) >= Number(cpu?.[1]), `CPU peak (${peak?.[1]} %)`, first);

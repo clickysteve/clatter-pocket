@@ -50,7 +50,7 @@ while (!started()) { record(2); frames += 128; if (++guard > 20000) throw new Er
 console.error(`audio start: about ${(frames / 44.118).toFixed(0)} ms of output, ${x.fm1_ms()} ms of clock`);
 for (let n = Number(arg("--lead", 0)) + 40; n > 0; n--) record(2);
 record(1000);
-const notes = { "DRUM 1": 36, "DRUM 2": 41, "DRUM 3": 47, SNARE: 38, CYMBAL: 49, "CL HAT": 42, "OP HAT": 46 };
+const notes = { "DRUM 1": 36, "DRUM 2": 37, "DRUM 3": 38, SNARE: 39, CYMBAL: 40, "CL HAT": 41, "OP HAT": 42 };
 const all = createHash("sha256");
 for (const [voice, note] of Object.entries(notes)) {
   x.fm1_midi(0x90); x.fm1_midi(note); x.fm1_midi(112);

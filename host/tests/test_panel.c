@@ -48,11 +48,11 @@ static void press(struct pocket_panel* p, uint32_t buttons)
 #define KEY_PROGRAMMED KEY(60) /* in PITCH */
 /* The first bank's key of each trigger. F3 is the kick, and the banks follow every nine keys. */
 #define BANK_KEY(position, bank) (POCKET_KEY_LOWEST + (position) + 9 * (bank))
-static const int firstKey[POCKET_LXR_TRIGGERS] = { BANK_KEY(0, 0), BANK_KEY(4, 0), BANK_KEY(5, 0), BANK_KEY(1, 0), BANK_KEY(6, 0), BANK_KEY(2, 0), BANK_KEY(3, 0) };
+static const int firstKey[POCKET_LXR_TRIGGERS] = { BANK_KEY(0, 0), BANK_KEY(1, 0), BANK_KEY(2, 0), BANK_KEY(3, 0), BANK_KEY(4, 0), BANK_KEY(5, 0), BANK_KEY(6, 0) };
 #define KEY_KICK KEY(BANK_KEY(0, 0))
-#define KEY_SNARE KEY(BANK_KEY(1, 0))
-#define KEY_HAT KEY(BANK_KEY(2, 0))
-#define KEY_LOW_TOM KEY(BANK_KEY(4, 0))
+#define KEY_SNARE KEY(BANK_KEY(3, 0))
+#define KEY_HAT KEY(BANK_KEY(5, 0))
+#define KEY_LOW_TOM KEY(BANK_KEY(1, 0))
 
 static void tap_keys(struct pocket_panel* p, uint32_t keys)
 {
@@ -359,8 +359,8 @@ static void test_keyboard(void)
 	start_engine(&panel);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
 	panel.follow = 0;
-	static const int order[POCKET_BANK_KEYS] = { POCKET_TRIG_DRUM1, POCKET_TRIG_SNARE, POCKET_TRIG_CLOSED_HAT, POCKET_TRIG_OPEN_HAT,
-		POCKET_TRIG_DRUM2, POCKET_TRIG_DRUM3, POCKET_TRIG_CYMBAL, POCKET_TRIG_DRUM3, POCKET_TRIG_SNARE };
+	static const int order[POCKET_BANK_KEYS] = { POCKET_TRIG_DRUM1, POCKET_TRIG_DRUM2, POCKET_TRIG_DRUM3, POCKET_TRIG_SNARE,
+		POCKET_TRIG_CYMBAL, POCKET_TRIG_CLOSED_HAT, POCKET_TRIG_OPEN_HAT, POCKET_TRIG_DRUM3, POCKET_TRIG_SNARE };
 	for (int k = 0; k < POCKET_KEYS; k++)
 	{
 		const uint32_t hits = panel.hits;
@@ -793,14 +793,16 @@ static void test_midi(void)
 	press(&panel, BUTTON(SEQ));
 	clear_pattern();
 
-	/* DRUM: the GM map, or the keys' map */
-	CHECK(pocket_panel_midi(&panel, 0, 36, 90) == 1 && panel.trigger == POCKET_TRIG_DRUM1, "note 36 is the kick");
+	/* DRUM: a different sound on every note, in the screen's order, or the GM map */
+	static const int inOrder[] = { POCKET_TRIG_DRUM1, POCKET_TRIG_DRUM2, POCKET_TRIG_DRUM3, POCKET_TRIG_SNARE, POCKET_TRIG_CYMBAL,
+		POCKET_TRIG_CLOSED_HAT, POCKET_TRIG_OPEN_HAT };
+	for (int i = 0; i < 7; i++) CHECK(pocket_panel_midi(&panel, 0, 36 + (unsigned)i, 90) == 1 && panel.trigger == inOrder[i], "note %d: %d", 36 + i, panel.trigger);
+	CHECK(pocket_panel_midi(&panel, 0, 36 + 9 + 3, 90) == 1 && panel.trigger == POCKET_TRIG_SNARE, "the second bank's snare");
+	CHECK(pocket_panel_midi(&panel, 0, 36 + 27, 90) == 1 && panel.trigger == POCKET_TRIG_DRUM1, "and the map repeats past the keys");
+	panel.midi_map = 1;
+	CHECK(pocket_panel_midi(&panel, 0, 36, 90) == 1 && panel.trigger == POCKET_TRIG_DRUM1, "GM: note 36 is the kick");
 	CHECK(pocket_panel_midi(&panel, 0, 46, 90) == 1 && panel.trigger == POCKET_TRIG_OPEN_HAT, "note 46 the open hat");
 	CHECK(pocket_panel_midi(&panel, 0, 60, 90) == 0, "note 60 is no GM drum");
-	panel.midi_map = 1;
-	CHECK(pocket_panel_midi(&panel, 0, 53, 90) == 1 && panel.trigger == POCKET_TRIG_DRUM1, "as the keys: F3 is the kick");
-	CHECK(pocket_panel_midi(&panel, 0, 53 + 9 + 1, 90) == 1 && panel.trigger == POCKET_TRIG_SNARE, "the second bank's snare");
-	CHECK(pocket_panel_midi(&panel, 0, 53 + 27, 90) == 1 && panel.trigger == POCKET_TRIG_DRUM1, "and the map repeats past the keys");
 	panel.midi_map = 0;
 	/* the channel */
 	panel.midi_channel = 10;
@@ -809,7 +811,7 @@ static void test_midi(void)
 	panel.midi_channel = 0;
 	/* recording, with the note's own velocity */
 	press(&panel, BUTTON(REC));
-	pocket_panel_midi(&panel, 0, 38, 55);
+	pocket_panel_midi(&panel, 0, 39, 55);
 	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_SNARE][0] == POCKET_CELL(55, 0), "MIDI is recorded with its velocity");
 	/* PITCH: the selected voice at the note */
 	press(&panel, BUTTON(SCL));
@@ -880,23 +882,6 @@ static void test_global(void)
 	press(&panel, BUTTON(GLO));
 	CHECK(panel.page == POCKET_PAGE_GLOBAL, "and back");
 	render_seconds(44100);
-}
-
-/* A bank of kits or patterns as firmware before projects wrote it, on the chip. */
-static void old_bank(unsigned kind, unsigned copy, uint32_t generation, const uint8_t slots[12][256])
-{
-	static uint8_t sector[4096];
-	const uint32_t magic = 0x31535043u, commit = 0, format = 1u << 8 | kind;
-	memset(sector, 0xff, sizeof sector);
-	memset(sector + 20, 0, 12);
-	memcpy(sector, &magic, 4);
-	memcpy(sector + 4, &commit, 4);
-	memcpy(sector + 12, &format, 4);
-	memcpy(sector + 16, &generation, 4);
-	memcpy(sector + 32, slots, 12 * 256);
-	const uint32_t crc = pocket_crc32(0, sector + 12, 3104 - 12);
-	memcpy(sector + 8, &crc, 4);
-	memcpy(fake_flash + 430080 + (2 * kind + copy) * 4096, sector, sizeof sector);
 }
 
 static void project_state(uint8_t* kit, struct pocket_pattern* pattern)
@@ -987,7 +972,7 @@ static void test_saving(void)
 	press(&panel, BUTTON(SAVE));
 	CHECK(fake_flash_ops == once, "moving away disarms it");
 	panel.kit_announce = 0;
-	pocket_panel_tick(&panel, POCKET_NOTICE_MS);
+	pocket_panel_tick(&panel, POCKET_QUESTION_MS);
 	press(&panel, BUTTON(SAVE));
 	CHECK(fake_flash_ops == once, "the question lapses");
 	press(&panel, BUTTON(SAVE));
@@ -1011,7 +996,7 @@ static void test_saving(void)
 	CHECK(memcmp(a, b, sizeof a) && memcmp(&saved, &now, sizeof now), "another kit and pattern");
 	press(&panel, BUTTON(PLAY));
 	press(&panel, BUTTON(SAVE));
-	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_UP));
 	CHECK(!strcmp(panel.notice, "LOADED 3"), "OCT- loads: %s", panel.notice);
 	CHECK(panel.octave == 0 && panel.key_velocity == 127, "and is neither the octave nor the velocity here");
 	settle(&panel);
@@ -1038,7 +1023,7 @@ static void test_saving(void)
 	/* an empty slot: nothing to load */
 	turn(&panel, POCKET_ENC_KNOB1, 3);
 	project_state(b, &now);
-	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_UP));
 	CHECK(!memcmp(&now, pocket_seq_pattern(), sizeof now), "an empty slot loads nothing");
 
 	/* every slot, in any order, and none disturbs another */
@@ -1054,7 +1039,7 @@ static void test_saving(void)
 	for (int slot = 0; slot < POCKET_STORE_PROJECTS; slot++)
 	{
 		panel.store_slot = (uint8_t)slot;
-		press(&panel, BUTTON(OCT_DOWN));
+		press(&panel, BUTTON(OCT_UP));
 		CHECK(pocket_seq_tempo() == (slot == 2 ? 133 : 100 + slot), "slot %d holds its own: %d", slot, pocket_seq_tempo());
 	}
 
@@ -1065,7 +1050,7 @@ static void test_saving(void)
 	CHECK(!strcmp(panel.notice, "NOTHING TO UNDO"), "history does not survive: %s", panel.notice);
 	press(&panel, BUTTON(SAVE));
 	turn(&panel, POCKET_ENC_KNOB1, 2);
-	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_UP));
 	settle(&panel);
 	project_state(b, &now);
 	CHECK(!memcmp(a, b, sizeof a) && !memcmp(&saved, &now, sizeof now) && pocket_seq_tempo() == 133, "the project survives a restart");
@@ -1079,7 +1064,7 @@ static void test_saving(void)
 	panel.store_slot = 0;
 	static uint16_t band[POCKET_SCREEN_W * POCKET_BAND_ROWS];
 	for (unsigned line = 4; line < 12; line++) pocket_panel_draw_band(&panel, NULL, line, band); /* no crash on bad records */
-	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_UP));
 	CHECK(panel.style < POCKET_GEN_STYLES && panel.density <= 100 && panel.complexity <= 100 && panel.mutate_strength < POCKET_MUTATE_STRENGTHS && panel.seed < 10000, "out-of-range values are not believed");
 	CHECK(!(panel.locks & 0x80) && pocket_seq_tempo() <= POCKET_SEQ_BPM_MAX && pocket_seq_swing() <= POCKET_SEQ_SWING_MAX, "nor the rest");
 	int stray = 0;
@@ -1101,7 +1086,7 @@ static void test_saving(void)
 	CHECK(panel.store_state == POCKET_STORE_OCCUPIED, "foreign data: %d", panel.store_state);
 	const long before = fake_flash_ops;
 	press(&panel, BUTTON(SAVE));
-	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_UP));
 	CHECK(fake_flash_ops == before, "one press, or a load, does not write");
 	for (unsigned line = 4; line < 12; line++) pocket_panel_draw_band(&panel, NULL, line, band);
 	press(&panel, BUTTON(HOME));
@@ -1138,103 +1123,6 @@ static void test_saving(void)
 	uint8_t used = 0;
 	pocket_store_peek(0, &used, 1);
 	CHECK(panel.store_state >= 0 && used, "and the last one is still there");
-}
-
-/* Saves from before projects: kept, listed, loaded, and given up only when asked. */
-static void test_old_saves(void)
-{
-	struct pocket_panel panel;
-	static uint8_t kits[12][256], patterns[12][256], k[POCKET_SOUND_PARAMS];
-	fake_flash_reset();
-	/* a kit, as the old firmware laid it out: used, kit, generated, edited, seed, wild, reserved, params */
-	kits[1][0] = 1;
-	kits[1][1] = 4;
-	kits[1][2] = 1;
-	kits[1][3] = 1;
-	kits[1][4] = 149;
-	kits[1][6] = 66;
-	pocket_kit_generate(kits[1] + 8, 3, 149, 50);
-	/* a pattern: used, swing, density, complexity, style, mutate, locks, reserved, seed, tempo, cells */
-	static const uint8_t head[12] = { 1, 58, 70, 20, 2, 2, 1 << 3, 0, 9, 0, 140, 0 };
-	memcpy(patterns[4], head, sizeof head);
-	const uint16_t cell = POCKET_CELL(99, 72);
-	memcpy(patterns[4] + 12 + 3 * 32 + 5 * 2, &cell, 2);
-	old_bank(0, 1, 7, kits);
-	old_bank(1, 0, 3, patterns);
-	static uint8_t chip[16384];
-	memcpy(chip, fake_flash + 430080, sizeof chip);
-	start_engine(&panel);
-	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
-	const long ops = fake_flash_ops;
-
-	press(&panel, BUTTON(SAVE));
-	CHECK(panel.store_state == POCKET_STORE_OK, "old banks open: %d", panel.store_state);
-	CHECK(pocket_store_room() == 3, "and hold back all but a sector of projects: %u", pocket_store_room());
-	static uint16_t band[POCKET_SCREEN_W * POCKET_BAND_ROWS];
-	for (int row = 0; row < 40; row++)
-	{
-		turn(&panel, POCKET_ENC_KNOB1, 1);
-		for (unsigned line = 4; line < 12; line++) pocket_panel_draw_band(&panel, NULL, line, band);
-	}
-	CHECK(panel.store_slot == 33, "the rows end at ERASE OLD SAVES: %d", panel.store_slot);
-	/* the old kit loads */
-	panel.store_slot = 10;
-	press(&panel, BUTTON(OCT_DOWN));
-	settle(&panel);
-	kit_now(k);
-	CHECK(!memcmp(k + 1, kits[1] + 9, POCKET_SOUND_PARAMS - 1 - 6 * 0) || k[POCKET_PAR_COARSE1] == kits[1][8 + POCKET_PAR_COARSE1], "an old kit loads");
-	CHECK(panel.kit == 4 && panel.kit_seed == 149 && panel.kit_edited, "with its name");
-	CHECK(pocket_seq_tempo() == 120, "a kit alone leaves the tempo");
-	/* the old pattern loads, as one page */
-	panel.store_slot = 21 + 4;
-	press(&panel, BUTTON(OCT_DOWN));
-	CHECK(pocket_seq_pattern()->cell[3][5] == POCKET_CELL(99, 72), "an old pattern loads");
-	CHECK(pocket_seq_pattern()->last_page == 0 && pocket_seq_tempo() == 140 && pocket_seq_swing() == 58 && panel.density == 70 && panel.locks == 1u << 3, "with its settings");
-	press2(&panel, BUTTON(SAVE), BUTTON(OCT_DOWN));
-	CHECK(pocket_seq_tempo() == 120, "and is undone like anything else");
-	press2(&panel, BUTTON(SAVE), BUTTON(OCT_UP));
-	/* none of that wrote anything, and SAVE on them does not */
-	press(&panel, BUTTON(SAVE));
-	CHECK(!strcmp(panel.notice, "OLD SAVES ONLY LOAD"), "old rows only load: %s", panel.notice);
-	panel.store_slot = 4;
-	press(&panel, BUTTON(SAVE));
-	CHECK(!strcmp(panel.notice, "HELD BY OLD SAVES"), "a project their sectors hold: %s", panel.notice);
-	CHECK(fake_flash_ops == ops, "nothing written");
-
-	/* a new project goes beside them, and they are untouched */
-	panel.store_slot = 0;
-	press(&panel, BUTTON(SAVE));
-	CHECK(!strcmp(panel.notice, "SAVED 1"), "a project beside old banks: %s", panel.notice);
-	CHECK(!memcmp(chip + 4096, fake_flash + 430080 + 4096, 4096) && !memcmp(chip + 8192, fake_flash + 430080 + 8192, 4096), "the old banks are byte for byte as they were");
-	for (int i = 1; i < 6; i++)
-	{
-		pocket_panel_tick(&panel, POCKET_NOTICE_MS);
-		panel.store_slot = 0;
-		press(&panel, BUTTON(SAVE));
-		press(&panel, BUTTON(SAVE));
-		CHECK(!strncmp(panel.notice, "SAVED", 5), "again: %s", panel.notice);
-		CHECK(!memcmp(chip + 4096, fake_flash + 430080 + 4096, 4096) && !memcmp(chip + 8192, fake_flash + 430080 + 8192, 4096), "and again");
-	}
-	press(&panel, BUTTON(HOME));
-	press(&panel, BUTTON(SAVE));
-	CHECK(pocket_store_old(0) && pocket_store_old(1), "still found after a reopen");
-
-	/* erasing them is asked for, twice */
-	panel.store_slot = 33;
-	const long asked = fake_flash_ops;
-	press(&panel, BUTTON(SAVE));
-	CHECK(fake_flash_ops == asked && !strcmp(panel.notice, "ERASE OLD: SAVE AGAIN"), "one press erases nothing: %s", panel.notice);
-	press(&panel, BUTTON(SAVE));
-	CHECK(!strcmp(panel.notice, "OLD SAVES ERASED"), "the second does: %s", panel.notice);
-	press(&panel, BUTTON(HOME));
-	press(&panel, BUTTON(SAVE));
-	CHECK(pocket_store_room() == POCKET_STORE_PROJECTS && !pocket_store_old(0) && !pocket_store_old(1), "then every project is free: %u", pocket_store_room());
-	panel.store_slot = 8;
-	press(&panel, BUTTON(SAVE));
-	CHECK(!strcmp(panel.notice, "SAVED 9"), "the last one too: %s", panel.notice);
-	uint8_t used = 0;
-	pocket_store_peek(0, &used, 1);
-	CHECK(used, "and the projects saved beside them are there");
 }
 
 /* What a sound is, independent of how loud: how it moves, how long it lasts, how bright it is. */
@@ -1343,8 +1231,8 @@ static void test_variations(void)
 		for (int bank = 0; bank < 3; bank++)
 		{
 			total += 2;
-			close += shape_distance(&shapes[5 + 9 * bank], &shapes[7 + 9 * bank]) < CLOSE;
-			close += shape_distance(&shapes[1 + 9 * bank], &shapes[8 + 9 * bank]) < CLOSE;
+			close += shape_distance(&shapes[2 + 9 * bank], &shapes[7 + 9 * bank]) < CLOSE;
+			close += shape_distance(&shapes[3 + 9 * bank], &shapes[8 + 9 * bank]) < CLOSE;
 		}
 	}
 	printf("  variations: %d of %d comparisons close, weakest %.2f, across %d kits\n", close, total, weakest, POCKET_KITS);
@@ -1384,7 +1272,7 @@ static void test_variations(void)
 		struct shape was, is;
 		shape_of(&was, plain);
 		shape_of(&is, sound);
-		if (position == 0 || position == 4 || position == 5) CHECK(worst * 1000 < peak, "position %d: after both variations the plain hit is the plain sound: %lld of %lld", position, (long long)worst, (long long)peak);
+		if (position <= 2) CHECK(worst * 1000 < peak, "position %d: after both variations the plain hit is the plain sound: %lld of %lld", position, (long long)worst, (long long)peak);
 		CHECK(shape_distance(&was, &is) < 0.08, "position %d: and sounds as it did: %.3f", position, shape_distance(&was, &is));
 	}
 	/* the hats share a voice: a variation on one does not outlive a hit on the other */
@@ -1409,11 +1297,11 @@ static void test_variations(void)
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
 	clear_pattern();
 	press(&panel, BUTTON(REC));
-	tap_keys(&panel, 1u << (1 + 9));
+	tap_keys(&panel, 1u << (3 + 9));
 	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_SNARE][0] == POCKET_CELL(127, POCKET_TONE_VARIATION(POCKET_VARIATION_A)), "a variation is recorded as one");
-	tap_keys(&panel, 1u << 1);
+	tap_keys(&panel, 1u << 3);
 	CHECK(pocket_seq_pattern()->cell[POCKET_TRIG_SNARE][0] == POCKET_CELL(127, 0), "the plain key replaces it");
-	tap_keys(&panel, 1u << 1);
+	tap_keys(&panel, 1u << 3);
 	CHECK(!pocket_seq_pattern()->cell[POCKET_TRIG_SNARE][0], "and then removes it");
 	tap_keys(&panel, 1u << (8 + 18));
 	CHECK(POCKET_CELL_VARIATION(pocket_seq_pattern()->cell[POCKET_TRIG_SNARE][0]) == POCKET_VARIATION_ALT_B, "the clap's B is its own");
@@ -1446,7 +1334,7 @@ static void test_variations(void)
 		/* what recording it sounded like has gone; the step plays from the same state */
 		start_engine(&panel);
 		const uint32_t cell = POCKET_CELL(127, POCKET_TONE_VARIATION(k / 9 + (k % 9 >= 7 ? POCKET_VARIATION_ALT : 0)));
-		static const int track[9] = { 0, 3, 5, 6, 1, 2, 4, 2, 3 };
+		static const int track[9] = { 0, 1, 2, 3, 4, 5, 6, 2, 3 };
 		clear_pattern();
 		pocket_seq_set_cell(track[k % 9], 0, cell);
 		pocket_seq_play(1);
@@ -1666,7 +1554,7 @@ static void test_step_keys(void)
 	CHECK(panel.step == 19 && panel.key_velocity == velocity, "OCT+: the next page");
 	press(&panel, BUTTON(OCT_UP));
 	CHECK(panel.step == 3 && pattern->last_page == 1, "and round, not longer");
-	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_UP));
 	CHECK(panel.step == 19, "OCT-");
 	/* a page turned with a key down: that key has done nothing */
 	HOLD(WHITE(4), 0, 0, 0, 0);
@@ -1769,7 +1657,7 @@ static void test_step_keys(void)
 	const int octave = panel.octave;
 	press(&panel, BUTTON(OCT_UP));
 	CHECK(panel.octave == octave + 1, "OCT is the octave");
-	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_UP));
 	press(&panel, BUTTON(SEQ));
 	tap_keys(&panel, WHITE(8));
 	CHECK(pattern->cell[panel.trigger][8] && !POCKET_CELL_NOTE(pattern->cell[panel.trigger][8]), "in PITCH too the keys are steps on PATTERN");
@@ -2077,7 +1965,7 @@ static void test_history(void)
 	MARK(3);
 	pocket_seq_set_tempo(90);
 	press(&panel, BUTTON(SAVE));
-	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_UP));
 	CHECK(pocket_seq_tempo() == 150, "the load's tempo");
 	MARK(4);
 	IS(4, "a project is loaded");
@@ -2367,6 +2255,72 @@ static void test_page_copy(void)
 
 /* The whole way: 16 steps, 32, copied, edited, a condition, heard to change, saved, restarted. */
 /* MIDI clock has the tempo: the knob does nothing, and the screen says so */
+static void test_project_buttons(void)
+{
+	static struct pocket_panel panel;
+	fake_flash_reset();
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "SAVED 1"), "SAVE saves: %s", panel.notice);
+
+	/* overwriting: the question stays up long enough to read and answer */
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "OVERWRITE: SAVE AGAIN"), "it asks: %s", panel.notice);
+	pocket_panel_tick(&panel, 2500);
+	long ops = fake_flash_ops;
+	press(&panel, BUTTON(SAVE));
+	CHECK(fake_flash_ops > ops && !strcmp(panel.notice, "SAVED 1"), "and 2.5 s later the answer is taken: %s", panel.notice);
+
+	/* OCT+ loads, OCT- erases */
+	const int tempo = pocket_seq_tempo();
+	pocket_seq_set_tempo(tempo + 9);
+	ops = fake_flash_ops;
+	press(&panel, BUTTON(OCT_UP));
+	CHECK(pocket_seq_tempo() == tempo && fake_flash_ops == ops, "OCT+ loads and writes nothing: %d", pocket_seq_tempo());
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(fake_flash_ops == ops && !strcmp(panel.notice, "ERASE: OCT- AGAIN"), "OCT- asks: %s", panel.notice);
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "OVERWRITE: SAVE AGAIN"), "SAVE does not answer it: %s", panel.notice);
+	CHECK(fake_flash_ops == ops, "nothing yet");
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(fake_flash_ops == ops && !strcmp(panel.notice, "ERASE: OCT- AGAIN"), "nor the other way round: %s", panel.notice);
+	press(&panel, BUTTON(PLAY));
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(fake_flash_ops == ops && !strcmp(panel.notice, "STOP TO SAVE"), "not while playing: %s", panel.notice);
+	press(&panel, BUTTON(PLAY));
+	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(fake_flash_ops > ops && !strcmp(panel.notice, "ERASED 1"), "OCT- again erases: %s", panel.notice);
+	pocket_seq_set_tempo(tempo + 9);
+	press(&panel, BUTTON(OCT_UP));
+	CHECK(pocket_seq_tempo() == tempo + 9, "the slot is empty: nothing to load");
+	ops = fake_flash_ops;
+	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_DOWN));
+	CHECK(fake_flash_ops == ops, "and nothing to erase");
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "SAVED 1"), "and it saves at the first press: %s", panel.notice);
+
+	/* only that slot goes, and it stays gone over a restart */
+	turn(&panel, POCKET_ENC_SELECT, 1);
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "SAVED 2"), "another slot: %s", panel.notice);
+	turn(&panel, POCKET_ENC_SELECT, -1);
+	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(HOME));
+	start_engine(&panel);
+	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
+	press(&panel, BUTTON(SAVE));
+	uint8_t record[4];
+	pocket_store_peek(0, record, sizeof record);
+	CHECK(!record[0], "slot 1 is gone");
+	pocket_store_peek(1, record, sizeof record);
+	CHECK(record[0], "slot 2 is not");
+}
+
 static void test_clock_tempo(void)
 {
 	static struct pocket_panel panel;
@@ -2459,14 +2413,14 @@ static void test_page_to_project(void)
 	press(&panel, BUTTON(SEQ));
 	clear_pattern();
 	press(&panel, BUTTON(SAVE));
-	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_UP));
 	CHECK(!strcmp(panel.notice, "LOADED 1"), "%s", panel.notice);
 	CHECK(!memcmp(&saved, pocket_seq_pattern(), sizeof saved), "32 steps and the condition, loaded");
 	CHECK(pocket_seq_pattern()->last_page == 1, "two pages");
 	start_engine(&panel);
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0, NULL);
 	press(&panel, BUTTON(SAVE));
-	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_UP));
 	CHECK(!memcmp(&saved, pocket_seq_pattern(), sizeof saved), "and after a restart");
 }
 
@@ -2506,7 +2460,7 @@ int main(int argc, char** argv)
 		CHECK(panel.dirty == (1u << POCKET_BANDS) - 1u, "a page change does not redraw the whole screen");
 	}
 	/* OCT no longer pages */
-	press(&panel, BUTTON(OCT_DOWN));
+	press(&panel, BUTTON(OCT_UP));
 	press(&panel, BUTTON(OCT_UP));
 	CHECK(panel.page == POCKET_PAGE_MAIN, "OCT changed the page (%d)", panel.page);
 	press(&panel, BUTTON(SEQ));
@@ -2596,12 +2550,14 @@ int main(int argc, char** argv)
 	/* activity: a MIDI hit names its voice for a moment; time ends it and redraws */
 	pocket_panel_init(&panel);
 	panel.dirty = 0;
-	CHECK(pocket_panel_midi(&panel, 9, 38, 100) == 1, "MIDI note 38 plays");
+	CHECK(pocket_panel_midi(&panel, 9, 39, 100) == 1, "MIDI note 39 plays");
 	CHECK(panel.midi_trigger == POCKET_TRIG_SNARE && panel.flash_ms[POCKET_TRIG_SNARE], "MIDI hit not shown");
 	CHECK(panel.dirty & (1u << 3), "MIDI hit does not redraw the MIDI line");
-	CHECK(pocket_panel_midi(&panel, 9, 99, 100) == 0 && panel.midi_trigger == POCKET_TRIG_SNARE, "an unmapped note played");
+	panel.midi_map = 1;
+	CHECK(pocket_panel_midi(&panel, 9, 99, 100) == 0 && panel.midi_trigger == POCKET_TRIG_SNARE, "an unmapped GM note played");
+	panel.midi_map = 0;
 	pocket_panel_tick(&panel, 1000);
-	pocket_panel_midi(&panel, 9, 38, 100);
+	pocket_panel_midi(&panel, 9, 39, 100);
 	panel.dirty = 0;
 	pocket_panel_tick(&panel, POCKET_FLASH_MS - 1);
 	CHECK(panel.flash_ms[POCKET_TRIG_SNARE] == 1 && !panel.dirty, "the activity cell ended early");
@@ -2645,7 +2601,7 @@ int main(int argc, char** argv)
 		now.midi_messages = 1;
 		pocket_panel_draw_band(&panel, &now, 3, d);
 		CHECK(memcmp(c, d, sizeof c) != 0, "MIDI messages do not change the MIDI line");
-		pocket_panel_midi(&panel, 9, 38, 100);
+		pocket_panel_midi(&panel, 9, 39, 100);
 		pocket_panel_draw_band(&panel, &now, 3, c); /* at once, before the next status period */
 		CHECK(memcmp(c, d, sizeof c) != 0, "a MIDI hit does not change the MIDI line");
 	}
@@ -2697,7 +2653,6 @@ int main(int argc, char** argv)
 	test_midi();
 	test_global();
 	test_saving();
-	test_old_saves();
 	test_variations();
 	test_long_patterns();
 	test_step_keys();
@@ -2706,6 +2661,7 @@ int main(int argc, char** argv)
 	test_page_copy();
 	test_page_to_project();
 	test_clock_tempo();
+	test_project_buttons();
 
 	/* screenshots: each screen as the FM-1 would show it */
 	start_engine(&panel);

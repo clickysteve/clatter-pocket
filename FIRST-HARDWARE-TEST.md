@@ -152,22 +152,17 @@ If the screen says **ENGINE ERROR**, the output stays silent. Stop and restore.
 
 ## MIDI test
 
-1. **USB MIDI from the computer.** Send note-on 36, velocity 100, on any channel: DRUM 1;
+1. **USB MIDI from the computer.** Send note-on 36, velocity 100, on any channel: KICK, on DRUM 1;
    the MIDI line shows NOTE 36 DRUM 1, briefly inverted.
-2. Then:
-   - 38: SNARE;
-   - 42: CL HAT;
-   - 46: OP HAT;
-   - 49: CYMBAL;
-   - 45: DRUM 2;
-   - 48: DRUM 3.
+2. Then: 37 DRUM 2, 38 DRUM 3, 39 SNARE, 40 CYMBAL, 41 CL HAT, 42 OP HAT, 43 PERC, 44 CLAP. Every note
+   from 36 to 62 is a different sound. Set MIDI MAP to GM on GLOBAL for the General MIDI notes.
 
    Velocity changes the level. Note-offs and other messages count as MIDI but trigger
    nothing.
 3. **DIN or TRS MIDI**: the same notes. **BLE MIDI**: pair the computer or phone with the
    FM-1 (BLE Peripheral, as stock) and send the same notes.
 4. **Simultaneous and repeated:**
-   - send 36, 38 and 42 together;
+   - send 36, 39 and 41 together;
    - send a fast 16th-note pattern at 180 BPM for a minute.
 
    DROP should stay 0, XRUN should not rise, and the sound should not stutter.
@@ -210,7 +205,8 @@ in "Before installation".** docs/POCKET-STORAGE.md says what is and is not known
    tap again, and record whether the 9 empty slots appear. The other two are safe results and the end of
    this test: nothing has been written.
 2. Tap **SAVE** again, on slot 1. Record what is heard and how long the screen takes to show SAVED 1.
-3. Press ENV for another kit, then tap SAVE and press **OCT−**: the first kit is back.
+3. Press ENV for another kit, then tap SAVE and press **OCT+**: the first kit is back. Press **OCT−**
+   twice on a slot you do not need: it asks, then the slot is empty.
 4. Power off, power on, tap SAVE: slot 1 is listed, and loads.
 5. Install the same package again and check again: this is what shows whether an update leaves the
    sectors alone. Record the result either way.
