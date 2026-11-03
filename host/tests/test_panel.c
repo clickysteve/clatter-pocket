@@ -1120,7 +1120,7 @@ static void test_saving(void)
 	CHECK(!strcmp(panel.notice, "SAVE FAILED"), "a failed save says so: %s", panel.notice);
 	fake_flash_fail_at = -1;
 	uint8_t used = 0;
-	pocket_store_peek(0, &used, 1);
+	pocket_store_peek(0, 0, &used, 1);
 	CHECK(panel.store_state >= 0 && used, "and the last one is still there");
 }
 
@@ -1179,15 +1179,14 @@ static void test_settings(void)
 	}
 	uint8_t used = 0;
 	pocket_store_open();
-	pocket_store_peek(0, &used, 1);
+	pocket_store_peek(0, 0, &used, 1);
 	CHECK(used, "the project is still there");
 	power_on(&panel);
 	pocket_panel_restore_settings(&panel);
 	CHECK(global_is(&panel, POCKET_KEYS_DRUM, 3, 1, 1, POCKET_QUANTISE_NEAREST, 4, 16, 0), "and they come back");
 
 	/* a sector from before: no settings, and the defaults */
-	static const uint8_t none[POCKET_STORE_SETTINGS_BYTES];
-	pocket_store_set_settings(none);
+	pocket_store_set_settings(NULL);
 	pocket_store_open();
 	pocket_store_project(0);
 	CHECK(pocket_store_commit() == POCKET_STORE_OK, "a save as 0.9.1 made it");
@@ -1196,7 +1195,7 @@ static void test_settings(void)
 	CHECK(global_is(&panel, POCKET_KEYS_DRUM, 0, 127, 1, POCKET_QUANTISE_NEAREST, 0, 0, 0), "0.9.1's save: the defaults");
 
 	/* out of range: not believed, one by one */
-	static const uint8_t wild[POCKET_STORE_SETTINGS_BYTES] = { 1, 7, 0x80, 0, 9, 0, 200, 17, 1 };
+	static const uint8_t wild[POCKET_STORE_SETTINGS] = { 7, 0x80, 0, 9, 0, 200, 17, 1 };
 	pocket_store_set_settings(wild);
 	pocket_store_open();
 	pocket_store_project(0);
@@ -1232,11 +1231,61 @@ static void test_settings(void)
 	CHECK(global_is(&panel, POCKET_KEYS_DRUM, 0, 127, 1, POCKET_QUANTISE_NEAREST, 0, 0, 0), "foreign data: the defaults");
 	press(&panel, BUTTON(GLO));
 	press(&panel, BUTTON(SAVE));
-	CHECK(!strcmp(panel.notice, "FLASH IN USE: OPEN PROJECTS") && !fake_flash_ops, "and SAVE leaves it alone: %s", panel.notice);
+	CHECK(!strcmp(panel.notice, "SAVING OFF: SEE PROJECTS") && !fake_flash_ops, "and SAVE leaves it alone: %s", panel.notice);
 	fake_flash_size = 4096;
 	pocket_panel_restore_settings(&panel);
 	press(&panel, BUTTON(SAVE));
-	CHECK(!strcmp(panel.notice, "SAVING OFF") && !fake_flash_ops, "the wrong partition: %s", panel.notice);
+	CHECK(!strcmp(panel.notice, "SAVING OFF: SEE PROJECTS") && !fake_flash_ops, "the wrong partition: %s", panel.notice);
+	fake_flash_reset();
+}
+
+#define NAME_AT 1332 /* in a record: the rhythm 12, the sound 256, the cells 1,064 */
+/* A project's name: KNOB 2 the letter's place, KNOB 3 the letter, saved with it, back with a load. */
+static void test_names(void)
+{
+	struct pocket_panel panel;
+	static uint16_t band[POCKET_SCREEN_W * POCKET_BAND_ROWS];
+	fake_flash_reset();
+	power_on(&panel);
+	press(&panel, BUTTON(SAVE));
+	CHECK(!memcmp(panel.name, "\0\0\0\0\0\0\0\0", 8), "no name to start with");
+	turn(&panel, POCKET_ENC_KNOB3, 1);
+	turn(&panel, POCKET_ENC_KNOB2, 1);
+	turn(&panel, POCKET_ENC_KNOB3, 2);
+	turn(&panel, POCKET_ENC_KNOB2, 1);
+	turn(&panel, POCKET_ENC_KNOB3, -1);
+	turn(&panel, POCKET_ENC_KNOB2, 20);
+	CHECK(panel.name_at == 7, "KNOB 2 stops at the last letter: %d", panel.name_at);
+	turn(&panel, POCKET_ENC_KNOB3, 27);
+	CHECK(!memcmp(panel.name, "AB-\0\0\0\0" "0", 8), "KNOB 3 the letters: %.8s", panel.name);
+	CHECK(panel.store_slot == 0 && !fake_flash_ops, "and nothing else moves, or is written");
+	for (unsigned b = 0; b < POCKET_BANDS; b++) pocket_panel_draw_band(&panel, NULL, b, band);
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "SAVED 1"), "saved: %s", panel.notice);
+	char name[8];
+	pocket_store_peek(0, NAME_AT, name, 8);
+	CHECK(!memcmp(name, "AB-\0\0\0\0" "0", 8), "in the record's spare bytes: %.8s", name);
+	for (unsigned b = 0; b < POCKET_BANDS; b++) pocket_panel_draw_band(&panel, NULL, b, band);
+
+	/* a restart has no name; a load brings it back, and a slot saved without one has none */
+	power_on(&panel);
+	press(&panel, BUTTON(SAVE));
+	turn(&panel, POCKET_ENC_KNOB1, 1);
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(OCT_UP));
+	CHECK(!memcmp(panel.name, "        ", 8), "slot 2 has no name: %.8s", panel.name);
+	turn(&panel, POCKET_ENC_KNOB1, -1);
+	press(&panel, BUTTON(OCT_UP));
+	CHECK(!memcmp(panel.name, "AB-    0", 8), "slot 1 has its own: %.8s", panel.name);
+
+	/* what a record holds is not believed: anything but a letter is a space */
+	uint8_t* record = pocket_store_project(0);
+	memset(record + NAME_AT, 0xff, 8);
+	record[NAME_AT + 1] = 'Z';
+	pocket_store_commit();
+	press(&panel, BUTTON(OCT_UP));
+	CHECK(!memcmp(panel.name, " Z      ", 8), "a bad name is cleaned: %.8s", panel.name);
+	for (unsigned b = 0; b < POCKET_BANDS; b++) pocket_panel_draw_band(&panel, NULL, b, band);
 	fake_flash_reset();
 }
 
@@ -2482,9 +2531,9 @@ static void test_project_buttons(void)
 	poll(&panel, 0, 0, 0, 0, 0, 0, 0);
 	press(&panel, BUTTON(SAVE));
 	uint8_t record[4];
-	pocket_store_peek(0, record, sizeof record);
+	pocket_store_peek(0, 0, record, sizeof record);
 	CHECK(!record[0], "slot 1 is gone");
-	pocket_store_peek(1, record, sizeof record);
+	pocket_store_peek(1, 0, record, sizeof record);
 	CHECK(record[0], "slot 2 is not");
 }
 
@@ -2822,6 +2871,7 @@ int main(int argc, char** argv)
 	test_saving();
 	test_saved_fx();
 	test_settings();
+	test_names();
 	test_variations();
 	test_long_patterns();
 	test_step_keys();

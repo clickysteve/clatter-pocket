@@ -116,8 +116,11 @@ act afterwards. So HOME's page function cannot reach SAFE MODE, or the reverse.
   and drive; each has its own decay.
 - **MIXER**: LEVEL and PAN of the selected voice, MASTER (shown; set by the pot), a level bar
   per voice. The LXR's pan is taken at each trigger, so a move is heard on the next hit.
-- **GLOBAL**: the settings, 18 rows of which 8 show (POCKET-CONTROLS.md). GLO opens it.
-- **PROJECTS**: a tap of SAVE, 9 slots ([POCKET-STORAGE.md](POCKET-STORAGE.md)).
+- **GLOBAL**: the settings, 18 rows of which 8 show (POCKET-CONTROLS.md). GLO opens it. A tap of
+  SAVE here stores the eight playing settings for after a power-off: SETTINGS SAVED, and the footer
+  says SAVE KEEPS.
+- **PROJECTS**: a tap of SAVE, 9 slots, a slot's name or kit, tempo and length. The status line is the
+  name the next save writes, and says K2 K3 EDIT ([POCKET-STORAGE.md](POCKET-STORAGE.md)).
 - **SYSTEM**: GLO from GLOBAL. Version, build, CPU mean and peak, FAULTS, and how to reach SAFE MODE.
 
 FAULTS is audio overruns plus engine events dropped since start: 0 is the only good number. An overrun also

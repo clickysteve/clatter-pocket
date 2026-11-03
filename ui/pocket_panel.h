@@ -35,7 +35,7 @@ enum {
 	POCKET_ENC_SELECT, POCKET_ENC_ALGORITHM, POCKET_ENC_KNOB1, POCKET_ENC_KNOB2, POCKET_ENC_KNOB3,
 	POCKET_ENC_KNOB4, POCKET_ENC_PRESETS
 };
-#define POCKET_FW_VERSION "0.9.1 UNVERIFIED"
+#define POCKET_FW_VERSION "0.9.2 UNVERIFIED"
 
 struct pocket_panel_input {
 	uint32_t keys;                      /* held note keys */
@@ -75,6 +75,7 @@ enum { POCKET_QUANTISE_BEHIND, POCKET_QUANTISE_NEAREST };
 #define POCKET_KITS 17          /* INIT, then the characters of pocket_kit.h */
 #define POCKET_NOTICE_MS 1200U  /* what a control just did, on the status line */
 #define POCKET_QUESTION_MS 3000U /* a question: long enough to read and answer */
+#define POCKET_NAME_CHARS 8     /* a project's name: A-Z, 0-9, -, and spaces */
 
 /* SOUND's controls, KNOB1..KNOB4, and MIXER's, KNOB1..KNOB2. */
 enum { POCKET_CTL_PITCH, POCKET_CTL_DECAY, POCKET_CTL_FILTER, POCKET_CTL_DRIVE, POCKET_CTL_LEVEL, POCKET_CTL_PAN, POCKET_CTLS };
@@ -99,19 +100,19 @@ struct pocket_panel {
 	uint16_t midi_flash_ms, alert_ms;
 	uint32_t alert_overruns;            /* overruns behind the warning */
 	const char* footer;                 /* message of the start-up, SAFE MODE and error screens */
-	/* The keyboard */
-	int8_t key_mode;                    /* POCKET_KEYS_*; the int8s are GLOBAL's rows */
+	/* GLOBAL's playing settings, in this order: they are saved as they are (pocket_panel.c). The
+	   int8s are GLOBAL's rows. */
+	int8_t key_mode;                    /* POCKET_KEYS_* */
 	int8_t octave;                      /* of the keys, in PITCH */
 	int8_t key_velocity;                /* the keys report no velocity: this is theirs */
 	int8_t follow;                      /* DRUM keys and MIDI move the selected voice */
-	/* Recording */
-	int8_t recording;
-	int8_t quantise;                    /* POCKET_QUANTISE_* */
+	int8_t quantise;                    /* recording while playing: POCKET_QUANTISE_* */
 	int8_t auto_step;                   /* steps the cursor moves after a stopped entry, or 0 */
-	uint8_t entered;                    /* a stopped entry this poll */
-	/* MIDI */
 	int8_t midi_channel;                /* 0: all, otherwise 1-16 */
 	int8_t midi_map;                    /* drums: 0 as the keys, from C1, 1 the General MIDI notes */
+	/* Recording */
+	int8_t recording;
+	uint8_t entered;                    /* a stopped entry this poll */
 	/* What is held */
 	uint8_t save_down;                  /* SAVE is held and has been since a press seen here */
 	uint8_t save_chorded;               /* and has modified something: its release does nothing */
@@ -134,6 +135,8 @@ struct pocket_panel {
 	uint8_t store_slot;                 /* selected row: a project, or something from an old bank */
 	uint8_t store_armed;                /* selected row + 1 while a second SAVE overwrites it */
 	int8_t store_state;                 /* what opening it said */
+	char name[POCKET_NAME_CHARS];       /* this project's name, as a save writes it: KNOB 2 and 3 there */
+	uint8_t name_at;                    /* the letter KNOB 3 changes */
 	/* The pattern, tempo, swing and transport are the sequencer's (pocket_seq.h). */
 	uint8_t step;                       /* selected step, on any page */
 	int8_t density, complexity;         /* 0-100 */

@@ -32,7 +32,7 @@ extern "C" {
 
 #define POCKET_STORE_PROJECTS 9
 #define POCKET_STORE_PROJECT_BYTES 1354
-#define POCKET_STORE_SETTINGS_BYTES 12 /* the caller's; zero in every sector written before 0.9.2 */
+#define POCKET_STORE_SETTINGS 8 /* the caller's bytes, kept in a sector's header */
 
 enum {
 	POCKET_STORE_OK = 0,
@@ -45,8 +45,8 @@ enum {
 
 /* Looks at all four sectors. Writes nothing. Any result below zero leaves nothing to save to. */
 int pocket_store_open(void);
-/* The first `bytes` of a project, all zero if it is empty. */
-void pocket_store_peek(unsigned project, void* data, unsigned bytes);
+/* `bytes` of a project from byte `at`, all zero if it is empty. */
+void pocket_store_peek(unsigned project, unsigned at, void* data, unsigned bytes);
 /* Reads a project's sector into the one held in RAM, and returns its record there, to read or to
  * fill: all zero if it is empty. NULL if Flash refused. A change stays in RAM until _commit. */
 uint8_t* pocket_store_project(unsigned project);
@@ -58,9 +58,10 @@ int pocket_store_commit(void);
 int pocket_store_claim(void);
 
 /* At start-up: reads our four sectors, writes nothing, and copies the settings of the newest good
- * one to data. 0 if none could be read: data is then unchanged. Needs no _open. */
+ * one to data. 0 if it has none, as every sector before 0.9.2, or none could be read: data is then
+ * not to be used. Needs no _open. */
 int pocket_store_settings(uint8_t* data);
-/* What every following commit writes as the settings. */
+/* What every following commit writes as the settings. NULL: none, as before 0.9.2. */
 void pocket_store_set_settings(const uint8_t* data);
 /* The settings alone: opens the store and writes its newest page again, at most one erase, as any
  * save. A result below zero, as _open's, and nothing written. */

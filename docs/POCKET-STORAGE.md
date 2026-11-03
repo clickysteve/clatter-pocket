@@ -14,6 +14,7 @@ the FM-1 emulator. One unit is not many, and an emulator cannot stand in for a d
 |---|---|
 | Tap **SAVE** | opens PROJECTS. In the browser emulator, `8` |
 | **SELECT** or KNOB 1 | choose a slot |
+| **KNOB 2**, **KNOB 3** | name the project: KNOB 2 picks the letter's place, KNOB 3 the letter (a space, A-Z, 0-9, -). The status line shows the name, `NAME AB[C]_____  K2 K3 EDIT`, with the place in brackets. A save writes it, and the slot's row shows it in place of the kit. A load brings it back; a restart starts with none |
 | Tap **SAVE** again | store here. On a slot in use it asks first: tap again within 3 seconds, while OVERWRITE: SAVE AGAIN shows. Only when stopped: STOP TO SAVE otherwise. It says SAVED 3 |
 | **OCT+** | load this slot, also while a pattern plays |
 | **OCT−** | erase this slot. It asks first: press again while ERASE: OCT- AGAIN shows. Only when stopped |
@@ -31,6 +32,7 @@ A load is one undo: SAVE+OCT− takes all of it back, kit, pattern and settings,
 | Length | how many pages play |
 | Tempo and swing | |
 | The generator | DENSITY, COMPLEX, SEED, STYLE, MUTATE, the track locks |
+| Its name | 8 letters, in bytes every save before 0.9.2 left zero: those have none, and show their kit. A letter that is not one is a space |
 
 GLOBAL's playing settings are not part of a project: they are how you play, not what was played.
 They survive a power-off on their own terms, below.
@@ -60,7 +62,8 @@ below proved safe. A project cannot be smaller than its worst case, every step o
 | The kit | 247 and a header of 8: 256 with the old slot's padding |
 | Tempo, swing, generator, length | 12 |
 | 448 steps at 19 bits (velocity 7, note or variation 8, condition 4) | 1,064 |
-| **A project** | **1,332, in a record of 1,354** |
+| A name | 8 |
+| **A project** | **1,340, in a record of 1,354** |
 | A sector's header | 32 |
 
 Three fit a sector, 32 + 3 × 1,354 = 4,094 bytes. One sector must always be free for a save to go to,

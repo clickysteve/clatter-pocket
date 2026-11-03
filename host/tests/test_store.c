@@ -72,7 +72,7 @@ static void test_basics(void)
 	CHECK(pocket_store_open() == POCKET_STORE_OK, "and open");
 	for (unsigned p = 0; p < POCKET_STORE_PROJECTS; p++) CHECK(has(POCKET_STORE_PROJECTS - 1 - p, 100 + p), "project %u reads back", p);
 	uint8_t head[4];
-	pocket_store_peek(4, head, sizeof head);
+	pocket_store_peek(4, 0, head, sizeof head);
 	CHECK(head[0] == 104 && head[3] == 104, "peeking at one reads it without loading its sector");
 	CHECK(outside_intact(), "only our sectors were written");
 

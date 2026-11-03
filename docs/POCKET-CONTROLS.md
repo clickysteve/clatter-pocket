@@ -61,8 +61,8 @@ Every control below works on every page, unless it says otherwise.
 | Knob | PATTERN | PATTERN, step held | PATTERN, SAVE held | PATTERN, SEQ held | SOUND | MIXER | GLOBAL | PROJECTS |
 |---|---|---|---|---|---|---|---|---|
 | KNOB 1 | selected step's velocity | its velocity | its condition | | pitch | level | row | slot |
-| KNOB 2 | tempo (nothing while following MIDI clock) | its pitch | | | decay | pan | value | |
-| KNOB 3 | swing | its condition | | length, a page at a time | filter | | | |
+| KNOB 2 | tempo (nothing while following MIDI clock) | its pitch | | | decay | pan | value | the name's letter place |
+| KNOB 3 | swing | its condition | | length, a page at a time | filter | | | the letter |
 | KNOB 4 | selected step, across pages | its variation | a page at a time | | drive | | | |
 
 Lights: PLAY playing, REC recording, SCL in PITCH, SAVE on a locked track, SEQ on PATTERN, and on

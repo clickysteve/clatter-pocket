@@ -36,7 +36,7 @@ struct sector {
 	uint32_t crc;        /* of everything after it */
 	uint32_t format;     /* version << 8 | page */
 	uint32_t generation; /* the highest good copy of a page is current */
-	uint8_t settings[POCKET_STORE_SETTINGS_BYTES]; /* reserved, all zero, before 0.9.2 */
+	uint8_t settings[12]; /* the caller's, then 1 if there are any: reserved, all zero, before 0.9.2 */
 	uint8_t projects[PER_SECTOR][POCKET_STORE_PROJECT_BYTES];
 	uint8_t padding[2];
 };
@@ -50,7 +50,8 @@ static uint8_t states[SECTORS], pageInRam;
 static uint32_t generations[SECTORS], formats[SECTORS], newest;
 static int8_t current[PAGES]; /* a sector, or -1 */
 static int8_t closed;  /* what the last look found, if it found nothing to save to */
-static uint8_t settings[POCKET_STORE_SETTINGS_BYTES];
+static uint8_t settings[sizeof ram.settings];
+#define HAS_SETTINGS POCKET_STORE_SETTINGS
 
 static uint32_t sector_offset(unsigned sector)
 {
@@ -85,29 +86,36 @@ static unsigned scan(unsigned sector, uint32_t* found, uint32_t* format)
 	return commit == 0 ? VALID : commit == ~0u ? WRITTEN : OURS;
 }
 
-static int examine(void)
+/* Our four sectors and nothing else: their states, each page's current copy, the newest. */
+static void look(unsigned* foreign, unsigned* bad, unsigned* valid)
 {
-	uint32_t sample[3];
-	unsigned foreign = 0, bad = 0, valid = 0;
 	newest = 0;
 	for (unsigned p = 0; p < PAGES; p++) current[p] = -1;
-	if (fm1_flash_size() != PARTITION_BYTES) return POCKET_STORE_UNAVAILABLE;
-	/* a sample bank can have a blank sector in it, so being blank here does not make it free */
-	if (fm1_flash_read(SAMPLE_OFFSET, sample, sizeof sample)) return POCKET_STORE_FAILED;
-	if (sample[0] == SAMPLE_MAGIC && sample[2] > SAMPLE_REACH) return POCKET_STORE_SAMPLES;
 	for (unsigned s = 0; s < SECTORS; s++)
 	{
 		states[s] = (uint8_t)scan(s, &generations[s], &formats[s]);
 		if (states[s] == VALID)
 		{
 			const int8_t held = current[formats[s] & 255u];
-			valid++;
+			++*valid;
 			if (held < 0 || (int32_t)(generations[s] - generations[held]) > 0) current[formats[s] & 255u] = (int8_t)s;
 			if ((int32_t)(generations[s] - newest) > 0) newest = generations[s];
 		}
-		else if (states[s] == FOREIGN) foreign++;
-		else if (states[s] != BLANK) bad++;
+		else if (states[s] == FOREIGN) ++*foreign;
+		else if (states[s] != BLANK) ++*bad;
 	}
+}
+
+static int examine(void)
+{
+	uint32_t sample[3];
+	unsigned foreign = 0, bad = 0, valid = 0;
+	for (unsigned p = 0; p < PAGES; p++) current[p] = -1;
+	if (fm1_flash_size() != PARTITION_BYTES) return POCKET_STORE_UNAVAILABLE;
+	/* a sample bank can have a blank sector in it, so being blank here does not make it free */
+	if (fm1_flash_read(SAMPLE_OFFSET, sample, sizeof sample)) return POCKET_STORE_FAILED;
+	if (sample[0] == SAMPLE_MAGIC && sample[2] > SAMPLE_REACH) return POCKET_STORE_SAMPLES;
+	look(&foreign, &bad, &valid);
 	/* Nothing of ours to vouch for them, so a sector that is not ours stays as it is. With a good
 	   sector of projects on the chip, it is a save that was cut off in its erase: the first save
 	   found all four blank or ours, or was asked to clear them, and the sample bank check above is
@@ -124,11 +132,11 @@ int pocket_store_open(void)
 	return r;
 }
 
-void pocket_store_peek(unsigned project, void* data, unsigned bytes)
+void pocket_store_peek(unsigned project, unsigned at, void* data, unsigned bytes)
 {
 	const int s = current[project / PER_SECTOR];
 	uint8_t* d = data;
-	if (s < 0 || fm1_flash_read(sector_offset((unsigned)s) + offsetof(struct sector, projects) + project % PER_SECTOR * POCKET_STORE_PROJECT_BYTES, d, bytes))
+	if (s < 0 || fm1_flash_read(sector_offset((unsigned)s) + offsetof(struct sector, projects) + project % PER_SECTOR * POCKET_STORE_PROJECT_BYTES + at, d, bytes))
 		while (bytes--) *d++ = 0;
 }
 
@@ -175,7 +183,7 @@ int pocket_store_commit(void)
 	ram.commit = ~0u;
 	ram.format = FORMAT(pageInRam);
 	ram.generation = newest + 1u;
-	for (unsigned i = 0; i < POCKET_STORE_SETTINGS_BYTES; i++) ram.settings[i] = settings[i];
+	for (unsigned i = 0; i < sizeof settings; i++) ram.settings[i] = settings[i];
 	ram.padding[0] = ram.padding[1] = 0;
 	ram.crc = pocket_crc32(0, (const uint8_t*)&ram + CRC_FROM, sizeof ram - CRC_FROM);
 	if (fm1_flash_write(offset, &ram, sizeof ram) || scan((unsigned)target, &found, &format) != WRITTEN) return POCKET_STORE_FAILED;
@@ -189,38 +197,39 @@ int pocket_store_commit(void)
 	return POCKET_STORE_OK;
 }
 
-/* No examine(): nothing about where to save is decided here, and the sample bank is not ours to read.
- * A sector of ours is VALID only with our magic, a good CRC and its commit word. */
+/* The page whose current copy is the newest, or -1. */
+static int newest_page(void)
+{
+	int page = -1;
+	for (unsigned p = 0; p < PAGES; p++)
+		if (current[p] >= 0 && generations[current[p]] == newest) page = (int)p;
+	return page;
+}
+
+/* look() only: our sectors, not the sample bank's header, and nothing about saving is decided here
+ * (_open does that). A sector of ours is VALID only with our magic, a good CRC and its commit word. */
 int pocket_store_settings(uint8_t* data)
 {
-	uint8_t found[POCKET_STORE_SETTINGS_BYTES];
-	uint32_t generation, format, best = 0;
-	int newest_sector = -1;
+	unsigned foreign = 0, bad = 0, valid = 0;
 	if (fm1_flash_size() != PARTITION_BYTES) return 0;
-	for (unsigned s = 0; s < SECTORS; s++)
-		if (scan(s, &generation, &format) == VALID && (newest_sector < 0 || (int32_t)(generation - best) > 0))
-		{
-			newest_sector = (int)s;
-			best = generation;
-		}
-	if (newest_sector < 0 || fm1_flash_read(sector_offset((unsigned)newest_sector) + offsetof(struct sector, settings), found, sizeof found)) return 0;
-	for (unsigned i = 0; i < sizeof found; i++) data[i] = found[i];
-	return 1;
+	look(&foreign, &bad, &valid);
+	const int page = newest_page();
+	return page >= 0 && !fm1_flash_read(sector_offset((unsigned)current[page]) + offsetof(struct sector, settings), data, POCKET_STORE_SETTINGS + 1u) &&
+		data[HAS_SETTINGS] == 1u;
 }
 
 void pocket_store_set_settings(const uint8_t* data)
 {
-	for (unsigned i = 0; i < POCKET_STORE_SETTINGS_BYTES; i++) settings[i] = data[i];
+	for (unsigned i = 0; i < POCKET_STORE_SETTINGS; i++) settings[i] = data ? data[i] : 0;
+	settings[HAS_SETTINGS] = data != 0;
 }
 
 int pocket_store_commit_settings(void)
 {
 	const int r = pocket_store_open();
-	unsigned page = 0;
 	if (r < 0) return r;
-	for (unsigned p = 0; p < PAGES; p++)
-		if (current[p] >= 0 && generations[current[p]] == newest) page = p;
-	if (!pocket_store_project(page * PER_SECTOR)) return POCKET_STORE_FAILED;
+	const int page = newest_page();
+	if (!pocket_store_project((unsigned)(page < 0 ? 0 : page) * PER_SECTOR)) return POCKET_STORE_FAILED;
 	return pocket_store_commit();
 }
 
