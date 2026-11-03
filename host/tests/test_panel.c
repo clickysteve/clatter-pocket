@@ -1124,6 +1124,122 @@ static void test_saving(void)
 	CHECK(panel.store_state >= 0 && used, "and the last one is still there");
 }
 
+/* GLOBAL's eight playing settings survive a power-off: they go with every save, a tap of SAVE on
+ * GLOBAL stores them alone, and start-up reads them back, writing nothing. */
+static void set_global(struct pocket_panel* p, int keys, int octave, int velocity, int follow, int quantise, int step, int channel, int map)
+{
+	p->key_mode = (int8_t)keys, p->octave = (int8_t)octave, p->key_velocity = (int8_t)velocity, p->follow = (int8_t)follow;
+	p->quantise = (int8_t)quantise, p->auto_step = (int8_t)step, p->midi_channel = (int8_t)channel, p->midi_map = (int8_t)map;
+}
+static int global_is(const struct pocket_panel* p, int keys, int octave, int velocity, int follow, int quantise, int step, int channel, int map)
+{
+	return p->key_mode == keys && p->octave == octave && p->key_velocity == velocity && p->follow == follow &&
+		p->quantise == quantise && p->auto_step == step && p->midi_channel == channel && p->midi_map == map;
+}
+static void power_on(struct pocket_panel* p)
+{
+	start_engine(p);
+	poll(p, 0, 0, 0, 0, 0, 0, 0);
+}
+static void test_settings(void)
+{
+	struct pocket_panel panel;
+	fake_flash_reset();
+	power_on(&panel);
+	const long reads = fake_flash_reads;
+	pocket_panel_restore_settings(&panel);
+	CHECK(global_is(&panel, POCKET_KEYS_DRUM, 0, 127, 1, POCKET_QUANTISE_NEAREST, 0, 0, 0), "a blank chip: the defaults");
+	CHECK(!fake_flash_ops && fake_flash_reads > reads, "start-up reads and writes nothing");
+
+	/* with a project save */
+	set_global(&panel, POCKET_KEYS_PITCH, -2, 90, 0, POCKET_QUANTISE_BEHIND, 3, 10, 1);
+	press(&panel, BUTTON(SAVE));
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "SAVED 1"), "a project: %s", panel.notice);
+	power_on(&panel);
+	CHECK(global_is(&panel, POCKET_KEYS_DRUM, 0, 127, 1, POCKET_QUANTISE_NEAREST, 0, 0, 0), "not before they are read");
+	pocket_panel_restore_settings(&panel);
+	CHECK(global_is(&panel, POCKET_KEYS_PITCH, -2, 90, 0, POCKET_QUANTISE_BEHIND, 3, 10, 1), "a save carries them");
+
+	/* alone, from GLOBAL: stopped, one erase at most, and the projects stay */
+	press(&panel, BUTTON(GLO));
+	set_global(&panel, POCKET_KEYS_DRUM, 3, 1, 1, POCKET_QUANTISE_NEAREST, 4, 16, 0);
+	press(&panel, BUTTON(PLAY));
+	long ops = fake_flash_ops;
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "STOP TO SAVE") && fake_flash_ops == ops, "not while playing: %s", panel.notice);
+	press(&panel, BUTTON(PLAY));
+	for (int i = 0; i < 3; i++)
+	{
+		ops = fake_flash_ops;
+		const long erased = fake_flash_erases;
+		press(&panel, BUTTON(SAVE));
+		CHECK(!strcmp(panel.notice, "SETTINGS SAVED") && panel.page == POCKET_PAGE_GLOBAL, "a tap of SAVE on GLOBAL: %s", panel.notice);
+		CHECK(fake_flash_erases - erased <= 1 && fake_flash_ops > ops, "one erase at most: %ld", fake_flash_erases - erased);
+	}
+	uint8_t used = 0;
+	pocket_store_open();
+	pocket_store_peek(0, &used, 1);
+	CHECK(used, "the project is still there");
+	power_on(&panel);
+	pocket_panel_restore_settings(&panel);
+	CHECK(global_is(&panel, POCKET_KEYS_DRUM, 3, 1, 1, POCKET_QUANTISE_NEAREST, 4, 16, 0), "and they come back");
+
+	/* a sector from before: no settings, and the defaults */
+	static const uint8_t none[POCKET_STORE_SETTINGS_BYTES];
+	pocket_store_set_settings(none);
+	pocket_store_open();
+	pocket_store_project(0);
+	CHECK(pocket_store_commit() == POCKET_STORE_OK, "a save as 0.9.1 made it");
+	power_on(&panel);
+	pocket_panel_restore_settings(&panel);
+	CHECK(global_is(&panel, POCKET_KEYS_DRUM, 0, 127, 1, POCKET_QUANTISE_NEAREST, 0, 0, 0), "0.9.1's save: the defaults");
+
+	/* out of range: not believed, one by one */
+	static const uint8_t wild[POCKET_STORE_SETTINGS_BYTES] = { 1, 7, 0x80, 0, 9, 0, 200, 17, 1 };
+	pocket_store_set_settings(wild);
+	pocket_store_open();
+	pocket_store_project(0);
+	pocket_store_commit();
+	power_on(&panel);
+	pocket_panel_restore_settings(&panel);
+	CHECK(global_is(&panel, POCKET_KEYS_DRUM, 0, 127, 1, POCKET_QUANTISE_BEHIND, 0, 0, 1), "out-of-range values are left at the default");
+
+	/* the newest good sector: a damaged one is passed over */
+	set_global(&panel, POCKET_KEYS_PITCH, 1, 64, 0, POCKET_QUANTISE_NEAREST, 2, 5, 0);
+	press(&panel, BUTTON(GLO));
+	press(&panel, BUTTON(SAVE));
+	set_global(&panel, POCKET_KEYS_PITCH, 2, 70, 0, POCKET_QUANTISE_NEAREST, 2, 6, 0);
+	press(&panel, BUTTON(SAVE));
+	unsigned newest = 0;
+	uint32_t best = 0;
+	for (unsigned sct = 0; sct < 4; sct++)
+	{
+		uint32_t g;
+		memcpy(&g, fake_flash + 430080 + sct * 4096 + 16, 4);
+		if (fake_flash[430080 + sct * 4096 + 4] == 0 && g >= best && g != ~0u) best = g, newest = sct;
+	}
+	fake_flash[430080 + newest * 4096 + 40] ^= 1;
+	power_on(&panel);
+	pocket_panel_restore_settings(&panel);
+	CHECK(global_is(&panel, POCKET_KEYS_PITCH, 1, 64, 0, POCKET_QUANTISE_NEAREST, 2, 5, 0), "a damaged newest sector: the one before");
+
+	/* foreign data: nothing read as settings, nothing written by SAVE on GLOBAL */
+	fake_flash_reset();
+	memset(fake_flash + 430080, 0x12, 4 * 4096);
+	power_on(&panel);
+	pocket_panel_restore_settings(&panel);
+	CHECK(global_is(&panel, POCKET_KEYS_DRUM, 0, 127, 1, POCKET_QUANTISE_NEAREST, 0, 0, 0), "foreign data: the defaults");
+	press(&panel, BUTTON(GLO));
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "FLASH IN USE: OPEN PROJECTS") && !fake_flash_ops, "and SAVE leaves it alone: %s", panel.notice);
+	fake_flash_size = 4096;
+	pocket_panel_restore_settings(&panel);
+	press(&panel, BUTTON(SAVE));
+	CHECK(!strcmp(panel.notice, "SAVING OFF") && !fake_flash_ops, "the wrong partition: %s", panel.notice);
+	fake_flash_reset();
+}
+
 /* A save from before 0.9.2 can hold the LXR's FX parameters. It loads: every other parameter as
  * it was, the FX ones not at all, and a save from it holds 0 where they were. */
 #define RECORD_PARAMS 20 /* a record: the rhythm (12 bytes), the sound's head (6), wild, reserved */
@@ -2705,6 +2821,7 @@ int main(int argc, char** argv)
 	test_global();
 	test_saving();
 	test_saved_fx();
+	test_settings();
 	test_variations();
 	test_long_patterns();
 	test_step_keys();

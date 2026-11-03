@@ -13,14 +13,14 @@ enum { OK = 0, IO = -2, NEEDS_ERASE = -4 };
 
 uint8_t fake_flash[FAKE_FLASH_BYTES];
 uint32_t fake_flash_size = FAKE_FLASH_BYTES;
-long fake_flash_ops, fake_flash_cut_at = -1, fake_flash_fail_at = -1, fake_flash_reads;
+long fake_flash_ops, fake_flash_cut_at = -1, fake_flash_fail_at = -1, fake_flash_reads, fake_flash_erases;
 static int powered = 1;
 
 void fake_flash_reset(void)
 {
 	memset(fake_flash, 0xff, sizeof fake_flash);
 	fake_flash_size = FAKE_FLASH_BYTES;
-	fake_flash_ops = fake_flash_reads = 0;
+	fake_flash_ops = fake_flash_reads = fake_flash_erases = 0;
 	fake_flash_cut_at = fake_flash_fail_at = -1;
 	powered = 1;
 }
@@ -53,6 +53,7 @@ static int begin(void)
 int fm1_flash_erase(uint32_t offset)
 {
 	if (offset % SECTOR || offset >= FAKE_FLASH_BYTES) return -1;
+	fake_flash_erases++;
 	const int run = begin();
 	if (run < 0) return IO;
 	memset(fake_flash + offset, 0xff, run ? SECTOR : SECTOR / 2);

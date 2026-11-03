@@ -164,6 +164,9 @@ struct pocket_panel {
 void pocket_panel_init(struct pocket_panel* panel);
 /* The first pattern, once the sequencer is initialised and the engine runs. */
 void pocket_panel_start_sequencer(struct pocket_panel* panel);
+/* GLOBAL's settings as the newest save left them, if any: at start-up only, never in SAFE MODE. It
+ * reads the store's four sectors and writes nothing (POCKET-STORAGE.md, rule 1). */
+void pocket_panel_restore_settings(struct pocket_panel* panel);
 /* Apply one control poll: navigation, the transport, recording, generation, triggers on key
  * presses, parameter steps from encoders. */
 void pocket_panel_apply(struct pocket_panel* panel, const struct pocket_panel_input* in);

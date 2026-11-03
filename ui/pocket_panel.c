@@ -37,7 +37,7 @@ static const char pageFooters[POCKET_PAGES - 1][30] = { /* SOUND's serves MIXER 
 	"ENV KIT ARP GEN LFO MUTATE",
 	"K1 VEL K2 BPM K3 SWG K4 STEP",
 	"SEL VOICE  KNOBS EDIT",
-	"K1 ROW K2 VALUE GLO SYSTEM",
+	"K1 ROW K2 VALUE SAVE KEEPS",
 	"GLO BACK  BOOT+HOME SAFE",
 	"SAVE  OCT+ LOAD  OCT- ERASE"
 };
@@ -661,6 +661,14 @@ static void store_claim(struct pocket_panel* panel)
 	panel->dirty |= BODY_BANDS;
 }
 
+/* Every save carries GLOBAL's settings of how you play, in its sector's header. */
+static void settings_put(const struct pocket_panel* panel);
+static int store_commit(const struct pocket_panel* panel)
+{
+	settings_put(panel);
+	return pocket_store_commit();
+}
+
 static void store_save(struct pocket_panel* panel)
 {
 	const unsigned slot = panel->store_slot;
@@ -697,7 +705,7 @@ static void store_save(struct pocket_panel* panel)
 		for (int k = 1; k < POCKET_SOUND_PARAMS; k++) p->sound.params[k] = kitTarget[k];
 		for (unsigned t = 0; t < POCKET_SEQ_TRACKS; t++)
 			for (unsigned i = 0; i < POCKET_SEQ_MAX_STEPS; i++) cell_write(p->cells, (t * POCKET_SEQ_MAX_STEPS + i) * CELL_BITS, pattern->cell[t][i]);
-		if (pocket_store_commit() == POCKET_STORE_OK) slot_say(panel, "SAVED ");
+		if (store_commit(panel) == POCKET_STORE_OK) slot_say(panel, "SAVED ");
 		else store_failed(panel);
 	}
 }
@@ -721,7 +729,7 @@ static void store_erase(struct pocket_panel* panel)
 	if (!record[0] || !store_confirmed(panel, "ERASE: OCT- AGAIN", STORE_ERASING)) return;
 	panel->store_armed = 0;
 	for (unsigned i = 0; i < POCKET_STORE_PROJECT_BYTES; i++) record[i] = 0;
-	if (pocket_store_commit() != POCKET_STORE_OK)
+	if (store_commit(panel) != POCKET_STORE_OK)
 	{
 		store_failed(panel);
 		return;
@@ -976,6 +984,45 @@ static void row_text(const struct pocket_panel* panel, int row, char* b)
 	else append_number(b, (uint32_t)v);
 }
 
+/* The eight that are how you play, not what was played, and survive a power-off: byte 0 says which
+ * format, 0 in a sector from before 0.9.2, then a byte each, range-checked as they come back. */
+#define SETTINGS_FORMAT 1u
+static const uint8_t keptRows[] = { ROW_KEYS, ROW_OCTAVE, ROW_KEY_VEL, ROW_FOLLOW, ROW_QUANTISE, ROW_AUTO_STEP, ROW_MIDI_CHANNEL, ROW_MIDI_MAP };
+_Static_assert(1 + sizeof keptRows <= POCKET_STORE_SETTINGS_BYTES, "GLOBAL's settings fit a sector's header");
+
+static void settings_put(const struct pocket_panel* panel)
+{
+	uint8_t b[POCKET_STORE_SETTINGS_BYTES] = { SETTINGS_FORMAT };
+	for (unsigned i = 0; i < sizeof keptRows; i++) b[1 + i] = *((const uint8_t*)panel + rows[keptRows[i]].field);
+	pocket_store_set_settings(b);
+}
+
+void pocket_panel_restore_settings(struct pocket_panel* panel)
+{
+	uint8_t b[POCKET_STORE_SETTINGS_BYTES];
+	if (!pocket_store_settings(b) || b[0] != SETTINGS_FORMAT) return;
+	for (unsigned i = 0; i < sizeof keptRows; i++)
+	{
+		const struct row* r = &rows[keptRows[i]];
+		const int v = (int8_t)b[1 + i];
+		if (v >= r->lo && v <= r->hi) *((int8_t*)panel + r->field) = (int8_t)v;
+	}
+	panel->dirty = ALL_BANDS;
+}
+
+/* SAVE, on GLOBAL: the settings alone, into the newest page again. Stopped, as any save. */
+static void settings_save(struct pocket_panel* panel)
+{
+	if (pocket_seq_playing())
+	{
+		announce(panel, "STOP TO SAVE");
+		return;
+	}
+	settings_put(panel);
+	const int r = pocket_store_commit_settings();
+	announce(panel, r >= 0 ? "SETTINGS SAVED" : r == POCKET_STORE_OCCUPIED ? "FLASH IN USE: OPEN PROJECTS" : r == POCKET_STORE_FAILED ? "SAVE FAILED" : "SAVING OFF");
+}
+
 static void move_step(struct pocket_panel* panel, int by)
 {
 	panel->step = (uint8_t)wrapped(panel->step + by, (int)POCKET_PATTERN_STEPS(pocket_seq_pattern()));
@@ -1214,6 +1261,7 @@ static void buttons(struct pocket_panel* panel, uint32_t pressed, uint32_t relea
 	{
 		panel->save_down = 0;
 		if (!panel->save_chorded && panel->page == POCKET_PAGE_STORE) store_save(panel);
+		else if (!panel->save_chorded && panel->page == POCKET_PAGE_GLOBAL) settings_save(panel);
 		else if (!panel->save_chorded) store_open(panel);
 	}
 	if ((pressed & BTN(FX)) && save)

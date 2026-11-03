@@ -32,8 +32,23 @@ A load is one undo: SAVE+OCT− takes all of it back, kit, pattern and settings,
 | Tempo and swing | |
 | The generator | DENSITY, COMPLEX, SEED, STYLE, MUTATE, the track locks |
 
-GLOBAL's playing preferences (key velocity, FOLLOW, QUANTISE, AUTO STEP, MIDI) are not part of a
-project: they are how you play, not what was played.
+GLOBAL's playing settings are not part of a project: they are how you play, not what was played.
+They survive a power-off on their own terms, below.
+
+## GLOBAL's settings
+
+KEYS, OCTAVE, KEY VEL, FOLLOW, QUANTISE, AUTO STEP, MIDI CH and MIDI MAP come back after a power-off.
+TEMPO, SWING, LENGTH and the generator rows are the project's, and come back with a load.
+
+| | |
+|---|---|
+| Stored | with every project save or erase, and alone by a tap of **SAVE on GLOBAL** (SETTINGS SAVED). Only when stopped, as any save |
+| Where | in the header of the sector the save writes: the 12 bytes every firmware before 0.9.2 wrote as zero, under the sector's CRC. No format change: every save from before loads, and holds no settings |
+| SAVE on GLOBAL | writes the newest page again, through the same steps as a project save: at most one erase, and a power cut loses only this |
+| Read | once, at start-up, after the engine is running, and never in SAFE MODE: the newest good sector's settings. Anything foreign, damaged, from before 0.9.2, or out of range means the default, and says nothing |
+| Not stored | when the store is closed: FLASH IN USE says to open PROJECTS, and nothing is written |
+
+Not yet on a device: 0.9.2 has not run on one.
 
 ## How many, and why nine
 
@@ -111,8 +126,12 @@ the emulator. A blank-sector test alone would have passed them.
 
 ### The rules the code keeps
 
-1. **Nothing happens until asked.** No Flash access at start-up, in SAFE MODE, or at all until PROJECTS
-   opens. Undo and redo never touch it. `check-firmware.py` and the emulator tests hold this.
+1. **Nothing is written until asked; one bounded read of our sectors at start-up.** At the end of
+   start-up, after the engine is running and never in SAFE MODE, the firmware reads our four
+   sectors, and nothing else, for GLOBAL's settings. A read cannot change anything, it uses the same
+   driver PROJECTS uses, the updater and audio are already up, and a bad sector only means the
+   defaults. Otherwise no Flash access until PROJECTS opens, or SAVE on GLOBAL. Undo and redo never
+   touch it. `check-firmware.py` and the emulator tests hold this.
 2. **Only blank or ours, unless the player says otherwise.** Opening the store reads all four sectors.
    Anything that is neither all 0xFF nor carrying one of our magic numbers closes it: `FLASH IN USE: TAP
    SAVE`. Stopped, SAVE asks `ERASE 4 SECTORS: SAVE AGAIN`, and a second press erases what is in the way,

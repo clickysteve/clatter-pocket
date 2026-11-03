@@ -18,6 +18,7 @@ extern long fake_flash_ops;        /* erases and page programs so far */
 extern long fake_flash_cut_at;     /* this op stops half way and none after it arrive; -1 never */
 extern long fake_flash_fail_at;    /* this op reports FM1_FLASH_IO, doing nothing; -1 never */
 extern long fake_flash_reads;      /* read calls so far */
+extern long fake_flash_erases;     /* erases asked for so far */
 
 void fake_flash_reset(void);       /* all erased */
 void fake_flash_power_on(void);    /* after a cut */

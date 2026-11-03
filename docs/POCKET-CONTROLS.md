@@ -417,8 +417,10 @@ time. The mutation and take counters do not: those keep moving, so the next one 
 ## GLOBAL
 
 GLO opens it; GLO again opens SYSTEM, the diagnostics, which are as they were. KNOB 1 picks a row,
-KNOB 2 changes it. Every row works, and is tested at both of its ends. These settings last until
-power-off.
+KNOB 2 changes it. Every row works, and is tested at both of its ends. A tap of **SAVE** here stores
+the eight playing settings, KEYS to AUTO STEP and the two MIDI rows, which then come back after a
+power-off: SETTINGS SAVED. Any project save stores them too. TEMPO to WILD belong to the project
+([POCKET-STORAGE.md](POCKET-STORAGE.md#globals-settings)). Only when stopped.
 
 | Row | Values | |
 |---|---|---|
@@ -440,7 +442,7 @@ power-off.
 | MIDI CH | ALL, 1-16 | input channel |
 | MIDI MAP | KEYS, GM | DRUM's note map |
 
-**Left out, because they would not work:** MIDI output and thru, a velocity curve, and a default tempo (these settings are not stored).
+**Left out, because they would not work:** MIDI output and thru, a velocity curve, and a default tempo (a project holds the tempo).
 
 ## The screen
 
@@ -624,8 +626,8 @@ not driven by hand. The website still offers 0.5.0.
 
 ## Known limitations
 
-- GLOBAL's playing preferences are not saved, and a restart returns the init kit and seed 1 until a
-  project is loaded: [POCKET-STORAGE.md](POCKET-STORAGE.md).
+- A restart returns the init kit and seed 1 until a project is loaded: [POCKET-STORAGE.md](POCKET-STORAGE.md).
+  GLOBAL's playing settings come back.
 - The keys have no velocity, and SELECT cannot be held: above.
 - Seven tracks: PERC shares a voice and a track with the high tom, CLAP with the snare, and neither
   sounds with its partner. CH and OH are one voice with a shared sound.

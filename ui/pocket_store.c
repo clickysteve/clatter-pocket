@@ -36,7 +36,7 @@ struct sector {
 	uint32_t crc;        /* of everything after it */
 	uint32_t format;     /* version << 8 | page */
 	uint32_t generation; /* the highest good copy of a page is current */
-	uint32_t reserved[3];
+	uint8_t settings[POCKET_STORE_SETTINGS_BYTES]; /* reserved, all zero, before 0.9.2 */
 	uint8_t projects[PER_SECTOR][POCKET_STORE_PROJECT_BYTES];
 	uint8_t padding[2];
 };
@@ -50,6 +50,7 @@ static uint8_t states[SECTORS], pageInRam;
 static uint32_t generations[SECTORS], formats[SECTORS], newest;
 static int8_t current[PAGES]; /* a sector, or -1 */
 static int8_t closed;  /* what the last look found, if it found nothing to save to */
+static uint8_t settings[POCKET_STORE_SETTINGS_BYTES];
 
 static uint32_t sector_offset(unsigned sector)
 {
@@ -174,7 +175,7 @@ int pocket_store_commit(void)
 	ram.commit = ~0u;
 	ram.format = FORMAT(pageInRam);
 	ram.generation = newest + 1u;
-	for (unsigned i = 0; i < 3; i++) ram.reserved[i] = 0;
+	for (unsigned i = 0; i < POCKET_STORE_SETTINGS_BYTES; i++) ram.settings[i] = settings[i];
 	ram.padding[0] = ram.padding[1] = 0;
 	ram.crc = pocket_crc32(0, (const uint8_t*)&ram + CRC_FROM, sizeof ram - CRC_FROM);
 	if (fm1_flash_write(offset, &ram, sizeof ram) || scan((unsigned)target, &found, &format) != WRITTEN) return POCKET_STORE_FAILED;
@@ -186,6 +187,41 @@ int pocket_store_commit(void)
 	generations[target] = newest;
 	current[pageInRam] = (int8_t)target;
 	return POCKET_STORE_OK;
+}
+
+/* No examine(): nothing about where to save is decided here, and the sample bank is not ours to read.
+ * A sector of ours is VALID only with our magic, a good CRC and its commit word. */
+int pocket_store_settings(uint8_t* data)
+{
+	uint8_t found[POCKET_STORE_SETTINGS_BYTES];
+	uint32_t generation, format, best = 0;
+	int newest_sector = -1;
+	if (fm1_flash_size() != PARTITION_BYTES) return 0;
+	for (unsigned s = 0; s < SECTORS; s++)
+		if (scan(s, &generation, &format) == VALID && (newest_sector < 0 || (int32_t)(generation - best) > 0))
+		{
+			newest_sector = (int)s;
+			best = generation;
+		}
+	if (newest_sector < 0 || fm1_flash_read(sector_offset((unsigned)newest_sector) + offsetof(struct sector, settings), found, sizeof found)) return 0;
+	for (unsigned i = 0; i < sizeof found; i++) data[i] = found[i];
+	return 1;
+}
+
+void pocket_store_set_settings(const uint8_t* data)
+{
+	for (unsigned i = 0; i < POCKET_STORE_SETTINGS_BYTES; i++) settings[i] = data[i];
+}
+
+int pocket_store_commit_settings(void)
+{
+	const int r = pocket_store_open();
+	unsigned page = 0;
+	if (r < 0) return r;
+	for (unsigned p = 0; p < PAGES; p++)
+		if (current[p] >= 0 && generations[current[p]] == newest) page = p;
+	if (!pocket_store_project(page * PER_SECTOR)) return POCKET_STORE_FAILED;
+	return pocket_store_commit();
 }
 
 int pocket_store_claim(void)
