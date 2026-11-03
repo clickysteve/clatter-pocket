@@ -50,7 +50,7 @@ TEMPO, SWING, LENGTH and the generator rows are the project's, and come back wit
 | Read | once, at start-up, after the engine is running, and never in SAFE MODE: the newest good sector's settings. Anything foreign, damaged, from before 0.9.2, or out of range means the default, and says nothing |
 | Not stored | when the store is closed: FLASH IN USE says to open PROJECTS, and nothing is written |
 
-Not yet on a device: 0.9.2 has not run on one.
+On a device: 0.9.2 kept all eight after a power-off on the owner's unit.
 
 ## How many, and why nine
 

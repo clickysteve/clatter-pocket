@@ -11,17 +11,22 @@ restored V15 from a browser. 0.8.2, installed from stock through both stages, fi
 audio, USB audio, MIDI notes, MIDI clock over USB, and saving after erasing what V15 left, all work, and a
 save survives a power cycle. 0.9.1 came back from the handover as `ota-FM1C_0000000000000000`, which
 the installer did not take for the loader, and it timed out twice; the offline page, changed to take any
-`ota-` loader, then installed it, and the keys, MIDI MAP and projects work. Nothing else below has been
-recorded yet, and 0.9.2 has not run on a device.
+`ota-` loader, then installed it, and the keys, MIDI MAP and projects work. 0.9.2, installed from stock
+V15 through both stages of the live installer, passed start-up (start screen about 1 s, MAIN about 2.5 s,
+CPU 51.1 % mean and 51.3 % peak, FAULTS 0, cool), the audio and sequencer steps, MIDI clock over USB, the
+eight GLOBAL settings after a power-off, and saving and loading after a power cycle. Naming a project
+failed: the place was drawn in brackets the font does not have. The erase question confused. Both are
+changed in 0.9.3, which has not run on a device. Not recorded: SAFE MODE, Bluetooth, long runs, leaving
+for official firmware.
 **From a unit looping at the start screen:** power on holding HOME until SAFE MODE shows, then connect
 the installer. **UNVERIFIED**.
 
-Candidate: firmware 0.9.2, commit `33798c6`, SHA-256
-`8561710440e4dce57b49557e970e29eb89b46a21d92d293369da43a5fcea1048`.
+Candidate: firmware 0.9.3, commit `2715bae`, SHA-256
+`d2eb62190986258aa041b9bf4e17496bf6c00cbcc3756e78f8ff2a998888c315`.
 
 **Install it from <https://clatter-pocket.allmyfriendsaresynths.com/installer/>**, which runs the steps
 below with the same update code. Or, offline, `clatter-pocket-installer-UNVERIFIED.html`, SHA-256
-`ff1fa31aefa43ce2593dcd1728d734ffba203d726a081f94c0561521ccfd0cf9`.
+`afbe884cacb0534e2bd1def7b2c73df1a577620b14119b666d39cb01e0c767fa`.
 
 Both packages are produced by:
 
