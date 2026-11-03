@@ -479,9 +479,12 @@ has not been seen**.
 **0.7.1, length on SEQ+KNOB 3: 437,532 bytes, 16,389 free, the margin kept by 5 bytes.** Heap 110,092.
 The next feature needs flash found for it first.
 
+**0.9.4, SEQ+REC clears the pattern and the kick stays a kick: 437,532 bytes, 16,389 free, the margin kept by
+5 bytes.** Heap 109,164. The clear is a mode of mutate (+65), and the name cursor drawn under its letter paid
+for most of it. The next feature needs flash found for it first.
+
 **0.9.3, names that show their place, and no question before erasing what V15 left: 437,500 bytes, 16,421
-free, the margin kept by 37 bytes.** Heap 109,164. The question's text paid for most of it. The next feature
-needs flash found for it first.
+free, the margin kept by 37 bytes.** Heap 109,164. The question's text paid for most of it.
 
 **0.9.2, GLOBAL's settings kept after a power-off and project names: 437,468 bytes, 16,453 free, the margin
 kept by 69 bytes.** Heap 109,164.
