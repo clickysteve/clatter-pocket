@@ -95,3 +95,5 @@ site/             the website (docs/WEBSITE.md)
 GPL-3.0-only with the LXR firmware's additional terms (NOTICE.md). Firmware builds also
 link M-VAVE's binary SDK under its own terms and the fm1_open linking exception
 (THIRD_PARTY_NOTICES.md).
+
+You can also try CLATTER Pocket in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
